@@ -9,6 +9,7 @@ class PlatformerGame {
         this.projectiles = [];
         this.lastShotTime = 0;
         this.shotCooldown = 500; // Milliseconds between shots
+        this.cameraX = 0;
 
         this.initializeGameObjects();
         this.setupEventListeners();
@@ -30,16 +31,30 @@ class PlatformerGame {
         };
 
         this.platforms = [
-            { x: 0, y: 350, width: 800, height: 50 },      // Ground
-            { x: 300, y: 250, width: 200, height: 20 },    // Middle platform
-            { x: 100, y: 150, width: 200, height: 20 },    // Upper left platform
-            { x: 500, y: 200, width: 200, height: 20 }     // Upper right platform
+            { x: 0, y: 350, width: 3000, height: 50 },      // Extended ground
+            { x: 300, y: 250, width: 200, height: 20 },    
+            { x: 100, y: 150, width: 200, height: 20 },    
+            { x: 500, y: 200, width: 200, height: 20 },
+            { x: 800, y: 150, width: 200, height: 20 },
+            { x: 1100, y: 250, width: 200, height: 20 },
+            { x: 1400, y: 150, width: 200, height: 20 },
+            { x: 1700, y: 200, width: 200, height: 20 },
+            { x: 2000, y: 250, width: 200, height: 20 },
+            { x: 2300, y: 150, width: 200, height: 20 },
+            { x: 2600, y: 200, width: 200, height: 20 }
         ];
 
         this.coins = [
             { x: 350, y: 200, width: 20, height: 20, collected: false },
             { x: 150, y: 100, width: 20, height: 20, collected: false },
-            { x: 550, y: 150, width: 20, height: 20, collected: false }
+            { x: 550, y: 150, width: 20, height: 20, collected: false },
+            { x: 850, y: 100, width: 20, height: 20, collected: false },
+            { x: 1150, y: 200, width: 20, height: 20, collected: false },
+            { x: 1450, y: 100, width: 20, height: 20, collected: false },
+            { x: 1750, y: 150, width: 20, height: 20, collected: false },
+            { x: 2050, y: 200, width: 20, height: 20, collected: false },
+            { x: 2350, y: 100, width: 20, height: 20, collected: false },
+            { x: 2650, y: 150, width: 20, height: 20, collected: false }
         ];
 
         this.enemies = [
@@ -50,7 +65,7 @@ class PlatformerGame {
                 height: 30,
                 speed: 2,
                 direction: 1,
-                platformIndex: 1,  // Index of the platform this enemy is on
+                platformIndex: 1,
                 alive: true
             },
             {
@@ -61,6 +76,56 @@ class PlatformerGame {
                 speed: 3,
                 direction: 1,
                 platformIndex: 2,
+                alive: true
+            },
+            {
+                x: 820,
+                y: 170,
+                width: 30,
+                height: 30,
+                speed: 2,
+                direction: 1,
+                platformIndex: 3,
+                alive: true
+            },
+            {
+                x: 1120,
+                y: 220,
+                width: 30,
+                height: 30,
+                speed: 3,
+                direction: 1,
+                platformIndex: 5,
+                alive: true
+            },
+            {
+                x: 1420,
+                y: 120,
+                width: 30,
+                height: 30,
+                speed: 2,
+                direction: 1,
+                platformIndex: 6,
+                alive: true
+            },
+            {
+                x: 1720,
+                y: 170,
+                width: 30,
+                height: 30,
+                speed: 3,
+                direction: 1,
+                platformIndex: 7,
+                alive: true
+            },
+            {
+                x: 2020,
+                y: 220,
+                width: 30,
+                height: 30,
+                speed: 2,
+                direction: 1,
+                platformIndex: 8,
                 alive: true
             }
         ];
@@ -119,14 +184,28 @@ class PlatformerGame {
     }
 
     updatePlayerMovement() {
+        // Get the rightmost boundary from ground platform
+        const ground = this.platforms[0];
+        const maxX = ground.x + ground.width - this.player.width;  // Maximum x position
+
         if (this.keys['ArrowLeft']) {
             this.player.x -= this.player.speed;
             this.player.direction = -1;
         }
         if (this.keys['ArrowRight']) {
-            this.player.x += this.player.speed;
-            this.player.direction = 1;
+            // Only allow movement if not at the boundary
+            if (this.player.x + this.player.width <= maxX) {  // Changed condition here
+                this.player.x += this.player.speed;
+                this.player.direction = 1;
+            }
         }
+
+        // Ensure player stays within bounds
+        this.player.x = Math.max(0, Math.min(maxX - this.player.width, this.player.x));  // Adjusted maxX
+
+        // Update camera to follow player, but don't let it go past the level bounds
+        const maxCameraX = maxX - this.canvas.width;
+        this.cameraX = Math.max(0, Math.min(maxCameraX, this.player.x - this.canvas.width / 3));
 
         this.player.velocityY += this.player.gravity;
         this.player.y += this.player.velocityY;
@@ -137,8 +216,9 @@ class PlatformerGame {
             const projectile = this.projectiles[i];
             projectile.x += projectile.speed * projectile.direction;
 
-            // Remove projectiles that are off screen
-            if (projectile.x < 0 || projectile.x > this.canvas.width) {
+            // Remove projectiles that are too far from the player
+            // Instead of using canvas width, we'll use a range relative to the camera
+            if (projectile.x < this.cameraX - 100 || projectile.x > this.cameraX + this.canvas.width + 100) {
                 this.projectiles.splice(i, 1);
                 continue;
             }
@@ -225,8 +305,17 @@ class PlatformerGame {
     }
 
     keepPlayerInBounds() {
-        this.player.x = Math.max(0, Math.min(this.canvas.width - this.player.width, this.player.x));
+        // Get the rightmost platform (which should be the ground)
+        const ground = this.platforms[0];  // The first platform is our ground
+        const maxX = ground.x + ground.width - this.player.width;  // Maximum x position
+
+        // Prevent moving past left and right boundaries
+        this.player.x = Math.max(0, Math.min(maxX, this.player.x));
         this.player.y = Math.min(this.canvas.height - this.player.height, this.player.y);
+        
+        // Prevent camera from showing area before start of level or after end of level
+        const maxCameraX = maxX - this.canvas.width;
+        this.cameraX = Math.max(0, Math.min(maxCameraX, this.cameraX));
     }
 
     draw() {
@@ -245,7 +334,7 @@ class PlatformerGame {
     drawPlatforms() {
         this.ctx.fillStyle = '#4CAF50';
         this.platforms.forEach(platform => {
-            this.ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+            this.ctx.fillRect(platform.x - this.cameraX, platform.y, platform.width, platform.height);
         });
     }
 
@@ -254,7 +343,7 @@ class PlatformerGame {
         this.coins.forEach(coin => {
             if (!coin.collected) {
                 this.ctx.beginPath();
-                this.ctx.arc(coin.x + coin.width/2, coin.y + coin.height/2, coin.width/2, 0, Math.PI * 2);
+                this.ctx.arc(coin.x -this.cameraX + coin.width/2, coin.y + coin.height/2, coin.width/2, 0, Math.PI * 2);
                 this.ctx.fill();
             }
         });
@@ -263,7 +352,7 @@ class PlatformerGame {
     drawProjectiles() {
         this.ctx.fillStyle = '#FFD700';
         this.projectiles.forEach(projectile => {
-            this.ctx.fillRect(projectile.x, projectile.y, projectile.width, projectile.height);
+            this.ctx.fillRect(projectile.x - this.cameraX, projectile.y, projectile.width, projectile.height);
         });
     }
 
@@ -271,14 +360,14 @@ class PlatformerGame {
         this.enemies.forEach(enemy => {
             if (enemy.alive) {
                 this.ctx.fillStyle = '#FF0000';
-                this.ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                this.ctx.fillRect(enemy.x - this.cameraX, enemy.y, enemy.width, enemy.height);
             }
         });
     }
 
     drawPlayer() {
         this.ctx.fillStyle = this.player.isInvulnerable ? '#FFA500' : '#FF5722';
-        this.ctx.fillRect(this.player.x, this.player.y, this.player.width, this.player.height);
+        this.ctx.fillRect(this.player.x - this.cameraX, this.player.y, this.player.width, this.player.height);
     }
 
     drawScore() {
