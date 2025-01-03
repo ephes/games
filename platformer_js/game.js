@@ -13,6 +13,7 @@ class PlatformerGame {
 
         this.initializeGameObjects();
         this.setupEventListeners();
+        this.loadSprites();
     }
 
     initializeGameObjects() {
@@ -27,7 +28,10 @@ class PlatformerGame {
             velocityY: 0,
             isJumping: false,
             isInvulnerable: false,
-            direction: 1  // 1 for right, -1 for left
+            direction: 1,  // 1 for right, -1 for left
+            isHit: false,
+            hitAnimationTimer: 0,
+            hitAnimationDuration: 500  // Duration of hit animation in milliseconds
         };
 
         this.platforms = [
@@ -166,9 +170,18 @@ class PlatformerGame {
 
     makePlayerInvulnerable() {
         this.player.isInvulnerable = true;
+        this.player.isHit = true;
+        this.player.hitAnimationTimer = performance.now();
+        
+        // Separate timeout for hit animation
+        setTimeout(() => {
+            this.player.isHit = false;
+        }, this.player.hitAnimationDuration);
+
+        // Original invulnerability timeout
         setTimeout(() => {
             this.player.isInvulnerable = false;
-        }, 2000); // 2 seconds of invulnerability
+        }, 2000);
     }
 
     update() {
@@ -366,8 +379,78 @@ class PlatformerGame {
     }
 
     drawPlayer() {
-        this.ctx.fillStyle = this.player.isInvulnerable ? '#FFA500' : '#FF5722';
-        this.ctx.fillRect(this.player.x - this.cameraX, this.player.y, this.player.width, this.player.height);
+        let currentSprite;
+        let currentFrameCount;
+        
+        // Check if hit animation should still be playing
+        if (this.player.isHit && 
+            performance.now() - this.player.hitAnimationTimer < this.player.hitAnimationDuration) {
+            currentSprite = this.sprites.player.hit;
+            currentFrameCount = this.playerAnimation.frameCount.hit;
+        } else {
+            this.player.isHit = false;  // End hit state if animation is complete
+            // First check if player is hit
+            if (this.player.isHit) {
+                currentSprite = this.sprites.player.hit;
+                currentFrameCount = this.playerAnimation.frameCount.hit;
+            } else if (this.player.isJumping) {
+                if (this.player.velocityY < 0) {
+                    currentSprite = this.sprites.player.jump;
+                    currentFrameCount = this.playerAnimation.frameCount.jump;
+                } else {
+                    currentSprite = this.sprites.player.fall;
+                    currentFrameCount = this.playerAnimation.frameCount.fall;
+                }
+            } else if (this.keys['ArrowLeft'] || this.keys['ArrowRight']) {
+                currentSprite = this.sprites.player.run;
+                currentFrameCount = this.playerAnimation.frameCount.run;
+            } else {
+                currentSprite = this.sprites.player.idle;
+                currentFrameCount = this.playerAnimation.frameCount.idle;
+            }
+        }
+
+        // Update animation frame only for sprites with multiple frames
+        if (currentFrameCount > 1 && 
+            performance.now() - this.playerAnimation.frameTimer > this.playerAnimation.frameInterval) {
+            this.playerAnimation.frameTimer = performance.now();
+            this.playerAnimation.frameX = (this.playerAnimation.frameX + 1) % currentFrameCount;
+        }
+
+        // For single-frame sprites, always use frame 0
+        if (currentFrameCount === 1) {
+            this.playerAnimation.frameX = 0;
+        }
+
+        // Draw the sprite
+        this.ctx.save();
+        if (this.player.direction === -1) {
+            this.ctx.scale(-1, 1);
+            this.ctx.drawImage(
+                currentSprite,
+                this.playerAnimation.frameX * this.playerAnimation.frameWidth,
+                this.playerAnimation.frameY,
+                this.playerAnimation.frameWidth,
+                this.playerAnimation.frameHeight,
+                -(this.player.x - this.cameraX + this.player.width),
+                this.player.y,
+                this.player.width,
+                this.player.height
+            );
+        } else {
+            this.ctx.drawImage(
+                currentSprite,
+                this.playerAnimation.frameX * this.playerAnimation.frameWidth,
+                this.playerAnimation.frameY,
+                this.playerAnimation.frameWidth,
+                this.playerAnimation.frameHeight,
+                this.player.x - this.cameraX,
+                this.player.y,
+                this.player.width,
+                this.player.height
+            );
+        }
+        this.ctx.restore();
     }
 
     drawScore() {
@@ -409,6 +492,41 @@ class PlatformerGame {
 
     start() {
         this.gameLoop();
+    }
+
+    loadSprites() {
+        this.sprites = {
+            player: {
+                idle: new Image(),
+                run: new Image(),
+                jump: new Image(),
+                fall: new Image(),
+                hit: new Image()
+            }
+        };
+        
+        // Load sprite sheets
+        this.sprites.player.idle.src = 'img/pink-man-idle.png';
+        this.sprites.player.run.src = 'img/pink-man-run.png';
+        this.sprites.player.jump.src = 'img/pink-man-jump.png';
+        this.sprites.player.fall.src = 'img/pink-man-fall.png';
+        this.sprites.player.hit.src = 'img/pink-man-hit.png';
+        
+        this.playerAnimation = {
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 32,
+            frameHeight: 32,
+            frameCount: {
+                idle: 11,
+                run: 12,
+                jump: 1,
+                fall: 1,
+                hit: 7
+            },
+            frameTimer: 0,
+            frameInterval: 1000/15
+        };
     }
 }
 
