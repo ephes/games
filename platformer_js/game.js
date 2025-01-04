@@ -73,14 +73,15 @@ class PlatformerGame {
                 alive: true,
                 isHit: false,
                 hitAnimationTimer: 0,
-                hitAnimationDuration: 500,
+                hitAnimationDuration: 300,
                 frameX: 0,
-                frameTimer: 0
+                frameTimer: 0,
+                animationSpeed: 20
             },
             {
                 x: 120,
                 y: 120,
-                width: 30,
+                width: 44,
                 height: 30,
                 speed: 3,
                 direction: 1,
@@ -88,14 +89,15 @@ class PlatformerGame {
                 alive: true,
                 isHit: false,
                 hitAnimationTimer: 0,
-                hitAnimationDuration: 500,
+                hitAnimationDuration: 300,
                 frameX: 0,
-                frameTimer: 0
+                frameTimer: 0,
+                animationSpeed: 20
             },
             {
                 x: 820,
                 y: 170,
-                width: 30,
+                width: 44,
                 height: 30,
                 speed: 2,
                 direction: 1,
@@ -103,14 +105,15 @@ class PlatformerGame {
                 alive: true,
                 isHit: false,
                 hitAnimationTimer: 0,
-                hitAnimationDuration: 500,
+                hitAnimationDuration: 300,
                 frameX: 0,
-                frameTimer: 0
+                frameTimer: 0,
+                animationSpeed: 20
             },
             {
                 x: 1120,
                 y: 220,
-                width: 30,
+                width: 44,
                 height: 30,
                 speed: 3,
                 direction: 1,
@@ -118,14 +121,15 @@ class PlatformerGame {
                 alive: true,
                 isHit: false,
                 hitAnimationTimer: 0,
-                hitAnimationDuration: 500,
+                hitAnimationDuration: 300,
                 frameX: 0,
-                frameTimer: 0
+                frameTimer: 0,
+                animationSpeed: 20
             },
             {
                 x: 1420,
                 y: 120,
-                width: 30,
+                width: 44,
                 height: 30,
                 speed: 2,
                 direction: 1,
@@ -133,14 +137,15 @@ class PlatformerGame {
                 alive: true,
                 isHit: false,
                 hitAnimationTimer: 0,
-                hitAnimationDuration: 500,
+                hitAnimationDuration: 300,
                 frameX: 0,
-                frameTimer: 0
+                frameTimer: 0,
+                animationSpeed: 20
             },
             {
                 x: 1720,
                 y: 170,
-                width: 30,
+                width: 44,
                 height: 30,
                 speed: 3,
                 direction: 1,
@@ -148,14 +153,15 @@ class PlatformerGame {
                 alive: true,
                 isHit: false,
                 hitAnimationTimer: 0,
-                hitAnimationDuration: 500,
+                hitAnimationDuration: 300,
                 frameX: 0,
-                frameTimer: 0
+                frameTimer: 0,
+                animationSpeed: 20
             },
             {
                 x: 2020,
                 y: 220,
-                width: 30,
+                width: 44,
                 height: 30,
                 speed: 2,
                 direction: 1,
@@ -163,9 +169,10 @@ class PlatformerGame {
                 alive: true,
                 isHit: false,
                 hitAnimationTimer: 0,
-                hitAnimationDuration: 500,
+                hitAnimationDuration: 300,
                 frameX: 0,
-                frameTimer: 0
+                frameTimer: 0,
+                animationSpeed: 20
             }
         ];
     }
@@ -274,9 +281,18 @@ class PlatformerGame {
             // Check for collisions with enemies
             for (let enemy of this.enemies) {
                 if (enemy.alive && this.checkCollision(projectile, enemy)) {
-                    enemy.alive = false;
+                    // Start hit animation
+                    enemy.isHit = true;
+                    enemy.hitAnimationTimer = performance.now();
+                    enemy.frameX = 0;  // Reset animation frame
+                    
+                    // Mark as dead after animation
+                    setTimeout(() => {
+                        enemy.alive = false;
+                    }, enemy.hitAnimationDuration);
+                    
                     this.projectiles.splice(i, 1);
-                    this.score += 50; // Bonus points for killing enemy
+                    this.score += 50;
                     break;
                 }
             }
@@ -418,15 +434,21 @@ class PlatformerGame {
             if (enemy.isHit) {
                 currentSprite = this.sprites.enemy.hit;
                 frameCount = 5;  // Hit animation frames
+                
+                // Update animation frame at higher speed
+                if (performance.now() - enemy.frameTimer > 1000/enemy.animationSpeed) {  // 20 FPS animation
+                    enemy.frameTimer = performance.now();
+                    enemy.frameX = (enemy.frameX + 1) % frameCount;
+                }
             } else {
                 currentSprite = this.sprites.enemy.run;
                 frameCount = 10;  // Run animation frames
-            }
-
-            // Update animation frame
-            if (performance.now() - enemy.frameTimer > 1000/15) {  // 15 FPS animation
-                enemy.frameTimer = performance.now();
-                enemy.frameX = (enemy.frameX + 1) % frameCount;
+                
+                // Keep normal run animation at 15 FPS
+                if (performance.now() - enemy.frameTimer > 1000/15) {
+                    enemy.frameTimer = performance.now();
+                    enemy.frameX = (enemy.frameX + 1) % frameCount;
+                }
             }
 
             // Draw the sprite
@@ -435,14 +457,14 @@ class PlatformerGame {
                 this.ctx.scale(-1, 1);
                 this.ctx.drawImage(
                     currentSprite,
-                    enemy.frameX * 44,  // frameWidth is 44
+                    enemy.frameX * 44,  // Source width is 44
                     0,
-                    44,  // frameWidth
-                    30,  // frameHeight
+                    44,  // Source width is 44
+                    30,  // Source height is 30
                     -(enemy.x - this.cameraX + enemy.width),
                     enemy.y,
-                    enemy.width,
-                    enemy.height
+                    44,  // Destination width should match enemy.width (44)
+                    30   // Destination height should match enemy.height (30)
                 );
             } else {
                 this.ctx.drawImage(
@@ -453,8 +475,8 @@ class PlatformerGame {
                     30,
                     enemy.x - this.cameraX,
                     enemy.y,
-                    enemy.width,
-                    enemy.height
+                    44,
+                    30
                 );
             }
             this.ctx.restore();
