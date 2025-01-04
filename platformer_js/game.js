@@ -65,12 +65,17 @@ class PlatformerGame {
             {
                 x: 320,
                 y: 220,
-                width: 30,
+                width: 44,
                 height: 30,
                 speed: 2,
                 direction: 1,
                 platformIndex: 1,
-                alive: true
+                alive: true,
+                isHit: false,
+                hitAnimationTimer: 0,
+                hitAnimationDuration: 500,
+                frameX: 0,
+                frameTimer: 0
             },
             {
                 x: 120,
@@ -80,7 +85,12 @@ class PlatformerGame {
                 speed: 3,
                 direction: 1,
                 platformIndex: 2,
-                alive: true
+                alive: true,
+                isHit: false,
+                hitAnimationTimer: 0,
+                hitAnimationDuration: 500,
+                frameX: 0,
+                frameTimer: 0
             },
             {
                 x: 820,
@@ -90,7 +100,12 @@ class PlatformerGame {
                 speed: 2,
                 direction: 1,
                 platformIndex: 3,
-                alive: true
+                alive: true,
+                isHit: false,
+                hitAnimationTimer: 0,
+                hitAnimationDuration: 500,
+                frameX: 0,
+                frameTimer: 0
             },
             {
                 x: 1120,
@@ -100,7 +115,12 @@ class PlatformerGame {
                 speed: 3,
                 direction: 1,
                 platformIndex: 5,
-                alive: true
+                alive: true,
+                isHit: false,
+                hitAnimationTimer: 0,
+                hitAnimationDuration: 500,
+                frameX: 0,
+                frameTimer: 0
             },
             {
                 x: 1420,
@@ -110,7 +130,12 @@ class PlatformerGame {
                 speed: 2,
                 direction: 1,
                 platformIndex: 6,
-                alive: true
+                alive: true,
+                isHit: false,
+                hitAnimationTimer: 0,
+                hitAnimationDuration: 500,
+                frameX: 0,
+                frameTimer: 0
             },
             {
                 x: 1720,
@@ -120,7 +145,12 @@ class PlatformerGame {
                 speed: 3,
                 direction: 1,
                 platformIndex: 7,
-                alive: true
+                alive: true,
+                isHit: false,
+                hitAnimationTimer: 0,
+                hitAnimationDuration: 500,
+                frameX: 0,
+                frameTimer: 0
             },
             {
                 x: 2020,
@@ -130,7 +160,12 @@ class PlatformerGame {
                 speed: 2,
                 direction: 1,
                 platformIndex: 8,
-                alive: true
+                alive: true,
+                isHit: false,
+                hitAnimationTimer: 0,
+                hitAnimationDuration: 500,
+                frameX: 0,
+                frameTimer: 0
             }
         ];
     }
@@ -371,10 +406,58 @@ class PlatformerGame {
 
     drawEnemies() {
         this.enemies.forEach(enemy => {
-            if (enemy.alive) {
-                this.ctx.fillStyle = '#FF0000';
-                this.ctx.fillRect(enemy.x - this.cameraX, enemy.y, enemy.width, enemy.height);
+            // Don't draw if enemy is dead and hit animation is complete
+            if (!enemy.alive && 
+                (!enemy.isHit || performance.now() - enemy.hitAnimationTimer > enemy.hitAnimationDuration)) {
+                return;
             }
+
+            let currentSprite;
+            let frameCount;
+
+            if (enemy.isHit) {
+                currentSprite = this.sprites.enemy.hit;
+                frameCount = 5;  // Hit animation frames
+            } else {
+                currentSprite = this.sprites.enemy.run;
+                frameCount = 10;  // Run animation frames
+            }
+
+            // Update animation frame
+            if (performance.now() - enemy.frameTimer > 1000/15) {  // 15 FPS animation
+                enemy.frameTimer = performance.now();
+                enemy.frameX = (enemy.frameX + 1) % frameCount;
+            }
+
+            // Draw the sprite
+            this.ctx.save();
+            if (enemy.direction === -1) {
+                this.ctx.scale(-1, 1);
+                this.ctx.drawImage(
+                    currentSprite,
+                    enemy.frameX * 44,  // frameWidth is 44
+                    0,
+                    44,  // frameWidth
+                    30,  // frameHeight
+                    -(enemy.x - this.cameraX + enemy.width),
+                    enemy.y,
+                    enemy.width,
+                    enemy.height
+                );
+            } else {
+                this.ctx.drawImage(
+                    currentSprite,
+                    enemy.frameX * 44,
+                    0,
+                    44,
+                    30,
+                    enemy.x - this.cameraX,
+                    enemy.y,
+                    enemy.width,
+                    enemy.height
+                );
+            }
+            this.ctx.restore();
         });
     }
 
@@ -495,12 +578,17 @@ class PlatformerGame {
     }
 
     loadSprites() {
+        // from here: https://pixelfrog-assets.itch.io/pixel-adventure-1
         this.sprites = {
             player: {
                 idle: new Image(),
                 run: new Image(),
                 jump: new Image(),
                 fall: new Image(),
+                hit: new Image()
+            },
+            enemy: {
+                run: new Image(),
                 hit: new Image()
             }
         };
@@ -527,6 +615,10 @@ class PlatformerGame {
             frameTimer: 0,
             frameInterval: 1000/15
         };
+
+        // Load enemy sprites
+        this.sprites.enemy.run.src = 'img/slime-run.png';
+        this.sprites.enemy.hit.src = 'img/slime-hit.png';
     }
 }
 
