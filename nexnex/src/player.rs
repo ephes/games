@@ -34,25 +34,27 @@ pub fn player_movement(
     mut query: Query<(&mut Velocity, &mut Climber, &GroundDetection), With<Player>>,
 ) {
     for (mut velocity, mut climber, ground_detection) in &mut query {
-        let right = if input.pressed(KeyCode::KeyD) { 1. } else { 0. };
-        let left = if input.pressed(KeyCode::KeyA) { 1. } else { 0. };
+        let right = if input.pressed(KeyCode::KeyD) ||input.pressed(KeyCode::ArrowRight) { 1. } else { 0. };
+        let left = if input.pressed(KeyCode::KeyA) || input.pressed(KeyCode::ArrowLeft) { 1. } else { 0. };
 
         velocity.linvel.x = (right - left) * 200.;
 
         if climber.intersecting_climbables.is_empty() {
             climber.climbing = false;
-        } else if input.just_pressed(KeyCode::KeyW) || input.just_pressed(KeyCode::KeyS) {
+        } else if input.just_pressed(KeyCode::KeyW) || input.just_pressed(KeyCode::ArrowUp) 
+            || input.just_pressed(KeyCode::KeyS) || input.just_pressed(KeyCode::ArrowDown) {
             climber.climbing = true;
         }
 
         if climber.climbing {
-            let up = if input.pressed(KeyCode::KeyW) { 1. } else { 0. };
-            let down = if input.pressed(KeyCode::KeyS) { 1. } else { 0. };
+            let up = if input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp) { 1. } else { 0. };
+            let down = if input.pressed(KeyCode::KeyS) || input.pressed(KeyCode::ArrowDown) { 1. } else { 0. };
 
             velocity.linvel.y = (up - down) * 200.;
         }
 
-        if input.just_pressed(KeyCode::Space) && (ground_detection.on_ground || climber.climbing) {
+        if (input.just_pressed(KeyCode::Space) || input.just_pressed(KeyCode::ArrowUp)) 
+            && (ground_detection.on_ground || climber.climbing) {
             velocity.linvel.y = 500.;
             climber.climbing = false;
         }
