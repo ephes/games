@@ -10,6 +10,7 @@ class PlatformerGame {
         this.lastShotTime = 0;
         this.shotCooldown = 500; // Milliseconds between shots
         this.cameraX = 0;
+        this.canShoot = false;
 
         this.initializeGameObjects();
         this.setupEventListeners();
@@ -49,9 +50,9 @@ class PlatformerGame {
         ];
 
         this.coins = [
-            { x: 350, y: 200, width: 20, height: 20, collected: false },
-            { x: 150, y: 100, width: 20, height: 20, collected: false },
-            { x: 550, y: 150, width: 20, height: 20, collected: false },
+            { x: 350, y: 200, width: 20, height: 20, collected: false, isPowerUp: true },
+            { x: 150, y: 100, width: 20, height: 20, collected: false, isPowerUp: false },
+            { x: 550, y: 150, width: 20, height: 20, collected: false, isPowerUp: false },
             { x: 850, y: 100, width: 20, height: 20, collected: false },
             { x: 1150, y: 200, width: 20, height: 20, collected: false },
             { x: 1450, y: 100, width: 20, height: 20, collected: false },
@@ -188,6 +189,7 @@ class PlatformerGame {
     }
 
     shoot() {
+        if (!this.canShoot) return;
         const currentTime = Date.now();
         if (currentTime - this.lastShotTime >= this.shotCooldown) {
             const projectile = {
@@ -364,6 +366,9 @@ class PlatformerGame {
             if (!coin.collected && this.checkCollision(this.player, coin)) {
                 coin.collected = true;
                 this.score += 10;
+                if (coin.isPowerUp) {
+                    this.canShoot = true;
+                }
             }
         });
     }
@@ -403,11 +408,13 @@ class PlatformerGame {
     }
 
     drawCoins() {
-        this.ctx.fillStyle = '#FFD700';
         this.coins.forEach(coin => {
             if (!coin.collected) {
                 this.ctx.beginPath();
-                this.ctx.arc(coin.x -this.cameraX + coin.width/2, coin.y + coin.height/2, coin.width/2, 0, Math.PI * 2);
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.arc(coin.x - this.cameraX + coin.width/2, 
+                            coin.y + coin.height/2, 
+                            coin.width/2, 0, Math.PI * 2);
                 this.ctx.fill();
             }
         });
@@ -573,7 +580,11 @@ class PlatformerGame {
     drawControls() {
         this.ctx.fillStyle = 'black';
         this.ctx.font = '16px Arial';
-        this.ctx.fillText('Controls: Arrow Keys to move, SPACE to shoot', 20, this.canvas.height - 20);
+        let controls = 'Controls: Arrow Keys to move';
+        if (this.canShoot) {
+            controls += ', SPACE to shoot';
+        }
+        this.ctx.fillText(controls, 20, this.canvas.height - 20);
     }
 
     drawGameOver() {
