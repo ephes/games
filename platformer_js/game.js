@@ -51,15 +51,15 @@ class PlatformerGame {
 
         this.coins = [
             { x: 350, y: 200, width: 20, height: 20, collected: false, isPowerUp: true },
-            { x: 150, y: 100, width: 20, height: 20, collected: false, isPowerUp: false },
-            { x: 550, y: 150, width: 20, height: 20, collected: false, isPowerUp: false },
+            { x: 150, y: 100, width: 20, height: 20, collected: false },
+            { x: 550, y: 150, width: 20, height: 20, collected: false },
             { x: 850, y: 100, width: 20, height: 20, collected: false },
             { x: 1150, y: 200, width: 20, height: 20, collected: false },
             { x: 1450, y: 100, width: 20, height: 20, collected: false },
             { x: 1750, y: 150, width: 20, height: 20, collected: false },
             { x: 2050, y: 200, width: 20, height: 20, collected: false },
             { x: 2350, y: 100, width: 20, height: 20, collected: false },
-            { x: 2650, y: 150, width: 20, height: 20, collected: false }
+            { x: 2650, y: 150, width: 20, height: 20, collected: false, isPowerUp: true }
         ];
 
         this.enemies = [
