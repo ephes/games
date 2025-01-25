@@ -326,15 +326,40 @@ class PlatformerGame {
         if (this.player.isInvulnerable) return;
 
         for (let enemy of this.enemies) {
-            if (enemy.alive && this.checkCollision(this.player, enemy)) {
-                this.lives--;
-                if (this.lives <= 0) {
-                    this.gameOver = true;
+            if (!enemy.alive) continue;
+            
+            if (this.checkCollision(this.player, enemy)) {
+                // Check if player is falling onto the enemy from above
+                const playerBottom = this.player.y + this.player.height;
+                const enemyTop = enemy.y;
+                const playerFalling = this.player.velocityY > 0;
+                
+                if (playerFalling && playerBottom >= enemyTop && 
+                    playerBottom - enemyTop <= this.player.velocityY + 10) {
+                    // Player jumped on enemy
+                    enemy.isHit = true;
+                    enemy.hitAnimationTimer = performance.now();
+                    enemy.frameX = 0;  // Reset animation frame
+                    
+                    // Mark as dead after animation
+                    setTimeout(() => {
+                        enemy.alive = false;
+                    }, enemy.hitAnimationDuration);
+                    
+                    // Bounce the player
+                    this.player.velocityY = -this.player.jumpForce * 0.7;
+                    this.score += 50;
                 } else {
-                    this.player.x = 50;
-                    this.player.y = 200;
-                    this.player.velocityY = 0;
-                    this.makePlayerInvulnerable();
+                    // Player collided with enemy from the side or below
+                    this.lives--;
+                    if (this.lives <= 0) {
+                        this.gameOver = true;
+                    } else {
+                        this.player.x = 50;
+                        this.player.y = 200;
+                        this.player.velocityY = 0;
+                        this.makePlayerInvulnerable();
+                    }
                 }
                 break;
             }
