@@ -5,6 +5,7 @@ class PlatformerGame {
         this.score = 0;
         this.lives = 3;
         this.gameOver = false;
+        this.gameWon = false;
         this.keys = {};
         this.projectiles = [];
         this.lastShotTime = 0;
@@ -33,6 +34,14 @@ class PlatformerGame {
             isHit: false,
             hitAnimationTimer: 0,
             hitAnimationDuration: 500  // Duration of hit animation in milliseconds
+        };
+
+        // Add end portal
+        this.portal = {
+            x: 2700,
+            y: 222, // Adjusted to be visible on the platform
+            width: 128,
+            height: 128
         };
 
         this.platforms = [
@@ -229,7 +238,7 @@ class PlatformerGame {
     }
 
     update() {
-        if (this.gameOver) return;
+        if (this.gameOver || this.gameWon) return;
 
         this.updatePlayerMovement();
         this.updateProjectiles();
@@ -237,6 +246,7 @@ class PlatformerGame {
         this.checkCoinCollisions();
         this.updateEnemies();
         this.checkEnemyCollisions();
+        this.checkPortalCollision();
         this.keepPlayerInBounds();
     }
 
@@ -398,6 +408,27 @@ class PlatformerGame {
         });
     }
 
+    checkPortalCollision() {
+        if (this.checkCollision(this.player, this.portal)) {
+            // Calculate how centered the player is within the portal
+            const playerCenterX = this.player.x + this.player.width / 2;
+            const playerCenterY = this.player.y + this.player.height / 2;
+            const portalCenterX = this.portal.x + this.portal.width / 2;
+            const portalCenterY = this.portal.y + this.portal.height / 2;
+            
+            // Calculate distance from player center to portal center
+            const dx = playerCenterX - portalCenterX;
+            const dy = playerCenterY - portalCenterY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Only trigger win when the player is reasonably close to the center (within 60% of portal radius)
+            const portalRadius = this.portal.width / 2;
+            if (distance < portalRadius * 0.6) {
+                this.gameWon = true;
+            }
+        }
+    }
+
     keepPlayerInBounds() {
         // Get the rightmost platform (which should be the ground)
         const ground = this.platforms[0];  // The first platform is our ground
@@ -418,11 +449,13 @@ class PlatformerGame {
         this.drawCoins();
         this.drawProjectiles();
         this.drawEnemies();
+        this.drawPortal();
         this.drawPlayer();
         this.drawScore();
         this.drawLives();
         this.drawControls();
         if (this.gameOver) this.drawGameOver();
+        if (this.gameWon) this.drawGameWon();
     }
 
     drawPlatforms() {
@@ -625,6 +658,44 @@ class PlatformerGame {
         this.ctx.textAlign = 'left';
     }
 
+    drawGameWon() {
+        this.ctx.fillStyle = 'rgba(0, 100, 0, 0.7)';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        this.ctx.fillStyle = 'white';
+        this.ctx.font = '48px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('You Won!', this.canvas.width/2, this.canvas.height/2);
+        this.ctx.font = '24px Arial';
+        this.ctx.fillText(`Final Score: ${this.score}`, this.canvas.width/2, this.canvas.height/2 + 40);
+        this.ctx.textAlign = 'left';
+    }
+
+    drawPortal() {
+        // Create a circular clipping region to remove white corners
+        this.ctx.save();
+        
+        // Create a circular mask for the portal
+        this.ctx.beginPath();
+        const centerX = this.portal.x - this.cameraX + this.portal.width / 2;
+        const centerY = this.portal.y + this.portal.height / 2;
+        const radius = this.portal.width / 2;
+        this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        this.ctx.closePath();
+        this.ctx.clip();
+        
+        // Draw the portal image inside the clipped region
+        this.ctx.drawImage(
+            this.sprites.portal,
+            this.portal.x - this.cameraX,
+            this.portal.y,
+            this.portal.width,
+            this.portal.height
+        );
+        
+        this.ctx.restore();
+    }
+
     gameLoop = () => {
         this.update();
         this.draw();
@@ -648,7 +719,8 @@ class PlatformerGame {
             enemy: {
                 run: new Image(),
                 hit: new Image()
-            }
+            },
+            portal: new Image()
         };
         
         // Load sprite sheets
@@ -677,6 +749,10 @@ class PlatformerGame {
         // Load enemy sprites
         this.sprites.enemy.run.src = 'img/slime-run.png';
         this.sprites.enemy.hit.src = 'img/slime-hit.png';
+        
+        // Load portal sprite
+        this.sprites.portal.src = 'img/level_portal_128.png';
+        this.sprites.portal.loaded = true; // Set to true by default
     }
 }
 
