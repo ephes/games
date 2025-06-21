@@ -1,237 +1,238 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
+  <head>
     <title>Platformer with Sprites</title>
     <style>
-        canvas {
-            border: 2px solid black;
-            background: #87CEEB;
-        }
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: #f0f0f0;
-        }
+      canvas {
+        border: 2px solid black;
+        background: #87ceeb;
+      }
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background: #f0f0f0;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <canvas id="gameCanvas" width="800" height="400"></canvas>
     <script>
-        class PlatformerGame {
-            constructor(canvasId) {
-                this.canvas = document.getElementById(canvasId);
-                this.ctx = this.canvas.getContext('2d');
-                
-                // Load sprite images
-                this.playerSprite = new Image();
-                this.playerSprite.src = '/api/placeholder/200/200'; // Placeholder for sprite sheet
-                this.enemySprite = new Image();
-                this.enemySprite.src = '/api/placeholder/200/200'; // Placeholder for sprite sheet
-                
-                // Animation states
-                this.playerState = {
-                    frameX: 0, // Current frame in sprite sheet
-                    frameY: 0, // Row in sprite sheet (0: idle, 1: run, 2: jump)
-                    maxFrames: 6, // Number of frames in animation
-                    frameTimer: 0,
-                    frameInterval: 100, // Time between frame changes in ms
-                };
+      class PlatformerGame {
+        constructor(canvasId) {
+          this.canvas = document.getElementById(canvasId);
+          this.ctx = this.canvas.getContext('2d');
 
-                // Rest of constructor remains the same...
-                this.score = 0;
-                this.lives = 3;
-                this.gameOver = false;
-                this.keys = {};
-                this.projectiles = [];
-                this.lastShotTime = 0;
-                this.shotCooldown = 500;
+          // Load sprite images
+          this.playerSprite = new Image();
+          this.playerSprite.src = '/api/placeholder/200/200'; // Placeholder for sprite sheet
+          this.enemySprite = new Image();
+          this.enemySprite.src = '/api/placeholder/200/200'; // Placeholder for sprite sheet
 
-                this.initializeGameObjects();
-                this.setupEventListeners();
-            }
+          // Animation states
+          this.playerState = {
+            frameX: 0, // Current frame in sprite sheet
+            frameY: 0, // Row in sprite sheet (0: idle, 1: run, 2: jump)
+            maxFrames: 6, // Number of frames in animation
+            frameTimer: 0,
+            frameInterval: 100 // Time between frame changes in ms
+          };
 
-            initializeGameObjects() {
-                this.player = {
-                    x: 50,
-                    y: 200,
-                    width: 48, // Adjusted for sprite size
-                    height: 48, // Adjusted for sprite size
-                    speed: 5,
-                    jumpForce: 12,
-                    gravity: 0.5,
-                    velocityY: 0,
-                    isJumping: false,
-                    isInvulnerable: false,
-                    direction: 1,
-                    isMoving: false
-                };
+          // Rest of constructor remains the same...
+          this.score = 0;
+          this.lives = 3;
+          this.gameOver = false;
+          this.keys = {};
+          this.projectiles = [];
+          this.lastShotTime = 0;
+          this.shotCooldown = 500;
 
-                // Rest of initialization...
-                this.platforms = [
-                    { x: 0, y: 350, width: 800, height: 50 },
-                    { x: 300, y: 250, width: 200, height: 20 },
-                    { x: 100, y: 150, width: 200, height: 20 },
-                    { x: 500, y: 200, width: 200, height: 20 }
-                ];
-
-                this.enemies = this.platforms.slice(1).map((platform, index) => ({
-                    x: platform.x + 20,
-                    y: platform.y - 40,
-                    width: 48,
-                    height: 48,
-                    speed: 2,
-                    direction: 1,
-                    platformIndex: index + 1,
-                    alive: true,
-                    frameX: 0,
-                    maxFrames: 4,
-                    frameTimer: 0,
-                    frameInterval: 150
-                }));
-            }
-
-            updatePlayerAnimation(deltaTime) {
-                this.playerState.frameTimer += deltaTime;
-                
-                // Update animation frame
-                if (this.playerState.frameTimer >= this.playerState.frameInterval) {
-                    this.playerState.frameTimer = 0;
-                    this.playerState.frameX = (this.playerState.frameX + 1) % this.playerState.maxFrames;
-                }
-
-                // Set animation row based on player state
-                if (this.player.isJumping) {
-                    this.playerState.frameY = 2; // Jump animation row
-                } else if (this.player.isMoving) {
-                    this.playerState.frameY = 1; // Run animation row
-                } else {
-                    this.playerState.frameY = 0; // Idle animation row
-                }
-            }
-
-            updateEnemyAnimations(deltaTime) {
-                this.enemies.forEach(enemy => {
-                    if (!enemy.alive) return;
-                    
-                    enemy.frameTimer += deltaTime;
-                    if (enemy.frameTimer >= enemy.frameInterval) {
-                        enemy.frameTimer = 0;
-                        enemy.frameX = (enemy.frameX + 1) % enemy.maxFrames;
-                    }
-                });
-            }
-
-            updatePlayerMovement() {
-                this.player.isMoving = false;
-                
-                if (this.keys['ArrowLeft']) {
-                    this.player.x -= this.player.speed;
-                    this.player.direction = -1;
-                    this.player.isMoving = true;
-                }
-                if (this.keys['ArrowRight']) {
-                    this.player.x += this.player.speed;
-                    this.player.direction = 1;
-                    this.player.isMoving = true;
-                }
-
-                this.player.velocityY += this.player.gravity;
-                this.player.y += this.player.velocityY;
-            }
-
-            drawPlayer() {
-                const spriteSize = 64; // Size of each frame in the sprite sheet
-                
-                this.ctx.save();
-                if (this.player.direction === -1) {
-                    // Flip context for left-facing sprites
-                    this.ctx.scale(-1, 1);
-                    this.ctx.translate(-this.player.x - this.player.width, 0);
-                } else {
-                    this.ctx.translate(this.player.x, 0);
-                }
-
-                // Draw the sprite frame
-                this.ctx.drawImage(
-                    this.playerSprite,
-                    this.playerState.frameX * spriteSize,
-                    this.playerState.frameY * spriteSize,
-                    spriteSize,
-                    spriteSize,
-                    0,
-                    this.player.y,
-                    this.player.width,
-                    this.player.height
-                );
-                
-                this.ctx.restore();
-            }
-
-            drawEnemies() {
-                const spriteSize = 64;
-                
-                this.enemies.forEach(enemy => {
-                    if (!enemy.alive) return;
-                    
-                    this.ctx.save();
-                    if (enemy.direction === -1) {
-                        this.ctx.scale(-1, 1);
-                        this.ctx.translate(-enemy.x - enemy.width, 0);
-                    } else {
-                        this.ctx.translate(enemy.x, 0);
-                    }
-
-                    this.ctx.drawImage(
-                        this.enemySprite,
-                        enemy.frameX * spriteSize,
-                        0,
-                        spriteSize,
-                        spriteSize,
-                        0,
-                        enemy.y,
-                        enemy.width,
-                        enemy.height
-                    );
-                    
-                    this.ctx.restore();
-                });
-            }
-
-            update(deltaTime) {
-                if (this.gameOver) return;
-
-                this.updatePlayerAnimation(deltaTime);
-                this.updateEnemyAnimations(deltaTime);
-                this.updatePlayerMovement();
-                this.updateProjectiles();
-                this.checkPlatformCollisions();
-                this.checkCoinCollisions();
-                this.updateEnemies();
-                this.checkEnemyCollisions();
-                this.keepPlayerInBounds();
-            }
-
-            gameLoop = () => {
-                const currentTime = Date.now();
-                const deltaTime = currentTime - (this.lastTime || currentTime);
-                this.lastTime = currentTime;
-
-                this.update(deltaTime);
-                this.draw();
-                requestAnimationFrame(this.gameLoop);
-            }
-
-            // ... rest of the game code remains the same
+          this.initializeGameObjects();
+          this.setupEventListeners();
         }
 
-        // Initialize and start the game
-        document.addEventListener('DOMContentLoaded', () => {
-            const game = new PlatformerGame('gameCanvas');
-            game.start();
-        });
+        initializeGameObjects() {
+          this.player = {
+            x: 50,
+            y: 200,
+            width: 48, // Adjusted for sprite size
+            height: 48, // Adjusted for sprite size
+            speed: 5,
+            jumpForce: 12,
+            gravity: 0.5,
+            velocityY: 0,
+            isJumping: false,
+            isInvulnerable: false,
+            direction: 1,
+            isMoving: false
+          };
+
+          // Rest of initialization...
+          this.platforms = [
+            { x: 0, y: 350, width: 800, height: 50 },
+            { x: 300, y: 250, width: 200, height: 20 },
+            { x: 100, y: 150, width: 200, height: 20 },
+            { x: 500, y: 200, width: 200, height: 20 }
+          ];
+
+          this.enemies = this.platforms.slice(1).map((platform, index) => ({
+            x: platform.x + 20,
+            y: platform.y - 40,
+            width: 48,
+            height: 48,
+            speed: 2,
+            direction: 1,
+            platformIndex: index + 1,
+            alive: true,
+            frameX: 0,
+            maxFrames: 4,
+            frameTimer: 0,
+            frameInterval: 150
+          }));
+        }
+
+        updatePlayerAnimation(deltaTime) {
+          this.playerState.frameTimer += deltaTime;
+
+          // Update animation frame
+          if (this.playerState.frameTimer >= this.playerState.frameInterval) {
+            this.playerState.frameTimer = 0;
+            this.playerState.frameX =
+              (this.playerState.frameX + 1) % this.playerState.maxFrames;
+          }
+
+          // Set animation row based on player state
+          if (this.player.isJumping) {
+            this.playerState.frameY = 2; // Jump animation row
+          } else if (this.player.isMoving) {
+            this.playerState.frameY = 1; // Run animation row
+          } else {
+            this.playerState.frameY = 0; // Idle animation row
+          }
+        }
+
+        updateEnemyAnimations(deltaTime) {
+          this.enemies.forEach(enemy => {
+            if (!enemy.alive) return;
+
+            enemy.frameTimer += deltaTime;
+            if (enemy.frameTimer >= enemy.frameInterval) {
+              enemy.frameTimer = 0;
+              enemy.frameX = (enemy.frameX + 1) % enemy.maxFrames;
+            }
+          });
+        }
+
+        updatePlayerMovement() {
+          this.player.isMoving = false;
+
+          if (this.keys['ArrowLeft']) {
+            this.player.x -= this.player.speed;
+            this.player.direction = -1;
+            this.player.isMoving = true;
+          }
+          if (this.keys['ArrowRight']) {
+            this.player.x += this.player.speed;
+            this.player.direction = 1;
+            this.player.isMoving = true;
+          }
+
+          this.player.velocityY += this.player.gravity;
+          this.player.y += this.player.velocityY;
+        }
+
+        drawPlayer() {
+          const spriteSize = 64; // Size of each frame in the sprite sheet
+
+          this.ctx.save();
+          if (this.player.direction === -1) {
+            // Flip context for left-facing sprites
+            this.ctx.scale(-1, 1);
+            this.ctx.translate(-this.player.x - this.player.width, 0);
+          } else {
+            this.ctx.translate(this.player.x, 0);
+          }
+
+          // Draw the sprite frame
+          this.ctx.drawImage(
+            this.playerSprite,
+            this.playerState.frameX * spriteSize,
+            this.playerState.frameY * spriteSize,
+            spriteSize,
+            spriteSize,
+            0,
+            this.player.y,
+            this.player.width,
+            this.player.height
+          );
+
+          this.ctx.restore();
+        }
+
+        drawEnemies() {
+          const spriteSize = 64;
+
+          this.enemies.forEach(enemy => {
+            if (!enemy.alive) return;
+
+            this.ctx.save();
+            if (enemy.direction === -1) {
+              this.ctx.scale(-1, 1);
+              this.ctx.translate(-enemy.x - enemy.width, 0);
+            } else {
+              this.ctx.translate(enemy.x, 0);
+            }
+
+            this.ctx.drawImage(
+              this.enemySprite,
+              enemy.frameX * spriteSize,
+              0,
+              spriteSize,
+              spriteSize,
+              0,
+              enemy.y,
+              enemy.width,
+              enemy.height
+            );
+
+            this.ctx.restore();
+          });
+        }
+
+        update(deltaTime) {
+          if (this.gameOver) return;
+
+          this.updatePlayerAnimation(deltaTime);
+          this.updateEnemyAnimations(deltaTime);
+          this.updatePlayerMovement();
+          this.updateProjectiles();
+          this.checkPlatformCollisions();
+          this.checkCoinCollisions();
+          this.updateEnemies();
+          this.checkEnemyCollisions();
+          this.keepPlayerInBounds();
+        }
+
+        gameLoop = () => {
+          const currentTime = Date.now();
+          const deltaTime = currentTime - (this.lastTime || currentTime);
+          this.lastTime = currentTime;
+
+          this.update(deltaTime);
+          this.draw();
+          requestAnimationFrame(this.gameLoop);
+        };
+
+        // ... rest of the game code remains the same
+      }
+
+      // Initialize and start the game
+      document.addEventListener('DOMContentLoaded', () => {
+        const game = new PlatformerGame('gameCanvas');
+        game.start();
+      });
     </script>
-</body>
+  </body>
 </html>

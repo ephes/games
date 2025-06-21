@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Platformer JS - Documentation</title>
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #333;
+        border-bottom: 3px solid #4caf50;
+        padding-bottom: 10px;
+      }
+      .buttons {
+        display: flex;
+        gap: 15px;
+        margin: 30px 0;
+      }
+      .button {
+        display: inline-block;
+        padding: 12px 24px;
+        background: #4caf50;
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+        transition: background 0.3s;
+      }
+      .button:hover {
+        background: #45a049;
+      }
+      .button.secondary {
+        background: #2196f3;
+      }
+      .button.secondary:hover {
+        background: #1976d2;
+      }
+      code {
+        background: #f1f1f1;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+      }
+      .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin: 30px 0;
+      }
+      .feature {
+        background: #f9f9f9;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #4caf50;
+      }
+      .feature h3 {
+        margin-top: 0;
+        color: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎮 Platformer JS Documentation</h1>
+
+      <p>
+        A modular 2D platformer game built with vanilla JavaScript and HTML5
+        Canvas.
+      </p>
+
+      <div class="buttons">
+        <a href="../index.html" class="button">Play Game</a>
+        <a href="api/index.html" class="button secondary">API Documentation</a>
+        <a
+          href="https://github.com/yourusername/platformer_js"
+          class="button secondary"
+          >View on GitHub</a
+        >
+      </div>
+
+      <h2>Features</h2>
+      <div class="features">
+        <div class="feature">
+          <h3>🏃 Player Movement</h3>
+          <p>
+            Smooth character controls with running, jumping, and shooting
+            mechanics.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>👾 Enemy AI</h3>
+          <p>
+            Enemies patrol platforms with collision detection and stomp
+            mechanics.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>🐍 Boss Battle</h3>
+          <p>Epic boss fight with health system and special attack patterns.</p>
+        </div>
+        <div class="feature">
+          <h3>💰 Collectibles</h3>
+          <p>Coins to collect and power-ups that grant new abilities.</p>
+        </div>
+      </div>
+
+      <h2>Project Structure</h2>
+      <p>
+        The game is built using ES modules for clean separation of concerns:
+      </p>
+
+      <pre><code>src/
+├── entities/      # Game entities (Player, Enemy, Boss)
+├── systems/       # Core systems (Input, Collision, Camera)
+├── objects/       # Game objects (Platform, Coin, Portal)
+├── rendering/     # Rendering logic
+└── utils/         # Constants and helpers</code></pre>
+
+      <h2>Getting Started</h2>
+      <p>The game works directly in the browser without any build step:</p>
+
+      <pre><code># Clone the repository
+git clone https://github.com/yourusername/platformer_js.git
+
+# Open in browser
+open index.html
+
+# Or start a local server
+npx serve</code></pre>
+
+      <h2>Development</h2>
+      <p>For development with hot reload:</p>
+
+      <pre><code># Install dependencies
+npm install
+
+# Start dev server
+npm run dev
+
+# Run tests
+npm test</code></pre>
+
+      <h2>Controls</h2>
+      <ul>
+        <li><strong>Arrow Keys</strong> - Move and jump</li>
+        <li><strong>Space</strong> - Shoot (after collecting power-up)</li>
+      </ul>
+
+      <h2>Contributing</h2>
+      <p>
+        Contributions are welcome! Please check the
+        <a href="api/index.html">API documentation</a> to understand the
+        codebase structure.
+      </p>
+
+      <footer
+        style="
+          margin-top: 50px;
+          padding-top: 20px;
+          border-top: 1px solid #eee;
+          text-align: center;
+          color: #666;
+        "
+      >
+        <p>Built with ❤️ using vanilla JavaScript</p>
+      </footer>
+    </div>
+  </body>
+</html>
