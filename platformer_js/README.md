@@ -2,6 +2,8 @@
 
 A modular 2D platformer game built with HTML5 Canvas and JavaScript ES modules. Works directly in the browser without any build step!
 
+🎮 **[Play the game online!](https://ephes.github.io/games/platformer/)**
+
 ## 🎮 Game Features
 
 - Side-scrolling platformer with multiple levels
