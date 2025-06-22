@@ -1,16 +1,10 @@
 # Platformer JS Game
 
-This is a 2D platformer game built with HTML5 Canvas and JavaScript.
+A modular 2D platformer game built with HTML5 Canvas and JavaScript ES modules.
 
 ## Current Structure
 
-The game is currently implemented as a single monolithic class (`PlatformerGame`) in `game.js` with all game logic, rendering, and state management in one file (~900 lines).
-
-## Recommended Improvements
-
-### 1. Code Structure - ES Modules
-
-The code should be refactored using ES modules for better organization and maintainability:
+The game has been refactored from a monolithic structure into clean ES modules:
 
 ```
 src/
@@ -31,83 +25,41 @@ src/
 │   ├── Coin.js            # Collectible coins
 │   └── Portal.js          # Level exit portal
 ├── rendering/
-│   ├── Renderer.js        # Main rendering coordination
-│   └── SpriteRenderer.js  # Sprite animation rendering
+│   └── Renderer.js        # Centralized rendering with sprite support
 └── utils/
-    └── constants.js       # Game constants and configuration
+    ├── constants.js       # Game constants and configuration
+    └── helpers.js         # Utility functions
 ```
 
-### 2. Testing Setup with Vitest
+## Development Setup
 
-Add a test infrastructure using Vitest for unit and integration testing:
+### Prerequisites
 
-```json
-{
-  "name": "platformer-js",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "test": "vitest",
-    "test:ui": "vitest --ui",
-    "coverage": "vitest run --coverage"
-  },
-  "devDependencies": {
-    "vite": "^5.0.0",
-    "vitest": "^1.0.0",
-    "@vitest/ui": "^1.0.0",
-    "@vitest/coverage-v8": "^1.0.0",
-    "jsdom": "^23.0.0",
-    "@testing-library/dom": "^9.0.0"
-  }
-}
-```
+- Node.js (v14 or higher)
+- npm or yarn
 
-### 3. Key Areas to Test
-
-1. **Entity Movement**: Player/enemy position updates, velocity calculations
-2. **Collision Detection**: Platform collisions, enemy collisions, projectile hits
-3. **Game State**: Score tracking, lives management, power-up effects
-4. **Input Handling**: Keyboard input mapping, action triggering
-5. **Animation System**: Frame updates, sprite switching
-
-### 4. Example Test Structure
-
-```javascript
-// src/entities/__tests__/Player.test.js
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Player } from '../Player.js';
-
-describe('Player', () => {
-  let player;
-
-  beforeEach(() => {
-    player = new Player(50, 200);
-  });
-
-  it('should jump when not already jumping', () => {
-    player.jump();
-    expect(player.velocityY).toBe(-12);
-    expect(player.isJumping).toBe(true);
-  });
-
-  it('should not jump when already in air', () => {
-    player.isJumping = true;
-    player.jump();
-    expect(player.velocityY).toBe(0);
-  });
-});
-```
-
-### 5. Development Commands
+### Installation
 
 ```bash
-# Install dependencies
 npm install
+```
 
-# Run development server
+### Running the Game
+
+```bash
+# Development server with hot reload
 npm run dev
 
+# The game runs at http://localhost:5173
+```
+
+Note: Due to ES module CORS restrictions, the game must be served via HTTP. Opening `index.html` directly won't work.
+
+## Testing
+
+The project includes a comprehensive test suite with 56+ tests using Vitest:
+
+```bash
 # Run tests in watch mode (for development)
 npm test
 
@@ -121,42 +73,95 @@ npm run test:ui
 npm run coverage
 ```
 
-### 6. Vite Configuration
+## Code Quality
 
-Create `vite.config.js`:
+### Linting
 
-```javascript
-import { defineConfig } from 'vite';
+```bash
+# Check for linting issues
+npm run lint
 
-export default defineConfig({
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: './src/test/setup.js'
-  },
-  server: {
-    open: true
-  }
-});
+# Auto-fix linting issues
+npm run lint:fix
 ```
 
-### 7. Benefits of This Structure
+### Formatting
 
-1. **Modularity**: Each class has a single responsibility
-2. **Testability**: Individual components can be tested in isolation
-3. **Maintainability**: Easier to locate and modify specific features
-4. **Reusability**: Components can be reused in different contexts
-5. **Type Safety**: Can add TypeScript later if needed
-6. **Build Optimization**: Vite will handle bundling and optimization
+```bash
+# Format all files with Prettier
+npm run format
 
-### 8. Migration Strategy
+# Check formatting without changes
+npm run format:check
+```
 
-1. Set up the build system (Vite + Vitest)
-2. Create the folder structure
-3. Extract entities (Player, Enemy, Boss) first
-4. Move collision system to its own module
-5. Separate rendering logic
-6. Add tests for each module as you extract it
-7. Update index.html to use ES modules
+Pre-commit hooks are configured to automatically run ESLint and Prettier on staged files.
 
-This refactoring will make the codebase more professional, easier to extend, and much easier to test.
+## Building and Deployment
+
+```bash
+# Build for production
+npm run build
+
+# Build documentation
+npm run build:docs
+
+# Preview production build
+npm run preview
+```
+
+The project includes GitHub Actions for automated deployment to GitHub Pages.
+
+## Architecture Highlights
+
+### Entities
+
+- **Player**: Handles player state, movement, animations, and power-ups
+- **Enemy**: Base class for enemies with patrol behavior
+- **Boss**: Extended enemy with health system and special animations
+- **Projectile**: Player-fired projectiles with collision detection
+
+### Systems
+
+- **InputManager**: Centralized keyboard input handling with event system
+- **CollisionSystem**: Static methods for all collision detection logic
+- **Camera**: Smooth camera following with boundary constraints
+- **SpriteLoader**: Async sprite loading with caching
+
+### Game Flow
+
+1. `main.js` initializes the game when DOM is ready
+2. `Game.js` coordinates all systems and game objects
+3. Game loop updates entities, checks collisions, and renders
+4. Renderer handles all drawing operations with sprite animations
+
+## Recent Improvements
+
+### Bug Fixes
+
+- Fixed double jump bug - players can no longer jump while in air
+- Fixed platform edge detection - requires 50% overlap to be grounded
+- Fixed async initialization issues causing blank screen
+
+### Features Added
+
+- Modular ES6 architecture
+- Comprehensive test coverage
+- JSDoc documentation
+- Build tooling with Vite
+- Pre-commit hooks
+- GitHub Actions deployment
+
+## Configuration
+
+Game configuration is centralized in `src/utils/constants.js`:
+
+- Game settings (lives, shot cooldown)
+- Player configuration (start position, speed)
+- Level data (platforms, enemies, coins)
+
+## Version History
+
+See [CHANGELOG.md](./CHANGELOG.md) for detailed version history.
+
+Current version: 0.1.0 (Alpha)
