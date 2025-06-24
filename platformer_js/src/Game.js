@@ -241,6 +241,11 @@ export class Game {
         } else if (hit.type === 'boss') {
           const points = hit.target.takeDamage();
           this.score += points;
+
+          // Check if boss is defeated
+          if (!this.boss.alive) {
+            this.portal.unlock();
+          }
         }
         this.projectiles.splice(i, 1);
       }
@@ -293,6 +298,11 @@ export class Game {
       const points = this.boss.takeDamage();
       this.player.bounce();
       this.score += points;
+
+      // Check if boss is defeated
+      if (!this.boss.alive) {
+        this.portal.unlock();
+      }
     } else if (bossCollision === 'damage') {
       this.lives = this.player.takeDamage(this.lives);
       if (this.lives <= 0) {
@@ -300,8 +310,11 @@ export class Game {
       }
     }
 
-    // Portal collision
-    if (CollisionSystem.checkPortalEntry(this.player, this.portal)) {
+    // Portal collision - only allow entry if unlocked
+    if (
+      !this.portal.isLocked &&
+      CollisionSystem.checkPortalEntry(this.player, this.portal)
+    ) {
       this.gameWon = true;
     }
   }

@@ -328,6 +328,9 @@ describe('PlatformerGame', () => {
 
   describe('Win Condition', () => {
     it('should win when player reaches portal center', () => {
+      // Unlock portal first (simulating boss defeat)
+      game.portal.unlock();
+
       // Position player at portal center
       game.player.x =
         game.portal.x + game.portal.width / 2 - game.player.width / 2;
@@ -339,7 +342,25 @@ describe('PlatformerGame', () => {
       expect(game.gameWon).toBe(true);
     });
 
+    it('should not win when player reaches locked portal', () => {
+      // Ensure portal is locked (default state)
+      expect(game.portal.isLocked).toBe(true);
+
+      // Position player at portal center
+      game.player.x =
+        game.portal.x + game.portal.width / 2 - game.player.width / 2;
+      game.player.y =
+        game.portal.y + game.portal.height / 2 - game.player.height / 2;
+
+      game.checkCollisions();
+
+      expect(game.gameWon).toBe(false);
+    });
+
     it('should not win when player only touches portal edge', () => {
+      // Unlock portal first
+      game.portal.unlock();
+
       // Position player at portal edge
       game.player.x = game.portal.x;
       game.player.y = game.portal.y;
