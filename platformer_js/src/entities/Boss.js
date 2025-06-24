@@ -55,8 +55,9 @@ export class Boss extends Enemy {
 
     // Boss AI with zone-based behavior
     if (player) {
-      const distanceToPlayer = Math.abs(this.x - player.x);
-      const playerDirection = player.x > this.x ? 1 : -1;
+      const horizontalDistance = player.x - this.x;
+      const distanceToPlayer = Math.abs(horizontalDistance);
+      const playerDirection = horizontalDistance > 0 ? 1 : -1;
       const verticalDistance = player.y - this.y;
 
       // Check if player is above and falling (trying to stomp)
@@ -76,13 +77,16 @@ export class Boss extends Enemy {
         } else if (distanceToPlayer > 300) {
           // Medium zone: Face player, move slowly
           this.speed = this.baseSpeed * 0.5;
-          if (this.direction !== playerDirection) {
+          // Only change direction if player is significantly to one side
+          if (this.direction !== playerDirection && distanceToPlayer > 50) {
             this.direction = playerDirection;
           }
         } else {
           // Close zone: Aggressive pursuit
           this.speed = this.baseSpeed * 1.5;
-          if (this.direction !== playerDirection) {
+          // Add dead zone to prevent spinning when player is directly above
+          // Only change direction if player is at least 30 pixels away horizontally
+          if (this.direction !== playerDirection && distanceToPlayer > 30) {
             this.direction = playerDirection;
           }
         }

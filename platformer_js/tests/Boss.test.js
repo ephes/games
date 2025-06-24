@@ -6,10 +6,10 @@ describe('Boss', () => {
   let platforms;
 
   beforeEach(() => {
-    platforms = [{ x: 100, y: 300, width: 600, height: 20 }];
+    platforms = [{ x: 0, y: 300, width: 800, height: 20 }];
 
     boss = new Boss({
-      x: 200,
+      x: 400,
       y: 250,
       speed: 2,
       platformIndex: 0
@@ -130,6 +130,113 @@ describe('Boss', () => {
       expect(boss.frameX).toBe(boss.animationSequence[3]);
 
       mockNow.mockRestore();
+    });
+  });
+
+  describe('AI and Movement', () => {
+    let player;
+
+    beforeEach(() => {
+      player = {
+        x: 300,
+        y: 200,
+        velocityY: 0
+      };
+    });
+
+    it('should not change direction rapidly when player is directly above', () => {
+      // Place boss directly under player
+      boss.x = 300;
+      boss.direction = 1;
+
+      // Update with player directly above (0 horizontal distance)
+      boss.update(platforms, 16, player);
+      expect(boss.direction).toBe(1); // Should maintain direction
+
+      // Move player slightly to the left (within dead zone)
+      player.x = 280; // 20 pixels away
+      boss.update(platforms, 16, player);
+      expect(boss.direction).toBe(1); // Should still maintain direction
+
+      // Move player outside dead zone
+      player.x = 250; // 50 pixels away
+      boss.update(platforms, 16, player);
+      expect(boss.direction).toBe(-1); // Now should change direction
+    });
+
+    it('should have different dead zones for different distance zones', () => {
+      // Test close zone (< 300 pixels) with 30 pixel dead zone
+      boss.x = 400; // Center of platform to avoid edge effects
+      boss.direction = 1;
+
+      // Within close zone dead zone (30 pixels)
+      player.x = boss.x - 25; // 25 pixels to the left
+      boss.update(platforms, 16, player);
+      expect(boss.direction).toBe(1); // Should NOT change
+
+      // Outside close zone dead zone
+      player.x = boss.x - 35; // 35 pixels to the left
+      boss.update(platforms, 16, player);
+      expect(boss.direction).toBe(-1); // Should change
+
+      // Test medium zone (300-600 pixels) with 50 pixel dead zone
+      // Reset boss position to avoid interference from previous test
+      boss.x = 200; // Well within platform bounds
+      boss.direction = 1;
+      player.x = boss.x + 350; // 350 pixels away (in medium zone)
+      boss.update(platforms, 16, player);
+      expect(boss.speed).toBe(boss.baseSpeed * 0.5); // Verify medium zone speed
+
+      // Now test dead zone - boss facing right, player slightly to the left
+      boss.direction = 1;
+      player.x = boss.x - 45; // 45 pixels to the left (155), still in close zone!
+      // This puts player at 155, boss at 200, so distance is 45 pixels (close zone)
+      boss.update(platforms, 16, player);
+      expect(boss.direction).toBe(-1); // Should change (45 > 30 pixel close zone dead zone)
+
+      // Test actual medium zone dead zone
+      boss.x = 200;
+      boss.direction = 1;
+      player.x = boss.x + 340; // 340 pixels away (in medium zone)
+      boss.update(platforms, 16, player);
+
+      // Now move player to other side but keep in medium zone
+      boss.direction = -1; // Boss facing left
+      player.x = boss.x + 340; // Player 340 pixels to the right
+      boss.update(platforms, 16, player);
+      expect(boss.direction).toBe(1); // Should change (340 > 50)
+    });
+
+    it('should dodge when player is falling from above', () => {
+      // Place player above boss and falling
+      player.x = boss.x + 10;
+      player.y = boss.y - 60;
+      player.velocityY = 5; // Falling
+      boss.direction = 1;
+      boss.speed = boss.baseSpeed;
+
+      boss.update(platforms, 16, player);
+
+      // Should move away quickly
+      expect(boss.speed).toBe(boss.baseSpeed * 3);
+      expect(boss.direction).toBe(-1); // Move away from player
+    });
+
+    it('should adjust speed based on distance zones', () => {
+      // Far zone
+      player.x = boss.x + 700;
+      boss.update(platforms, 16, player);
+      expect(boss.speed).toBe(boss.baseSpeed);
+
+      // Medium zone
+      player.x = boss.x + 400;
+      boss.update(platforms, 16, player);
+      expect(boss.speed).toBe(boss.baseSpeed * 0.5);
+
+      // Close zone
+      player.x = boss.x + 100;
+      boss.update(platforms, 16, player);
+      expect(boss.speed).toBe(boss.baseSpeed * 1.5);
     });
   });
 });
