@@ -66,8 +66,8 @@ export const LEVEL_DATA = {
   ],
   boss: {
     x: 2600,
-    y: 150,
-    platformIndex: 10
+    y: 270, // Adjusted to be closer to ground
+    platformIndex: 0 // Ground platform
   },
   portal: {
     x: 2700,

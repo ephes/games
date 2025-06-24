@@ -203,7 +203,7 @@ export class Game {
 
     // Update enemies
     this.enemies.forEach(enemy => enemy.update(this.platforms, deltaTime));
-    this.boss.update(this.platforms, deltaTime);
+    this.boss.update(this.platforms, deltaTime, this.player);
 
     // Update projectiles
     this.updateProjectiles(deltaTime);

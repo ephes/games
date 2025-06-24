@@ -133,7 +133,7 @@ export class Renderer {
    * @param {number} cameraX - Camera X offset
    */
   drawBoss(boss) {
-    if (!boss.alive) {
+    if (!boss.alive && !boss.isInHitAnimation()) {
       return;
     }
 
@@ -144,10 +144,15 @@ export class Renderer {
 
     const config = this.animationConfigs.boss;
     const sx = boss.frameX * config.frameWidth;
-    const sy = boss.frameY * config.frameHeight;
+    const sy = 0; // Single row sprite sheet
 
     this.ctx.save();
 
+    // Enable image smoothing for better animation
+    this.ctx.imageSmoothingEnabled = true;
+    this.ctx.imageSmoothingQuality = 'high';
+
+    // Draw the boss sprite first
     if (boss.direction === -1) {
       this.ctx.scale(-1, 1);
       this.ctx.drawImage(
@@ -175,16 +180,59 @@ export class Renderer {
       );
     }
 
+    // Apply hit effect overlay after drawing the sprite
+    if (boss.isHit) {
+      // Create a more stable flash effect with slower pulsing
+      const timeSinceHit = Date.now() - boss.hitTimer;
+      const flashPhase = timeSinceHit / boss.hitDuration;
+      const flashIntensity = Math.max(0, 1 - flashPhase) * 0.6; // Fade out over hit duration
+
+      this.ctx.globalCompositeOperation = 'source-atop';
+      this.ctx.fillStyle = `rgba(255, 100, 100, ${flashIntensity})`;
+      this.ctx.fillRect(
+        boss.direction === -1 ? -(boss.x + boss.width) : boss.x,
+        boss.y,
+        boss.width,
+        boss.height
+      );
+      this.ctx.globalCompositeOperation = 'source-over';
+    }
+
     this.ctx.restore();
 
-    // Draw health bar
-    this.drawHealthBar(
-      boss.x,
-      boss.y - 16,
-      boss.width,
-      10,
-      boss.getHealthPercentage()
-    );
+    // Draw health bar only if boss is alive
+    if (boss.alive) {
+      this.drawHealthBar(
+        boss.x,
+        boss.y - 16,
+        boss.width,
+        10,
+        boss.getHealthPercentage()
+      );
+    }
+
+    // Debug overlay
+    if (window.DEBUG_BOSS) {
+      this.ctx.fillStyle = 'white';
+      this.ctx.fillRect(boss.x - 50, boss.y - 50, 150, 30);
+      this.ctx.fillStyle = 'black';
+      this.ctx.font = '12px monospace';
+      this.ctx.fillText(
+        `Frame: ${boss.frameX} Seq: ${boss.sequenceIndex}`,
+        boss.x - 45,
+        boss.y - 35
+      );
+      this.ctx.fillText(
+        `Timer: ${Date.now() - boss.frameTimer}ms`,
+        boss.x - 45,
+        boss.y - 25
+      );
+
+      // Draw frame boundaries
+      this.ctx.strokeStyle = 'red';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(boss.x, boss.y, boss.width, boss.height);
+    }
   }
 
   /**

@@ -50,7 +50,7 @@ export class SpriteLoader {
     this.loadSprite('enemy.hit', 'assets/sprites/slime-hit.png');
 
     // Boss sprite
-    this.loadSprite('boss', 'assets/sprites/cobra_boss_moving.png');
+    this.loadSprite('boss', 'assets/sprites/boss_kobra_64x96-sheet.png');
 
     // Portal sprite
     this.loadSprite('portal', 'assets/sprites/level_portal_128.png');
@@ -94,10 +94,9 @@ export class SpriteLoader {
         }
       },
       boss: {
-        frameWidth: 128,
-        frameHeight: 128,
-        framesX: 5,
-        framesY: 2,
+        frameWidth: 64,
+        frameHeight: 96,
+        frames: 5,
         fps: 10
       }
     };

@@ -258,8 +258,8 @@ describe('PlatformerGame', () => {
     it('should damage boss with projectiles', () => {
       // Ensure boss is alive
       expect(game.boss.alive).toBe(true);
-      expect(game.boss.width).toBe(128);
-      expect(game.boss.height).toBe(128);
+      expect(game.boss.width).toBe(64);
+      expect(game.boss.height).toBe(96);
 
       // Create a projectile at boss position
       game.canShoot = true;
