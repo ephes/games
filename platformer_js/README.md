@@ -9,7 +9,7 @@ A modular 2D platformer game built with HTML5 Canvas and JavaScript ES modules. 
 - Side-scrolling platformer with multiple levels
 - Player character with run, jump, and shoot abilities
 - Enemy AI with platform patrol behavior
-- Boss fight with health system
+- Boss fight with health system and fireball attacks
 - Collectible coins and power-ups
 - Win condition with portal exit
 - Sprite-based animations
@@ -63,7 +63,7 @@ npm run preview
 
 ## 🧪 Testing
 
-The project uses Vitest for unit testing with 56+ tests covering game logic.
+The project uses Vitest for unit testing with 93 tests covering game logic.
 
 ```bash
 # Run tests in watch mode
@@ -113,7 +113,7 @@ platformer_js/
 ├── src/              # Modular ES6 source code
 │   ├── main.js       # Entry point
 │   ├── Game.js       # Main game coordinator
-│   ├── entities/     # Player, Enemy, Boss, Projectile
+│   ├── entities/     # Player, Enemy, Boss, Projectile, BossProjectile
 │   ├── systems/      # Input, Collision, Camera, Sprites
 │   ├── objects/      # Platform, Coin, Portal
 │   ├── rendering/    # Renderer

@@ -3,6 +3,7 @@
  */
 
 import { Enemy } from './Enemy.js';
+import { BossProjectile } from './BossProjectile.js';
 
 /**
  * Boss enemy class
@@ -40,6 +41,13 @@ export class Boss extends Enemy {
     // Play frames in a back-and-forth pattern: 0,1,2,3,4,3,2,1
     this.animationSequence = [0, 1, 2, 3, 4, 3, 2, 1];
     this.sequenceIndex = 0;
+
+    // Projectile system
+    this.projectiles = [];
+    this.canShoot = true;
+    this.shootCooldown = 1500; // 1.5 seconds between shots
+    this.lastShotTime = -this.shootCooldown; // Allow immediate first shot
+    this.shootingRange = 600; // Range to start shooting at player
   }
 
   /**
@@ -121,6 +129,17 @@ export class Boss extends Enemy {
     if (this.isHit && Date.now() - this.hitTimer > this.hitDuration) {
       this.isHit = false;
     }
+
+    // Update projectile shooting
+    this.updateShooting(player);
+
+    // Update projectiles (only if boss is alive)
+    if (this.alive) {
+      this.projectiles = this.projectiles.filter(projectile => {
+        projectile.update(deltaTime);
+        return projectile.active;
+      });
+    }
   }
 
   /**
@@ -155,6 +174,11 @@ export class Boss extends Enemy {
 
     if (this.health <= 0) {
       this.alive = false;
+      // Clear all projectiles when boss dies
+      this.projectiles.forEach(projectile => {
+        projectile.active = false;
+      });
+      this.projectiles = [];
       return 200; // Points for defeating boss
     }
 
@@ -174,5 +198,59 @@ export class Boss extends Enemy {
    */
   hit() {
     return this.takeDamage();
+  }
+
+  /**
+   * Update shooting behavior
+   * @param {Object} player - Player object
+   */
+  updateShooting(player) {
+    if (!player) {
+      return;
+    }
+    if (!this.alive) {
+      return;
+    }
+
+    const now = Date.now();
+    const distanceToPlayer = Math.abs(player.x - this.x);
+    const timeSinceLastShot = now - this.lastShotTime;
+
+    // Check if can shoot
+    if (this.canShoot && distanceToPlayer <= this.shootingRange) {
+      if (timeSinceLastShot >= this.shootCooldown) {
+        this.shoot(player);
+        this.lastShotTime = now;
+      }
+    }
+  }
+
+  /**
+   * Shoot a projectile at the player
+   * @param {Object} player - Player object
+   */
+  shoot(player) {
+    const direction = player.x > this.x ? 1 : -1;
+    const projectileX = this.x + (direction > 0 ? this.width : 0);
+    const projectileY = this.y + this.height / 2;
+
+    // Simple, fair projectile speed
+    const projectileSpeed = 5;
+
+    const projectile = new BossProjectile(
+      projectileX,
+      projectileY,
+      direction,
+      projectileSpeed
+    );
+    this.projectiles.push(projectile);
+  }
+
+  /**
+   * Get all active projectiles
+   * @returns {Array} Active projectiles
+   */
+  getProjectiles() {
+    return this.projectiles;
   }
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Boss } from '../src/entities/Boss.js';
+import { BossProjectile } from '../src/entities/BossProjectile.js';
 
 describe('Boss', () => {
   let boss;
@@ -237,6 +238,175 @@ describe('Boss', () => {
       player.x = boss.x + 100;
       boss.update(platforms, 16, player);
       expect(boss.speed).toBe(boss.baseSpeed * 1.5);
+    });
+  });
+
+  describe('Projectile System', () => {
+    let player;
+
+    beforeEach(() => {
+      player = {
+        x: 300,
+        y: 200,
+        velocityY: 0
+      };
+    });
+
+    it('should initialize projectile system', () => {
+      expect(boss.projectiles).toEqual([]);
+      expect(boss.canShoot).toBe(true);
+      expect(boss.shootCooldown).toBe(1500);
+      expect(boss.lastShotTime).toBe(-1500);
+      expect(boss.shootingRange).toBe(600);
+    });
+
+    it('should shoot when player is in range', () => {
+      const mockNow = vi.spyOn(Date, 'now');
+      mockNow.mockReturnValue(3000);
+
+      // Ensure boss can shoot (cooldown has passed)
+      boss.lastShotTime = 0;
+
+      // Player within range
+      player.x = boss.x + 300;
+      boss.update(platforms, 16, player);
+
+      expect(boss.projectiles.length).toBe(1);
+      expect(boss.projectiles[0]).toBeInstanceOf(BossProjectile);
+      expect(boss.lastShotTime).toBe(3000);
+
+      mockNow.mockRestore();
+    });
+
+    it('should not shoot when player is out of range', () => {
+      const mockNow = vi.spyOn(Date, 'now');
+      mockNow.mockReturnValue(3000);
+
+      // Player out of range (need to be > 600 pixels away)
+      player.x = boss.x + 700;
+      boss.update(platforms, 16, player);
+
+      expect(boss.projectiles.length).toBe(0);
+
+      mockNow.mockRestore();
+    });
+
+    it('should respect shooting cooldown', () => {
+      const mockNow = vi.spyOn(Date, 'now');
+      mockNow.mockReturnValue(3000);
+
+      // Set lastShotTime to 0 to ensure first shot happens
+      boss.lastShotTime = 0;
+
+      // First shot
+      player.x = boss.x + 300;
+      boss.update(platforms, 16, player);
+      expect(boss.projectiles.length).toBe(1);
+      expect(boss.lastShotTime).toBe(3000);
+
+      // Try to shoot again immediately (should fail)
+      mockNow.mockReturnValue(3500);
+      boss.update(platforms, 16, player);
+      expect(boss.projectiles.length).toBe(1);
+
+      // Wait for cooldown (2000ms)
+      mockNow.mockReturnValue(5100);
+      boss.update(platforms, 16, player);
+      expect(boss.projectiles.length).toBe(2);
+
+      mockNow.mockRestore();
+    });
+
+    it('should shoot in correct direction', () => {
+      const mockNow = vi.spyOn(Date, 'now');
+      mockNow.mockReturnValue(3000);
+
+      // Player to the right
+      player.x = boss.x + 300;
+      boss.shoot(player);
+      expect(boss.projectiles[0].velocityX).toBeGreaterThan(0);
+
+      // Player to the left
+      boss.projectiles = [];
+      player.x = boss.x - 300;
+      boss.shoot(player);
+      expect(boss.projectiles[0].velocityX).toBeLessThan(0);
+
+      mockNow.mockRestore();
+    });
+
+    it('should position projectiles correctly', () => {
+      // Player to the right
+      player.x = boss.x + 300;
+      boss.shoot(player);
+      expect(boss.projectiles[0].x).toBe(boss.x + boss.width);
+      expect(boss.projectiles[0].y).toBe(boss.y + boss.height / 2);
+
+      // Player to the left
+      boss.projectiles = [];
+      player.x = boss.x - 300;
+      boss.shoot(player);
+      expect(boss.projectiles[0].x).toBe(boss.x);
+      expect(boss.projectiles[0].y).toBe(boss.y + boss.height / 2);
+    });
+
+    it('should clean up inactive projectiles', () => {
+      const mockNow = vi.spyOn(Date, 'now');
+      mockNow.mockReturnValue(3000);
+
+      // Create some projectiles
+      player.x = boss.x + 300;
+      boss.update(platforms, 16, player);
+      mockNow.mockReturnValue(5100);
+      boss.update(platforms, 16, player);
+
+      expect(boss.projectiles.length).toBe(2);
+
+      // Deactivate one projectile
+      boss.projectiles[0].active = false;
+
+      // Update should remove inactive projectile
+      boss.update(platforms, 16, player);
+      expect(boss.projectiles.length).toBe(1);
+      expect(boss.projectiles[0].active).toBe(true);
+
+      mockNow.mockRestore();
+    });
+
+    it('should not shoot when boss is dead', () => {
+      boss.alive = false;
+      player.x = boss.x + 300;
+      boss.update(platforms, 16, player);
+
+      expect(boss.projectiles.length).toBe(0);
+    });
+
+    it('should return projectiles via getProjectiles method', () => {
+      const projectiles = boss.getProjectiles();
+      expect(projectiles).toBe(boss.projectiles);
+      expect(Array.isArray(projectiles)).toBe(true);
+    });
+
+    it('should clear all projectiles when boss dies', () => {
+      const mockNow = vi.spyOn(Date, 'now');
+      mockNow.mockReturnValue(3000);
+
+      // Create some projectiles
+      player.x = boss.x + 300;
+      boss.update(platforms, 16, player);
+      mockNow.mockReturnValue(5000);
+      boss.update(platforms, 16, player);
+
+      expect(boss.projectiles.length).toBe(2);
+
+      // Kill the boss
+      boss.health = 1;
+      boss.takeDamage();
+
+      expect(boss.alive).toBe(false);
+      expect(boss.projectiles.length).toBe(0);
+
+      mockNow.mockRestore();
     });
   });
 });

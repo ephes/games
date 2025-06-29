@@ -205,6 +205,21 @@ export class Game {
     this.enemies.forEach(enemy => enemy.update(this.platforms, deltaTime));
     this.boss.update(this.platforms, deltaTime, this.player);
 
+    // Get boss projectiles and check collisions
+    const bossProjectiles = this.boss.getProjectiles();
+    bossProjectiles.forEach(projectile => {
+      if (
+        projectile.active &&
+        CollisionSystem.checkCollision(this.player, projectile)
+      ) {
+        projectile.active = false;
+        this.lives = this.player.takeDamage(this.lives);
+        if (this.lives <= 0) {
+          this.gameOver = true;
+        }
+      }
+    });
+
     // Update projectiles
     this.updateProjectiles(deltaTime);
 
@@ -334,6 +349,18 @@ export class Game {
     this.coins.forEach(coin => coin.draw(this.ctx, 0));
     this.enemies.forEach(enemy => this.renderer.drawEnemy(enemy));
     this.renderer.drawBoss(this.boss);
+
+    // Draw boss projectiles
+    const bossProjectiles = this.boss.getProjectiles();
+    const fireballSprite = this.spriteLoader.getSprite('boss.fireball');
+    bossProjectiles.forEach(projectile => {
+      if (fireballSprite) {
+        projectile.drawWithSprite(this.ctx, this.camera, fireballSprite);
+      } else {
+        projectile.draw(this.ctx, this.camera);
+      }
+    });
+
     this.portal.draw(this.ctx, 0);
     this.projectiles.forEach(projectile => projectile.draw(this.ctx, 0));
     this.renderer.drawPlayer(this.player);

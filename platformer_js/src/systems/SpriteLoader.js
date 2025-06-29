@@ -55,6 +55,9 @@ export class SpriteLoader {
     // Portal sprite
     this.loadSprite('portal', 'assets/sprites/level_portal_128.png');
 
+    // Boss fireball sprite
+    this.loadSprite('boss.fireball', 'assets/sprites/boss-fireball.png');
+
     await Promise.all(this.loadPromises);
     this.loaded = true;
   }

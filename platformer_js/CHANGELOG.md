@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Boss fireball attack system with animated projectiles
+- BossProjectile entity class with 4-frame animation
+- Shooting mechanics for boss (600px range, 1.5s cooldown)
+- Automatic projectile cleanup when boss is defeated
+- Tests for boss projectile system (bringing total to 93 tests)
+
+### Changed
+
+- Boss now actively attacks the player with fireballs
+- Increased boss shooting range from 400px to 600px
+- Decreased boss shooting cooldown from 2s to 1.5s
+
 ## [0.1.0] - 2024-06-21
 
 ### Added
