@@ -9,13 +9,13 @@ const ASPECT_RATIO: f32 = 16. / 9.;
 pub fn camera_fit_inside_current_level(
     mut camera_query: Query<
         (
-            &mut bevy::render::camera::OrthographicProjection,
+            &mut Projection,
             &mut Transform,
         ),
         Without<Player>,
     >,
     player_query: Query<&Transform, With<Player>>,
-    level_query: Query<(&Transform, &LevelIid), (Without<OrthographicProjection>, Without<Player>)>,
+    level_query: Query<(&Transform, &LevelIid), (Without<Projection>, Without<Player>)>,
     ldtk_projects: Query<&LdtkProjectHandle>,
     level_selection: Res<LevelSelection>,
     ldtk_project_assets: Res<Assets<LdtkProject>>,
@@ -23,15 +23,18 @@ pub fn camera_fit_inside_current_level(
     if let Ok(Transform {
         translation: player_translation,
         ..
-    }) = player_query.get_single()
+    }) = player_query.single()
     {
         let player_translation = *player_translation;
 
-        let (mut orthographic_projection, mut camera_transform) = camera_query.single_mut();
+        let Ok((mut projection, mut camera_transform)) = camera_query.single_mut() else {
+            return;
+        };
 
-        for (level_transform, level_iid) in &level_query {
+        if let Projection::Orthographic(ref mut orthographic_projection) = *projection {
+            for (level_transform, level_iid) in &level_query {
             let ldtk_project = ldtk_project_assets
-                .get(ldtk_projects.single())
+                .get(ldtk_projects.single().expect("LdtkProjectHandle should exist"))
                 .expect("Project should be loaded if level has spawned");
 
             let level = ldtk_project
@@ -66,6 +69,7 @@ pub fn camera_fit_inside_current_level(
                 camera_transform.translation.x += level_transform.translation.x;
                 camera_transform.translation.y += level_transform.translation.y;
             }
+        }
         }
     }
 }

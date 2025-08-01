@@ -1,5 +1,6 @@
 use crate::player::Player;
 use bevy::prelude::*;
+use bevy::input::ButtonInput;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
 
@@ -11,13 +12,13 @@ pub fn setup(
     
     commands.spawn(Camera2d);
 
-    rapier_config.single_mut().gravity = Vec2::new(0.0, -2000.0);
+    if let Ok(mut config) = rapier_config.single_mut() {
+        config.gravity = Vec2::new(0.0, -2000.0);
+    }
 
-    let ldtk_handle = asset_server
-        .load("Typical_2D_platformer_example.ldtk")
-        .into();
+    let ldtk_handle = asset_server.load("Typical_2D_platformer_example.ldtk");
     commands.spawn(LdtkWorldBundle {
-        ldtk_handle,
+        ldtk_handle: ldtk_handle.into(),
         ..Default::default()
     });
 }
@@ -31,7 +32,7 @@ pub fn update_level_selection(
 ) {
     for (level_iid, level_transform) in &level_query {
         let ldtk_project = ldtk_project_assets
-            .get(ldtk_projects.single())
+            .get(ldtk_projects.single().expect("LdtkProjectHandle should exist"))
             .expect("Project should be loaded if level has spawned");
 
         let level = ldtk_project
