@@ -81,7 +81,7 @@ describe('PlatformerGame', () => {
 
     it('should create boss', () => {
       expect(game.boss).toBeDefined();
-      expect(game.boss.health).toBe(10);
+      expect(game.boss.health).toBe(3);
       expect(game.boss.alive).toBe(true);
       expect(game.boss.x).toBe(2600);
     });
@@ -328,6 +328,9 @@ describe('PlatformerGame', () => {
 
   describe('Win Condition', () => {
     it('should win when player reaches portal center', () => {
+      // Set to last level
+      game.currentLevel = game.totalLevels - 1;
+
       // Unlock portal first (simulating boss defeat)
       game.portal.unlock();
 
