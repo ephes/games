@@ -82,4 +82,12 @@ export class Camera {
   applyTransform(ctx) {
     ctx.translate(-this.x, -this.y);
   }
+
+  /**
+   * Reset camera position
+   */
+  reset() {
+    this.x = 0;
+    this.y = 0;
+  }
 }
