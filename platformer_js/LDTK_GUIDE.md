@@ -1,0 +1,191 @@
+# LDtk Level Editor Guide
+
+## What is LDtk?
+
+LDtk (Level Designer Toolkit) is a modern, user-friendly 2D level editor that outputs JSON files. It's perfect for creating platformer levels visually.
+
+## Installation
+
+1. Download LDtk from [ldtk.io](https://ldtk.io)
+2. Install and run the application
+3. Open the project file: `assets/levels/platformer.ldtk`
+
+## Project Structure
+
+The LDtk project is configured with:
+
+### Layers
+
+1. **Entities** - For placing game objects
+2. **Platforms** - IntGrid layer for drawing platforms
+
+### Entity Types
+
+#### Player (Green Rectangle)
+
+- Start position for the player
+- Only one allowed per level
+
+#### Enemy (Red Rectangle)
+
+- Properties:
+  - `Speed`: Movement speed (1-5)
+  - `PlatformIndex`: Which platform to patrol
+
+#### Boss (Purple Rectangle)
+
+- Properties:
+  - `PlatformIndex`: Which platform to stand on
+- Only one allowed per level
+
+#### Coin (Yellow Circle)
+
+- Properties:
+  - `IsPowerUp`: Boolean for power-up coins
+
+#### Portal (Purple Circle)
+
+- Level exit portal
+- Only one allowed per level
+
+### Platform Layer
+
+- Use the IntGrid layer to paint platforms
+- Value 1 = Platform (Brown color)
+- Platforms are automatically merged when adjacent
+
+## Creating Levels
+
+### Step 1: Set Level Properties
+
+- Click on the level
+- Set `LevelName` in the level fields
+
+### Step 2: Draw Platforms
+
+1. Select the "Platforms" layer
+2. Choose the "Platform" value (1)
+3. Paint platforms on the grid
+4. Adjacent tiles automatically merge into single platforms
+
+### Step 3: Place Entities
+
+1. Select the "Entities" layer
+2. Choose an entity type from the toolbar
+3. Click to place entities
+4. Set entity properties in the panel
+
+### Step 4: Save and Export
+
+- Save the project (Ctrl+S)
+- The `.ldtk` file is automatically updated
+
+## Using LDtk Levels in Game
+
+### Option 1: Replace Built-in Levels
+
+```javascript
+// In main.js
+import { LDtkLoader } from './src/systems/LDtkLoader.js';
+
+// Load LDtk levels
+const loader = new LDtkLoader();
+await loader.loadWorld('./assets/levels/platformer.ldtk');
+const ldtkLevels = loader.getAllLevels();
+
+// Use LDtk levels instead of built-in
+game.useLDtkLevels(ldtkLevels);
+```
+
+### Option 2: Add as Additional Levels
+
+```javascript
+// Add LDtk levels after built-in levels
+const additionalLevels = loader.getAllLevels();
+game.addLevels(additionalLevels);
+```
+
+## Tips
+
+### Platform Design
+
+- Keep platforms at least 3 tiles wide for enemies
+- Leave space between platforms for jumping challenges
+- Use different heights for variety
+
+### Entity Placement
+
+- Place enemies on platforms (use PlatformIndex)
+- Space coins to guide player path
+- Put power-up coins in challenging spots
+- Place portal at the end of the level
+
+### Testing Levels
+
+1. Save in LDtk
+2. Refresh the game in browser
+3. Test your level
+4. Iterate and improve
+
+## Advanced Features
+
+### Custom Properties
+
+You can add more properties to entities:
+
+- Enemy AI patterns
+- Coin values
+- Platform movement
+
+### Multiple Worlds
+
+Create separate worlds for:
+
+- Different difficulty levels
+- Bonus stages
+- Test levels
+
+## Example Workflow
+
+1. **Sketch Level**: Plan on paper first
+2. **Build Foundation**: Create main platform path
+3. **Add Challenge**: Place enemies and gaps
+4. **Add Rewards**: Position coins
+5. **Test & Refine**: Play and adjust
+6. **Polish**: Add details and balance difficulty
+
+## Troubleshooting
+
+### Entities Not Appearing
+
+- Check entity layer is visible
+- Verify entity properties are set
+- Ensure saved after changes
+
+### Platforms Not Solid
+
+- Use value 1 in IntGrid
+- Check platform layer is active
+- Verify grid alignment
+
+### Level Not Loading
+
+- Save LDtk project
+- Check file path in code
+- Verify JSON is valid
+
+## Integration Code Example
+
+```javascript
+// Add to Game.js
+async useLDtkLevels(ldtkLevels) {
+  // Replace LEVELS constant with LDtk levels
+  this.levels = ldtkLevels;
+  this.totalLevels = ldtkLevels.length;
+
+  // Reload current level
+  this.createLevel();
+}
+```
+
+Now you can create and edit levels visually in LDtk!
