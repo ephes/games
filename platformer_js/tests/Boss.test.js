@@ -255,9 +255,9 @@ describe('Boss', () => {
     it('should initialize projectile system', () => {
       expect(boss.projectiles).toEqual([]);
       expect(boss.canShoot).toBe(true);
-      expect(boss.shootCooldown).toBe(1500);
-      expect(boss.lastShotTime).toBe(-1500);
-      expect(boss.shootingRange).toBe(600);
+      expect(boss.shootCooldown).toBe(3000);
+      expect(boss.lastShotTime).toBe(-3000);
+      expect(boss.shootingRange).toBe(400);
     });
 
     it('should shoot when player is in range', () => {
@@ -282,8 +282,8 @@ describe('Boss', () => {
       const mockNow = vi.spyOn(Date, 'now');
       mockNow.mockReturnValue(3000);
 
-      // Player out of range (need to be > 600 pixels away)
-      player.x = boss.x + 700;
+      // Player out of range (need to be > 400 pixels away)
+      player.x = boss.x + 500;
       boss.update(platforms, 16, player);
 
       expect(boss.projectiles.length).toBe(0);
@@ -309,8 +309,8 @@ describe('Boss', () => {
       boss.update(platforms, 16, player);
       expect(boss.projectiles.length).toBe(1);
 
-      // Wait for cooldown (2000ms)
-      mockNow.mockReturnValue(5100);
+      // Wait for cooldown (3000ms)
+      mockNow.mockReturnValue(6100);
       boss.update(platforms, 16, player);
       expect(boss.projectiles.length).toBe(2);
 
@@ -357,7 +357,7 @@ describe('Boss', () => {
       // Create some projectiles
       player.x = boss.x + 300;
       boss.update(platforms, 16, player);
-      mockNow.mockReturnValue(5100);
+      mockNow.mockReturnValue(6100);
       boss.update(platforms, 16, player);
 
       expect(boss.projectiles.length).toBe(2);
@@ -394,7 +394,7 @@ describe('Boss', () => {
       // Create some projectiles
       player.x = boss.x + 300;
       boss.update(platforms, 16, player);
-      mockNow.mockReturnValue(5000);
+      mockNow.mockReturnValue(6100);
       boss.update(platforms, 16, player);
 
       expect(boss.projectiles.length).toBe(2);

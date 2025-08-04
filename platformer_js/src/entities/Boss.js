@@ -20,8 +20,8 @@ export class Boss extends Enemy {
     // Override default size
     this.width = 64;
     this.height = 96;
-    this.health = 10;
-    this.maxHealth = 10;
+    this.health = 3; // Reduced from 10 for easier testing
+    this.maxHealth = 3;
 
     // Boss movement
     this.baseSpeed = config.speed || 2;
@@ -45,9 +45,9 @@ export class Boss extends Enemy {
     // Projectile system
     this.projectiles = [];
     this.canShoot = true;
-    this.shootCooldown = 1500; // 1.5 seconds between shots
+    this.shootCooldown = 3000; // 3 seconds between shots (easier for testing)
     this.lastShotTime = -this.shootCooldown; // Allow immediate first shot
-    this.shootingRange = 600; // Range to start shooting at player
+    this.shootingRange = 400; // Reduced range to start shooting at player
   }
 
   /**
@@ -234,8 +234,8 @@ export class Boss extends Enemy {
     const projectileX = this.x + (direction > 0 ? this.width : 0);
     const projectileY = this.y + this.height / 2;
 
-    // Simple, fair projectile speed
-    const projectileSpeed = 5;
+    // Reduced projectile speed for easier testing
+    const projectileSpeed = 3;
 
     const projectile = new BossProjectile(
       projectileX,
