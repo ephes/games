@@ -51,10 +51,6 @@ jobs:
           mkdir -p ../deploy/platformer
           cp -r dist/* ../deploy/platformer/
           cp -r docs ../deploy/platformer/
-          cp index.html ../deploy/platformer/
-          cp -r assets ../deploy/platformer/
-          cp -r src ../deploy/platformer/
-          cp styles.css ../deploy/platformer/
         
       - name: Setup Pages
         uses: actions/configure-pages@v4
