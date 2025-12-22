@@ -35,6 +35,9 @@ npm install
 ```bash
 # Start development server with hot reload
 npm run dev
+
+# Justfile shortcut
+just start
 ```
 
 #### Alternative: Simple HTTP Server
@@ -68,6 +71,9 @@ The project uses Vitest for unit testing with 93 tests covering game logic.
 ```bash
 # Run tests in watch mode
 npm test
+
+# Justfile shortcut
+just test
 
 # Run tests once (CI mode)
 npm run test:run
