@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::camera::ScalingMode;
 use bevy_ecs_ldtk::prelude::*;
 
 use crate::player::Player;
@@ -49,7 +50,7 @@ pub fn camera_fit_inside_current_level(
                     let height = (level.px_hei as f32 / 9.).round() * 9.;
                     let width = height * ASPECT_RATIO;
                     orthographic_projection.scaling_mode =
-                        bevy::render::camera::ScalingMode::Fixed { width, height };
+                        ScalingMode::Fixed { width, height };
                     camera_transform.translation.x =
                         (player_translation.x - level_transform.translation.x - width / 2.)
                             .clamp(0., level.px_wid as f32 - width);
@@ -59,7 +60,7 @@ pub fn camera_fit_inside_current_level(
                     let width = (level.px_wid as f32 / 16.).round() * 16.;
                     let height = width / ASPECT_RATIO;
                     orthographic_projection.scaling_mode =
-                        bevy::render::camera::ScalingMode::Fixed { width, height };
+                        ScalingMode::Fixed { width, height };
                     camera_transform.translation.y =
                         (player_translation.y - level_transform.translation.y - height / 2.)
                             .clamp(0., level.px_hei as f32 - height);

@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::ecs::message::MessageReader;
 use std::collections::HashSet;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
@@ -24,31 +25,31 @@ pub struct LadderBundle {
 pub fn detect_climb_range(
     mut climbers: Query<&mut Climber>,
     climbables: Query<Entity, With<Climbable>>,
-    mut collisions: EventReader<CollisionEvent>,
+    mut collisions: MessageReader<CollisionEvent>,
 ) {
     for collision in collisions.read() {
-        match collision {
+        match collision.to_owned() {
             CollisionEvent::Started(collider_a, collider_b, _) => {
                 if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(*collider_a), climbables.get(*collider_b))
+                    (climbers.get_mut(collider_a), climbables.get(collider_b))
                 {
                     climber.intersecting_climbables.insert(climbable);
                 }
                 if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(*collider_b), climbables.get(*collider_a))
+                    (climbers.get_mut(collider_b), climbables.get(collider_a))
                 {
                     climber.intersecting_climbables.insert(climbable);
                 };
             }
             CollisionEvent::Stopped(collider_a, collider_b, _) => {
                 if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(*collider_a), climbables.get(*collider_b))
+                    (climbers.get_mut(collider_a), climbables.get(collider_b))
                 {
                     climber.intersecting_climbables.remove(&climbable);
                 }
 
                 if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(*collider_b), climbables.get(*collider_a))
+                    (climbers.get_mut(collider_b), climbables.get(collider_a))
                 {
                     climber.intersecting_climbables.remove(&climbable);
                 }
