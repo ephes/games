@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Upgrade Vite 8, Vitest/UI/coverage 5, JSDoc and lint-staged, and refresh
+  transitive dependencies; the lockfile has zero npm audit findings.
+- Require Node 24 LTS or 26+; use Node 24 in CI and keep dev servers local.
+
 ### Added
 
 - Boss fireball attack system with animated projectiles

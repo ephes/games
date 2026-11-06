@@ -18,14 +18,14 @@ A modular 2D platformer game built with HTML5 Canvas and JavaScript ES modules. 
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
+- Node.js 24 LTS (or 26+) (CI uses `platformer_js/.node-version`)
 - npm or yarn
 
 ### Installation
 
 ```bash
 # Install dependencies
-npm install
+npm ci
 ```
 
 ### Running the Game
@@ -66,7 +66,7 @@ npm run preview
 
 ## 🧪 Testing
 
-The project uses Vitest for unit testing with 93 tests covering game logic.
+The project uses Vitest for unit testing covering game logic.
 
 ```bash
 # Run tests in watch mode
@@ -104,6 +104,10 @@ npm run format
 # Check formatting without making changes
 npm run format:check
 ```
+
+The refreshed lockfile audits with zero known vulnerabilities. Vite and the
+Vitest UI are development tools: keep their default loopback binding and never
+expose them to untrusted networks (`--host 0.0.0.0`) or reverse proxies.
 
 ### Pre-commit Hooks
 

@@ -23,18 +23,19 @@
   },
   "devDependencies": {
     "@testing-library/dom": "^9.0.0",
-    "@vitest/coverage-v8": "^1.0.0",
-    "@vitest/ui": "^1.0.0",
+    "@vitest/coverage-v8": "^5.1.0",
+    "@vitest/ui": "^5.1.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-vitest": "^0.3.20",
     "husky": "^8.0.3",
-    "jsdoc": "^4.0.2",
+    "jsdoc": "^4.0.5",
     "jsdom": "^23.0.0",
-    "lint-staged": "^15.2.0",
+    "lint-staged": "^17.6.0",
     "prettier": "^3.1.1",
-    "vite": "^5.0.0",
-    "vitest": "^1.0.0"
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0",
+    "yaml": "^2.9.1"
   },
   "lint-staged": {
     "*.js": [
@@ -47,5 +48,8 @@
   },
   "dependencies": {
     "ldtk": "^0.8.7"
+  },
+  "engines": {
+    "node": "^24.0.0 || >=26.0.0"
   }
 }
