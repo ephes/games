@@ -31,8 +31,30 @@ export class InputManager {
    * Set up keyboard event listeners
    */
   setupEventListeners() {
-    document.addEventListener('keydown', e => this.handleKeyDown(e));
-    document.addEventListener('keyup', e => this.handleKeyUp(e));
+    this.onKeyDown = event => this.handleKeyDown(event);
+    this.onKeyUp = event => this.handleKeyUp(event);
+    this.onBlur = () => this.reset();
+    this.onVisibilityChange = () => {
+      if (document.hidden) {
+        this.reset();
+      }
+    };
+    document.addEventListener('keydown', this.onKeyDown);
+    document.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.onBlur);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+  }
+
+  /**
+   * Release DOM and action listeners when this input manager is replaced.
+   */
+  dispose() {
+    document.removeEventListener('keydown', this.onKeyDown);
+    document.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onBlur);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    this.disable();
+    this.listeners.clear();
   }
 
   /**

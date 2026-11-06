@@ -160,6 +160,11 @@ platformer_js/
 - **Arrow Keys**: Move left/right and jump
 - **Space**: Shoot (after collecting power-up)
 
+Switching windows or hiding the tab clears held movement and shooting keys.
+Press again after returning. Call `game.dispose()` before replacing a game to
+cancel its animation and remove input listeners; standalone input managers have
+`dispose()` too.
+
 ## 🚀 GitHub Pages Deployment
 
 Pull requests and pushes to `main` run read-only quality checks. Publishing is

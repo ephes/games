@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transitive dependencies; the lockfile has zero npm audit findings.
 - Require Node 24 LTS or 26+; use Node 24 in CI and keep dev servers local.
 
+### Fixed
+
+- Clear held keys on window blur or hidden tabs and support explicit input/game
+  disposal with animation cancellation.
+
 ### Development
 
 - Check PRs and main pushes with read-only install, lint, format, test, game build

@@ -199,7 +199,7 @@ export class Game {
     this.update(deltaTime);
     this.render();
 
-    requestAnimationFrame(this.gameLoop);
+    this.animationFrameId = requestAnimationFrame(this.gameLoop);
   };
 
   /**
@@ -456,6 +456,14 @@ export class Game {
   start() {
     this.lastTime = performance.now();
     this.gameLoop(this.lastTime);
+  }
+
+  /**
+   * Stop animation and release keyboard listeners before replacing the game.
+   */
+  dispose() {
+    cancelAnimationFrame(this.animationFrameId);
+    this.inputManager.dispose();
   }
 
   /**
