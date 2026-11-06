@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Development
 
+- Test real LDtk world conversion, entity fields (including zero/false values),
+  and collision mesh adjacency with synthetic fixtures.
+- Test the real sprite loader's cache, completion ordering and image failures
+  with controlled Image events.
+
 - Check PRs and main pushes with read-only install, lint, format, test, game build
   and documentation build steps. Pages publication is manual and opt-in.
 
