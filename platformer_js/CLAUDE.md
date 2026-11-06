@@ -35,13 +35,13 @@ src/
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
+- Node.js 24 LTS (or 26+) (CI uses `platformer_js/.node-version`)
 - npm or yarn
 
 ### Installation
 
 ```bash
-npm install
+npm ci
 ```
 
 ### Running the Game
@@ -110,7 +110,8 @@ npm run build:docs
 npm run preview
 ```
 
-The project includes GitHub Actions for automated deployment to GitHub Pages.
+GitHub Actions checks pull requests and main pushes. Pages publication requires
+a manual workflow run with `publish` enabled (disabled by default).
 
 ## Architecture Highlights
 

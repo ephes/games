@@ -18,14 +18,14 @@ A modular 2D platformer game built with HTML5 Canvas and JavaScript ES modules. 
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
+- Node.js 24 LTS (or 26+) (CI uses `platformer_js/.node-version`)
 - npm or yarn
 
 ### Installation
 
 ```bash
 # Install dependencies
-npm install
+npm ci
 ```
 
 ### Running the Game
@@ -66,7 +66,7 @@ npm run preview
 
 ## 🧪 Testing
 
-The project uses Vitest for unit testing with 93 tests covering game logic.
+The project uses Vitest for unit testing covering game logic.
 
 ```bash
 # Run tests in watch mode
@@ -105,6 +105,24 @@ npm run format
 npm run format:check
 ```
 
+The local CI-equivalent sequence, from `platformer_js/`, is:
+
+```bash
+npm ci
+npm run lint
+npm run format:check
+npm run test:run
+npm run build
+npm run build:docs
+npm audit --json
+```
+
+This JavaScript project has no separate type-check command. The existing lint
+baseline has three `no-console` warnings; formatting has no baseline drift.
+The refreshed lockfile audits with zero known vulnerabilities. Vite and the
+Vitest UI are development tools: keep their default loopback binding and never
+expose them to untrusted networks (`--host 0.0.0.0`) or reverse proxies.
+
 ### Pre-commit Hooks
 
 The project uses Husky and lint-staged for automated checks:
@@ -142,13 +160,21 @@ platformer_js/
 - **Arrow Keys**: Move left/right and jump
 - **Space**: Shoot (after collecting power-up)
 
+Switching windows or hiding the tab clears held movement and shooting keys.
+Press again after returning. Call `game.dispose()` before replacing a game to
+cancel its animation and remove input listeners; standalone input managers have
+`dispose()` too.
+
+Camera and player horizontal bounds refresh on level creation, transitions,
+resets, and LDtk replacement. The right edge is the farthest platform's
+`x + width`, with at least one viewport of width; vertical bounds stay fixed to
+the canvas height.
+
 ## 🚀 GitHub Pages Deployment
 
-The game is configured for easy GitHub Pages deployment:
-
-1. Enable GitHub Pages in your repository settings
-2. Set source to "GitHub Actions"
-3. Push to main branch - the workflow will automatically deploy
+Pull requests and pushes to `main` run read-only quality checks. Publishing is
+manual: run **Platformer quality and manual publication** with `publish` enabled.
+It defaults to false; ordinary pushes and PRs never upload or deploy Pages.
 
 The game will be available at: `https://[username].github.io/[repo-name]/`
 

@@ -72,15 +72,6 @@ export class Game {
     // Initialize game objects
     this.createLevel();
     this.setupInputHandlers();
-
-    // Set camera bounds
-    const ground = this.platforms[0];
-    this.camera.setBounds({
-      minX: 0,
-      maxX: ground.width,
-      minY: 0,
-      maxY: this.canvas.height
-    });
   }
 
   /**
@@ -115,6 +106,18 @@ export class Game {
     // Create portal
     this.portal = new Portal(levelData.portal.x, levelData.portal.y);
     this.portal.setSprite(this.spriteLoader.getSprite('portal'));
+
+    // Set camera bounds
+
+    this.camera.setBounds({
+      minX: 0,
+      maxX: Math.max(
+        this.canvas.width,
+        ...levelData.platforms.map(platform => platform.x + platform.width)
+      ),
+      minY: 0,
+      maxY: this.canvas.height
+    });
   }
 
   /**
@@ -199,7 +202,7 @@ export class Game {
     this.update(deltaTime);
     this.render();
 
-    requestAnimationFrame(this.gameLoop);
+    this.animationFrameId = requestAnimationFrame(this.gameLoop);
   };
 
   /**
@@ -216,10 +219,9 @@ export class Game {
     this.player.update(keys, deltaTime);
 
     // Keep player in bounds
-    const ground = this.platforms[0];
     const bounds = {
-      minX: 0,
-      maxX: ground.width,
+      minX: this.camera.bounds.minX,
+      maxX: this.camera.bounds.maxX,
       maxY: this.canvas.height
     };
     const clamped = CollisionSystem.keepInBounds(this.player, bounds);
@@ -456,6 +458,14 @@ export class Game {
   start() {
     this.lastTime = performance.now();
     this.gameLoop(this.lastTime);
+  }
+
+  /**
+   * Stop animation and release keyboard listeners before replacing the game.
+   */
+  dispose() {
+    cancelAnimationFrame(this.animationFrameId);
+    this.inputManager.dispose();
   }
 
   /**
