@@ -66,7 +66,11 @@ npm run preview
 
 ## 🧪 Testing
 
-The project uses Vitest for unit testing covering game logic.
+The project uses Vitest for unit testing covering game logic. Loader tests run
+real LDtk world/level conversion, entity field lookup and IntGrid collision mesh
+merging against synthetic records, mocking only `World.fromURL`. Sprite loader
+tests use explicitly triggered Image load/error events to check cache identity,
+out-of-order completion and failed startup without network requests or timers.
 
 ```bash
 # Run tests in watch mode
