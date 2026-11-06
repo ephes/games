@@ -165,6 +165,11 @@ Press again after returning. Call `game.dispose()` before replacing a game to
 cancel its animation and remove input listeners; standalone input managers have
 `dispose()` too.
 
+Camera and player horizontal bounds refresh on level creation, transitions,
+resets, and LDtk replacement. The right edge is the farthest platform's
+`x + width`, with at least one viewport of width; vertical bounds stay fixed to
+the canvas height.
+
 ## 🚀 GitHub Pages Deployment
 
 Pull requests and pushes to `main` run read-only quality checks. Publishing is

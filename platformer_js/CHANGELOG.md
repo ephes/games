@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Clear held keys on window blur or hidden tabs and support explicit input/game
   disposal with animation cancellation.
+- Refresh camera and player bounds from current platform geometry on level
+  creation, transitions, resets and LDtk replacement.
 
 ### Development
 
