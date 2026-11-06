@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transitive dependencies; the lockfile has zero npm audit findings.
 - Require Node 24 LTS or 26+; use Node 24 in CI and keep dev servers local.
 
+### Development
+
+- Check PRs and main pushes with read-only install, lint, format, test, game build
+  and documentation build steps. Pages publication is manual and opt-in.
+
 ### Added
 
 - Boss fireball attack system with animated projectiles

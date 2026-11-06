@@ -110,7 +110,8 @@ npm run build:docs
 npm run preview
 ```
 
-The project includes GitHub Actions for automated deployment to GitHub Pages.
+GitHub Actions checks pull requests and main pushes. Pages publication requires
+a manual workflow run with `publish` enabled (disabled by default).
 
 ## Architecture Highlights
 

@@ -1,20 +1,27 @@
-name: Deploy Platformer JS to GitHub Pages
+name: Platformer quality and manual publication
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'platformer_js/**'
-      - '.github/workflows/deploy-platformer.yml'
+      - "platformer_js/**"
+      - ".github/workflows/deploy-platformer.yml"
+  pull_request:
+    paths:
+      - "platformer_js/**"
+      - ".github/workflows/deploy-platformer.yml"
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the checked build to GitHub Pages
+        type: boolean
+        default: false
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: "pages-platformer"
+  group: "platformer-${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: false
 
 jobs:
@@ -26,43 +33,52 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version-file: platformer_js/.node-version
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: platformer_js/package-lock.json
-          
+
       - name: Install dependencies
         run: npm ci
-        
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
       - name: Run tests
         run: npm run test:run
-        
+
       - name: Build project
         run: npm run build
-        
+
       - name: Build documentation
         run: npm run build:docs
-        
+
       - name: Prepare deployment directory
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
         run: |
           mkdir -p ../deploy/platformer
           cp -r dist/* ../deploy/platformer/
           cp -r docs ../deploy/platformer/
           mkdir -p ../deploy/platformer/assets
           cp -r assets/* ../deploy/platformer/assets/
-        
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-        
+
       - name: Upload artifact
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './deploy'
+          path: "./deploy"
 
   deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}platformer/
