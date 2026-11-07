@@ -96,25 +96,31 @@ The LDtk project is configured with:
 ### Option 1: Replace Built-in Levels
 
 ```javascript
-// In main.js
-import { LDtkLoader } from './src/systems/LDtkLoader.js';
-
-// Load LDtk levels
-const loader = new LDtkLoader();
-await loader.loadWorld('./assets/levels/platformer.ldtk');
-const ldtkLevels = loader.getAllLevels();
-
-// Use LDtk levels instead of built-in
-game.useLDtkLevels(ldtkLevels);
+await game.loadLDtkLevels('./assets/levels/platformer.ldtk');
 ```
 
 ### Option 2: Add as Additional Levels
 
 ```javascript
-// Add LDtk levels after built-in levels
-const additionalLevels = loader.getAllLevels();
-game.addLevels(additionalLevels);
+await game.addLDtkLevels('./assets/levels/platformer.ldtk');
 ```
+
+### Standalone Conversion
+
+```javascript
+import { LDtkLoader } from './src/systems/LDtkLoader.js';
+
+const loader = new LDtkLoader();
+const world = await loader.loadWorld('./assets/levels/platformer.ldtk');
+const ldtkLevels = loader.getAllLevels(world);
+```
+
+Standalone `loadWorld(url, { publish: false })` returns a candidate without
+changing the published `loader.world`. By default, only the latest requested
+load publishes; superseded calls still return their own candidate. Pass that
+returned world to `getAllLevels(world)` to convert the intended request.
+For game imports use `await game.loadLDtkLevels(url)` or
+`await game.addLDtkLevels(url)` so the coordinator owns publication.
 
 ## Tips
 

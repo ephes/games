@@ -1,0 +1,133 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Game } from '../src/Game.js';
+import { Player } from '../src/entities/Player.js';
+import { Enemy } from '../src/entities/Enemy.js';
+import { BossProjectile } from '../src/entities/BossProjectile.js';
+
+const deferred = () => {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+};
+
+describe('Owned game lifecycle and simulation clock', () => {
+  let game, frames, nextId;
+  beforeEach(() => {
+    document.body.innerHTML = '<canvas id="lifecycle"></canvas>';
+    game = new Game('lifecycle');
+    frames = new Map();
+    nextId = 0;
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(callback => {
+        frames.set(++nextId, callback);
+        return nextId;
+      })
+    );
+    vi.stubGlobal(
+      'cancelAnimationFrame',
+      vi.fn(id => frames.delete(id))
+    );
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    vi.spyOn(game, 'render').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    game.dispose();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+  function frame(time) {
+    const [id, callback] = frames.entries().next().value;
+    frames.delete(id);
+    callback(time);
+  }
+  it('starts one chain and makes disposal terminal even for a delivered callback', () => {
+    vi.spyOn(game, 'update').mockImplementation(() => {});
+    game.start();
+    game.start();
+    expect(frames.size).toBe(1);
+    frame(20);
+    expect(game.update).toHaveBeenCalledTimes(1);
+    const stale = frames.values().next().value;
+    game.dispose();
+    game.dispose();
+    stale(40);
+    game.start();
+    expect(frames.size).toBe(0);
+    expect(game.update).toHaveBeenCalledTimes(1);
+  });
+  it('releases every input listener on startup failure and retains the error', async () => {
+    const loading = deferred();
+    vi.spyOn(game.spriteLoader, 'loadAll').mockReturnValue(loading.promise);
+    const removeDocument = vi.spyOn(document, 'removeEventListener');
+    const removeWindow = vi.spyOn(window, 'removeEventListener');
+    const error = new Error('synthetic sprite failure');
+    const result = game.init().catch(failure => failure);
+    loading.reject(error);
+    expect(await result).toBe(error);
+    for (const [type, callback] of [
+      ['keydown', game.inputManager.onKeyDown],
+      ['keyup', game.inputManager.onKeyUp],
+      ['visibilitychange', game.inputManager.onVisibilityChange]
+    ]) {
+      expect(removeDocument).toHaveBeenCalledWith(type, callback);
+    }
+    expect(removeWindow).toHaveBeenCalledWith('blur', game.inputManager.onBlur);
+    expect(game.inputManager.enabled).toBe(false);
+    expect(game.player).toBeNull();
+  });
+  it('does not resurrect a game disposed during sprite loading', async () => {
+    const loading = deferred();
+    vi.spyOn(game.spriteLoader, 'loadAll').mockReturnValue(loading.promise);
+    const result = game.init();
+    game.dispose();
+    loading.resolve();
+    await result;
+    expect(game.player).toBeNull();
+    expect(game.renderer).toBeNull();
+    expect(game.inputManager.listeners.size).toBe(0);
+    game.start();
+    expect(frames.size).toBe(0);
+  });
+  it.each([30, 60, 144])(
+    'preserves 60 Hz movement, gravity and shots at %s Hz',
+    hz => {
+      const player = new Player(0, -10000);
+      const enemy = new Enemy({ x: 100, y: 0, speed: 2 });
+      const shot = new BossProjectile(0, 0, 1, 3);
+      vi.spyOn(game, 'update').mockImplementation(dt => {
+        player.update({ ArrowRight: true }, dt);
+        enemy.update([], dt);
+        shot.update(dt);
+      });
+      game.start();
+      for (let i = 1; i <= hz; i++) {
+        frame((i * 1000) / hz);
+      }
+      expect(game.update).toHaveBeenCalledTimes(60);
+      expect(player.x).toBe(300);
+      expect(enemy.x).toBe(220);
+      expect(shot.x).toBe(180);
+      const expected = new Player(0, -10000);
+      for (let i = 0; i < 60; i++) {
+        expected.update({ ArrowRight: true }, 1000 / 60);
+      }
+      expect(player.y).toBe(expected.y);
+      expect(game.render).toHaveBeenCalledTimes(hz + 1);
+    }
+  );
+  it('bounds catch-up and drops suspension time before resuming', () => {
+    vi.spyOn(game, 'update').mockImplementation(() => {});
+    game.start();
+    frame(200);
+    expect(game.update.mock.calls.length).toBeLessThanOrEqual(5);
+    game.update.mockClear();
+    frame(60000);
+    expect(game.update).not.toHaveBeenCalled();
+    frame(60000 + 1000 / 60);
+    expect(game.update).toHaveBeenCalledTimes(1);
+  });
+});

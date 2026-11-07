@@ -116,6 +116,8 @@ npm ci
 npm run lint
 npm run format:check
 npm run test:run
+npx playwright install --with-deps chromium
+npm run test:browser
 npm run build
 npm run build:docs
 npm audit --json
@@ -167,7 +169,14 @@ platformer_js/
 Switching windows or hiding the tab clears held movement and shooting keys.
 Press again after returning. Call `game.dispose()` before replacing a game to
 cancel its animation and remove input listeners; standalone input managers have
-`dispose()` too.
+`dispose()` too. Starting twice keeps one animation chain. Disposal is terminal:
+create a fresh Game to restart. Failed initialization disposes input and preserves
+the startup error; disposal during sprite loading prevents later activation.
+
+Simulation uses fixed 60 Hz steps and renders once per animation frame. A frame
+can run at most five simulation steps; gaps over 250 ms discard accumulated time
+so returning from suspension does not replay missed movement. Shooting cooldowns,
+invulnerability and hit animations continue to use wall-clock time.
 
 Camera and player horizontal bounds refresh on level creation, transitions,
 resets, and LDtk replacement. The right edge is the farthest platform's
@@ -185,7 +194,10 @@ It retains the current level index if available, otherwise starts at index zero.
 Replacement objects are constructed before publishing the new levels; failure
 keeps the previous level table, objects, camera and loaded world intact. Success
 clears player projectiles and resets the camera, preserving score, lives and
-shooting ability.
+shooting ability. Replacement and append imports share latest-request ownership:
+only the most recently requested import can publish its candidate world and
+levels. Superseded replacements return false, even if the newer request fails;
+imports completed after disposal do not publish.
 
 LDtk Platforms layers require positive safe integer grid size, width and height,
 with safe integer pixel extents and at most 1,000,000 cells per layer.
@@ -206,7 +218,8 @@ projectiles and other collisions. Surviving contact still permits portal entry.
 
 ## 🚀 GitHub Pages Deployment
 
-Pull requests and pushes to `main` run read-only quality checks. Publishing is
+Pull requests and pushes to `main` or `fix/**` run read-only quality checks,
+including a synthetic Chromium clock smoke at 30, 60 and 144 Hz. Publishing is
 manual: run **Platformer quality and manual publication** with `publish` enabled.
 It defaults to false; ordinary pushes and PRs never upload or deploy Pages.
 
