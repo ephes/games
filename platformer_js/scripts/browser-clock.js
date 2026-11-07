@@ -51,7 +51,9 @@ try {
       game.renderer = new Renderer(game.canvas, game.spriteLoader);
       game.inputManager.keys.ArrowRight = true;
       game.boss.canShoot = false;
-      game.boss.projectiles.push(new BossProjectile(1000, 100, 1, 3));
+      game.boss.projectiles.push(
+        new BossProjectile(1000, 100, 1, 3, game.camera.bounds)
+      );
       let renders = 0;
       const render = game.render.bind(game);
       game.render = () => {
