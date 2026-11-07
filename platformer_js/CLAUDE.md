@@ -123,6 +123,11 @@ a manual workflow run with `publish` enabled (disabled by default).
 - **Boss**: Extended enemy with health system and special animations
 - **Projectile**: Player-fired projectiles with collision detection
 
+Enemy defeat is accepted once, before its timed hit animation finishes; Game
+scores only an accepted transition. Boss damage retains its health semantics.
+Game passes level bounds to Boss and its shots; resets, transitions and imports
+replace the projectile owner. Programmatic boss speed zero stays stationary.
+
 ### Systems
 
 - **InputManager**: Centralized keyboard input handling with event system

@@ -268,7 +268,13 @@ describe('Playable level state', () => {
       game.boss = new Boss(config);
     } else if (hazard === 'projectile') {
       game.boss.projectiles.push(
-        new BossProjectile(game.player.x, game.player.y, 1, 0)
+        new BossProjectile(
+          game.player.x,
+          game.player.y,
+          1,
+          0,
+          game.camera.bounds
+        )
       );
     }
   }

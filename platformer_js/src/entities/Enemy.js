@@ -40,6 +40,9 @@ export class Enemy {
    */
   update(platforms, deltaTime) {
     if (!this.alive) {
+      if (this.isInHitAnimation()) {
+        this.updateAnimation(deltaTime);
+      }
       return;
     }
 
@@ -81,17 +84,18 @@ export class Enemy {
   }
 
   /**
-   * Handle being hit
+   * Accept the first defeat immediately, retaining the timed visual animation.
+   * @returns {boolean} Whether this hit defeated the enemy
    */
   hit() {
+    if (!this.alive) {
+      return false;
+    }
+    this.alive = false;
     this.isHit = true;
     this.hitAnimationTimer = Date.now();
-    this.frameX = 0; // Reset animation frame
-
-    // Mark as dead after animation
-    setTimeout(() => {
-      this.alive = false;
-    }, this.hitAnimationDuration);
+    this.frameX = 0;
+    return true;
   }
 
   /**

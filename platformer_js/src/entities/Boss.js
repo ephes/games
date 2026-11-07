@@ -12,9 +12,10 @@ import { BossProjectile } from './BossProjectile.js';
 export class Boss extends Enemy {
   /**
    * Create a new boss
-   * @param {Object} config - Boss configuration
+   * @param {Object} config - Boss configuration (speed 0 is stationary)
+   * @param {Object} bounds - Active level bounds passed to shots
    */
-  constructor(config) {
+  constructor(config, bounds) {
     super(config);
     this.kind = 'boss';
 
@@ -25,8 +26,7 @@ export class Boss extends Enemy {
     this.maxHealth = 3;
 
     // Boss movement
-    this.baseSpeed = config.speed || 2;
-    this.speed = this.baseSpeed;
+    this.baseSpeed = this.speed;
 
     // Boss-specific animation properties
     this.frameCount = 5;
@@ -45,6 +45,7 @@ export class Boss extends Enemy {
 
     // Projectile system
     this.projectiles = [];
+    this.bounds = bounds;
     this.canShoot = true;
     this.shootCooldown = 3000; // 3 seconds between shots (easier for testing)
     this.lastShotTime = -this.shootCooldown; // Allow immediate first shot
@@ -195,7 +196,9 @@ export class Boss extends Enemy {
   }
 
   /**
-   * Override hit method to use takeDamage
+   * Boss hits return damage points, rather than Enemy's defeat boolean.
+   * Game routes boss scoring through takeDamage(), separately from enemies.
+   * @returns {number} Points awarded for boss damage
    */
   hit() {
     return this.takeDamage();
@@ -242,7 +245,8 @@ export class Boss extends Enemy {
       projectileX,
       projectileY,
       direction,
-      projectileSpeed
+      projectileSpeed,
+      this.bounds
     );
     this.projectiles.push(projectile);
   }

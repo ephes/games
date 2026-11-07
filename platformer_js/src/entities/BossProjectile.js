@@ -1,5 +1,19 @@
+import { GAME_CONFIG } from '../utils/constants.js';
+
 export class BossProjectile {
-  constructor(x, y, direction, speed = 5) {
+  constructor(
+    x,
+    y,
+    direction,
+    speed = 5,
+    bounds = {
+      minX: 0,
+      maxX: GAME_CONFIG.CANVAS_WIDTH,
+      minY: 0,
+      maxY: GAME_CONFIG.CANVAS_HEIGHT
+    }
+  ) {
+    this.bounds = { ...bounds };
     this.x = x;
     this.y = y;
     this.width = 16;
@@ -32,8 +46,13 @@ export class BossProjectile {
       this.currentFrame = (this.currentFrame + 1) % this.frameCount;
     }
 
-    // Deactivate if off screen (level is 3000 wide)
-    if (this.x < -200 || this.x > 3200 || this.y < -100 || this.y > 800) {
+    // Finite off-world margins, independent of viewport/camera position.
+    if (
+      this.x < this.bounds.minX - 200 ||
+      this.x > this.bounds.maxX + 200 ||
+      this.y < this.bounds.minY - 100 ||
+      this.y > this.bounds.maxY + 100
+    ) {
       this.active = false;
     }
   }

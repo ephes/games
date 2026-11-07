@@ -98,7 +98,6 @@ export class Game {
       data => new Coin(data.x, data.y, data.isPowerUp)
     );
     const enemies = levelData.enemies.map(data => new Enemy(data));
-    const boss = new Boss(levelData.boss);
     const portal = new Portal(levelData.portal.x, levelData.portal.y);
     portal.setSprite(this.spriteLoader.getSprite('portal'));
     const bounds = {
@@ -110,6 +109,8 @@ export class Game {
       minY: 0,
       maxY: this.canvas.height
     };
+
+    const boss = new Boss(levelData.boss, bounds);
 
     this.player = player;
     this.platforms = platforms;
@@ -317,8 +318,9 @@ export class Game {
 
       if (hit) {
         if (hit.type === 'enemy') {
-          hit.target.hit();
-          this.score += 50;
+          if (hit.target.hit()) {
+            this.score += 50;
+          }
         } else if (hit.type === 'boss') {
           const points = hit.target.takeDamage();
           this.score += points;
@@ -363,9 +365,10 @@ export class Game {
     for (const enemy of this.enemies) {
       const collision = CollisionSystem.checkEnemyCollision(this.player, enemy);
       if (collision === 'stomp') {
-        enemy.hit();
-        this.player.bounce();
-        this.score += 50;
+        if (enemy.hit()) {
+          this.player.bounce();
+          this.score += 50;
+        }
       } else if (collision === 'damage') {
         this.lives = this.player.takeDamage(this.lives);
         if (this.lives <= 0) {

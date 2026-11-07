@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Award an enemy's defeat once and remove collisions immediately while its hit
+  animation finishes, preserving boss health behavior.
+- Bound boss shots by the active level with finite off-world margins, and
+  preserve explicit zero boss speed just like ordinary enemies.
+
 - Own one animation chain per game, make disposal terminal, and release input on
   failed or cancelled initialization.
 - Publish only the latest replacement/append LDtk import from its own candidate
@@ -44,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   creation, transitions, resets and LDtk replacement.
 
 ### Development
+
+- Remove the unused duplicate level coordinator and describe Game's maintained
+  progression/import ownership in levels.md.
 
 - Run synthetic Chromium frame-schedule smoke tests in branch and main CI.
 

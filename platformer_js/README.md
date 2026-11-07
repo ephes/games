@@ -185,6 +185,14 @@ the canvas height.
 
 Damage respawns the player at the active level's start, clearing vertical speed
 and jumping state while retaining the usual life loss and invulnerability.
+Enemies accept one defeat and award 50 points once, even when bullets and a
+stomp overlap. Defeated enemies stop moving/colliding immediately while their
+300 ms hit animation remains visible. Boss health and per-hit scoring are unchanged.
+Programmatic enemy and boss configurations preserve speed zero as stationary;
+omitted speed defaults to 2. Boss shots use the active level's camera bounds,
+with a 200 px horizontal and 100 px vertical off-world margin. Recreating a level
+replaces its boss and projectile collection.
+
 Bosses expose `kind: 'boss'` for collision rules, so production minification
 preserves the central 40% head zone and top 20% stomp restriction.
 
