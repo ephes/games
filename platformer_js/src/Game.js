@@ -57,21 +57,32 @@ export class Game {
     this.projectiles = [];
 
     this.lastTime = 0;
+    this.accumulator = 0;
+    this.running = false;
+    this.disposed = false;
+    this.loopGeneration = 0;
+    this.importGeneration = 0;
   }
 
   /**
    * Initialize game
    */
   async init() {
-    // Load sprites first
-    await this.spriteLoader.loadAll();
-
-    // Create renderer with loaded sprites
-    this.renderer = new Renderer(this.canvas, this.spriteLoader);
-
-    // Initialize game objects
-    this.createLevel();
-    this.setupInputHandlers();
+    if (this.disposed) {
+      return;
+    }
+    try {
+      await this.spriteLoader.loadAll();
+      if (this.disposed) {
+        return;
+      }
+      this.renderer = new Renderer(this.canvas, this.spriteLoader);
+      this.createLevel();
+      this.setupInputHandlers();
+    } catch (error) {
+      this.dispose();
+      throw error;
+    }
   }
 
   /**
@@ -184,14 +195,34 @@ export class Game {
    * Main game loop
    * @param {number} timestamp - Current timestamp
    */
-  gameLoop = timestamp => {
-    const deltaTime = timestamp - this.lastTime;
+  gameLoop = (timestamp, generation) => {
+    if (!this.running || this.disposed || generation !== this.loopGeneration) {
+      return;
+    }
+    const step = 1000 / 60;
+    const elapsed = Math.max(0, timestamp - this.lastTime);
     this.lastTime = timestamp;
-
-    this.update(deltaTime);
+    // Drop suspension time; ordinary slow frames can catch up at most five steps.
+    if (elapsed > 250) {
+      this.accumulator = 0;
+    } else {
+      this.accumulator += Math.min(elapsed, step * 5);
+    }
+    let steps = 0;
+    while (this.accumulator + 1e-7 >= step && steps < 5) {
+      this.accumulator = Math.max(0, this.accumulator - step);
+      this.update(step);
+      steps++;
+      if (!this.running || this.disposed) {
+        return;
+      }
+    }
     this.render();
-
-    this.animationFrameId = requestAnimationFrame(this.gameLoop);
+    if (this.running && !this.disposed && generation === this.loopGeneration) {
+      this.animationFrameId = requestAnimationFrame(time =>
+        this.gameLoop(time, generation)
+      );
+    }
   };
 
   /**
@@ -452,14 +483,26 @@ export class Game {
    * Start the game
    */
   start() {
+    if (this.running || this.disposed) {
+      return;
+    }
+    this.running = true;
+    this.accumulator = 0;
     this.lastTime = performance.now();
-    this.gameLoop(this.lastTime);
+    this.gameLoop(this.lastTime, ++this.loopGeneration);
   }
 
   /**
    * Stop animation and release keyboard listeners before replacing the game.
    */
   dispose() {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.running = false;
+    this.loopGeneration++;
+    this.importGeneration++;
     cancelAnimationFrame(this.animationFrameId);
     this.inputManager.dispose();
   }
@@ -470,10 +513,16 @@ export class Game {
    * @returns {Promise<boolean>} True on replacement; false leaves play unchanged
    */
   async loadLDtkLevels(url) {
-    const previousWorld = this.ldtkLoader.world;
+    if (this.disposed) {
+      return false;
+    }
+    const generation = ++this.importGeneration;
     try {
-      await this.ldtkLoader.loadWorld(url);
-      const ldtkLevels = this.ldtkLoader.getAllLevels();
+      const world = await this.ldtkLoader.loadWorld(url, { publish: false });
+      if (this.disposed || generation !== this.importGeneration) {
+        return false;
+      }
+      const ldtkLevels = this.ldtkLoader.getAllLevels(world);
 
       if (ldtkLevels.length > 0) {
         const index =
@@ -485,6 +534,7 @@ export class Game {
 
         // Construction may fail; do not publish the new table until it succeeds.
         this.createLevel(ldtkLevels[index]);
+        this.ldtkLoader.world = world;
         this.levels = ldtkLevels;
         this.totalLevels = ldtkLevels.length;
         this.currentLevel = index;
@@ -497,7 +547,6 @@ export class Game {
     } catch (error) {
       console.error('Failed to load LDtk levels:', error);
     }
-    this.ldtkLoader.world = previousWorld;
     return false;
   }
 
@@ -507,11 +556,19 @@ export class Game {
    * @returns {Promise<void>}
    */
   async addLDtkLevels(url) {
+    if (this.disposed) {
+      return;
+    }
+    const generation = ++this.importGeneration;
     try {
-      await this.ldtkLoader.loadWorld(url);
-      const ldtkLevels = this.ldtkLoader.getAllLevels();
+      const world = await this.ldtkLoader.loadWorld(url, { publish: false });
+      if (this.disposed || generation !== this.importGeneration) {
+        return;
+      }
+      const ldtkLevels = this.ldtkLoader.getAllLevels(world);
 
       if (ldtkLevels.length > 0) {
+        this.ldtkLoader.world = world;
         this.levels = [...this.levels, ...ldtkLevels];
         this.totalLevels = this.levels.length;
 

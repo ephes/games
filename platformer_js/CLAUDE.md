@@ -110,7 +110,8 @@ npm run build:docs
 npm run preview
 ```
 
-GitHub Actions checks pull requests and main pushes. Pages publication requires
+GitHub Actions checks pull requests, main and fix/\*\* pushes, including
+`npm run test:browser` after `npx playwright install --with-deps chromium`. Pages publication requires
 a manual workflow run with `publish` enabled (disabled by default).
 
 ## Architecture Highlights
@@ -133,8 +134,16 @@ a manual workflow run with `publish` enabled (disabled by default).
 
 1. `main.js` initializes the game when DOM is ready
 2. `Game.js` coordinates all systems and game objects
-3. Game loop updates entities, checks collisions, and renders
+3. One owned RAF loop runs bounded fixed 60 Hz simulation steps and renders once per frame
 4. Renderer handles all drawing operations with sprite animations
+
+`start()` is idempotent; `dispose()` is terminal and releases input. Initialization
+failure disposes the partial game while retaining the original error. Deferred
+initialization and imports cannot publish after disposal. Replacement and append
+LDtk requests publish only the latest requested candidate; conversion never reads
+another in-flight request's world. Suspension gaps over 250 ms reset simulation
+timing, with at most five catch-up steps otherwise. Cooldowns and timed visual
+effects retain wall-clock semantics.
 
 ## Recent Improvements
 

@@ -2,7 +2,7 @@ name: Platformer quality and manual publication
 
 on:
   push:
-    branches: [main]
+    branches: [main, "fix/**"]
     paths:
       - "platformer_js/**"
       - ".github/workflows/deploy-platformer.yml"
@@ -52,6 +52,12 @@ jobs:
 
       - name: Run tests
         run: npm run test:run
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser clock smoke
+        run: npm run test:browser
 
       - name: Build project
         run: npm run build

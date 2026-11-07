@@ -68,7 +68,9 @@ describe('Current level camera bounds', () => {
     game.ldtkLoader.loadWorld = vi.fn().mockResolvedValue();
     game.ldtkLoader.getAllLevels = vi.fn().mockReturnValue([level(3200)]);
     await game.loadLDtkLevels('synthetic.ldtk');
-    expect(game.ldtkLoader.loadWorld).toHaveBeenCalledWith('synthetic.ldtk');
+    expect(game.ldtkLoader.loadWorld).toHaveBeenCalledWith('synthetic.ldtk', {
+      publish: false
+    });
     expectRightEdge(3200);
   });
 });

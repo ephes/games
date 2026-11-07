@@ -13,16 +13,25 @@ export class LDtkLoader {
    */
   constructor() {
     this.world = null;
+    this.loadGeneration = 0;
   }
 
   /**
-   * Load LDtk world from URL
+   * Load a candidate world. Only the latest requested load may publish it.
+   * A superseded call still returns its own candidate; convert that returned
+   * world with getAllLevels(world), rather than reading the published default.
    * @param {string} url - URL to LDtk file
-   * @returns {Promise<World>} Loaded world
+   * @param {Object} options - Publication options
+   * @param {boolean} options.publish - Publish if latest (default true)
+   * @returns {Promise<World>} This request's candidate world
    */
-  async loadWorld(url) {
-    this.world = await World.fromURL(url);
-    return this.world;
+  async loadWorld(url, { publish = true } = {}) {
+    const generation = ++this.loadGeneration;
+    const world = await World.fromURL(url);
+    if (publish && generation === this.loadGeneration) {
+      this.world = world;
+    }
+    return world;
   }
 
   /**
@@ -282,15 +291,16 @@ export class LDtkLoader {
   }
 
   /**
-   * Get all levels from world
+   * Convert a candidate world or the currently published world.
+   * @param {World|null} world - Candidate (defaults to the published world)
    * @returns {Array} Array of converted levels
    */
-  getAllLevels() {
-    if (!this.world) {
+  getAllLevels(world = this.world) {
+    if (!world) {
       return [];
     }
 
-    return this.world.levels.map(ldtkLevel => this.convertLevel(ldtkLevel));
+    return world.levels.map(ldtkLevel => this.convertLevel(ldtkLevel));
   }
 
   /**

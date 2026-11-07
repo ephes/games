@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Own one animation chain per game, make disposal terminal, and release input on
+  failed or cancelled initialization.
+- Publish only the latest replacement/append LDtk import from its own candidate
+  world; obsolete completions and failures cannot change the active level.
+- Run bounded fixed 60 Hz simulation steps independently of display refresh rate,
+  discarding suspension time while retaining wall-clock cooldowns.
+
 - Reject malformed LDtk IntGrid dimensions, unsafe pixel extents, grids over
   1,000,000 cells and cell arrays that do not match the declared dimensions
   before scanning or replacing the active world. Normalize the bundled empty
@@ -37,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   creation, transitions, resets and LDtk replacement.
 
 ### Development
+
+- Run synthetic Chromium frame-schedule smoke tests in branch and main CI.
 
 - Test real LDtk world conversion, entity fields (including zero/false values),
   and collision mesh adjacency with synthetic fixtures.

@@ -10,6 +10,7 @@ describe('Platformer quality workflow', () => {
   it('checks pull requests and main pushes with read-only permissions', () => {
     expect(workflow.on).toHaveProperty('pull_request');
     expect(workflow.on.push.branches).toContain('main');
+    expect(workflow.on.push.branches).toContain('fix/**');
     expect(workflow.permissions).toEqual({ contents: 'read' });
     expect(workflow.jobs.build.permissions).toBeUndefined();
     const steps = workflow.jobs.build.steps;
@@ -23,6 +24,8 @@ describe('Platformer quality workflow', () => {
       'npm run lint',
       'npm run format:check',
       'npm run test:run',
+      'npx playwright install --with-deps chromium',
+      'npm run test:browser',
       'npm run build',
       'npm run build:docs'
     ]) {
