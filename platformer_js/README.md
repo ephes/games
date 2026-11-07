@@ -66,7 +66,11 @@ npm run preview
 
 ## 🧪 Testing
 
-The project uses Vitest for unit testing covering game logic. Loader tests run
+The project uses Vitest for unit testing covering game logic. Tests exercise
+the production Player and InputManager, including animation precedence/frame counts,
+renewed hit/protection timers and self-removing action subscribers. Player tests
+keep fixed simulation steps separate from fake wall time; input tests dispose
+every DOM listener after each case. Loader tests run
 real LDtk world/level conversion, entity field lookup and IntGrid collision mesh
 merging against synthetic records, mocking only `World.fromURL`. Sprite loader
 tests use explicitly triggered Image load/error events to check cache identity,
@@ -176,7 +180,11 @@ the startup error; disposal during sprite loading prevents later activation.
 Simulation uses fixed 60 Hz steps and renders once per animation frame. A frame
 can run at most five simulation steps; gaps over 250 ms discard accumulated time
 so returning from suspension does not replay missed movement. Shooting cooldowns,
-invulnerability and hit animations continue to use wall-clock time.
+invulnerability and hit animations continue to use wall-clock time. Renewing
+protection restarts both timers: hit visuals expire after 500 ms and protection
+after the requested duration, unaffected by older expirations. Action delivery
+uses the subscribers present at the start of each edge; changes to subscriptions
+take effect on the next edge.
 
 Camera and player horizontal bounds refresh on level creation, transitions,
 resets, and LDtk replacement. The right edge is the farthest platform's
