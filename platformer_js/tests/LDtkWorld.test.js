@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { World } from 'ldtk';
+import starterWorld from '../assets/levels/platformer.ldtk?raw';
 import { LDtkLoader } from '../src/systems/LDtkLoader.js';
 
 const emptyLevel = name => ({
@@ -78,6 +79,16 @@ describe('LDtk world conversion', () => {
     expect(loader.getLevel(0)).toEqual(expected[0]);
     expect(loader.getLevel(1)).toEqual(expected[1]);
     expect(loader.getLevel(2)).toBeNull();
+  });
+
+  it('converts the bundled synthetic starter world with an empty dense grid', () => {
+    const input = JSON.parse(starterWorld);
+    loader.world = input;
+    const levels = loader.getAllLevels();
+    expect(levels).toHaveLength(1);
+    expect(levels[0].playerStart).toEqual({ x: 48, y: 192 });
+    expect(levels[0].platforms).toEqual([]);
+    expect(fromURL).not.toHaveBeenCalled();
   });
 
   it('propagates a load failure without creating a world', async () => {

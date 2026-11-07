@@ -10,6 +10,9 @@ LDtk (Level Designer Toolkit) is a modern, user-friendly 2D level editor that ou
 2. Install and run the application
 3. Open the project file: `assets/levels/platformer.ldtk`
 
+The starter world has no painted platforms. Its dense grid contains 5,000 zero
+cells; draw platforms before playing it.
+
 ## Project Structure
 
 The LDtk project is configured with:
@@ -29,7 +32,7 @@ The LDtk project is configured with:
 #### Enemy (Red Rectangle)
 
 - Properties:
-  - `Speed`: Movement speed (1-5)
+  - `Speed`: Finite numeric movement speed (default 2; zero is stationary)
   - `PlatformIndex`: Which platform to patrol
 
 #### Boss (Purple Rectangle)
@@ -53,6 +56,14 @@ The LDtk project is configured with:
 - Use the IntGrid layer to paint platforms
 - Value 1 = Platform (Brown color)
 - Platforms are automatically merged when adjacent
+- Grid size, width and height must be positive safe integers, with safe integer
+  pixel extents and at most 1,000,000 cells per Platforms layer
+- Export a dense `intGridCsv` array with exactly width × height entries; use 0
+  for empty cells
+- Entities need finite numeric x/y coordinates. Enemy and boss `PlatformIndex`
+  values must index the final merged platform array (default 0 when absent).
+  Invalid present numeric fields reject the import, retaining the active game
+  and world when using `game.loadLDtkLevels(url)`
 
 ## Creating Levels
 
