@@ -15,6 +15,7 @@ export class Player {
   constructor(x, y) {
     this.x = x;
     this.y = y;
+    this.respawnPoint = { x, y };
     this.width = 30;
     this.height = 30;
     this.speed = 5;
@@ -165,9 +166,10 @@ export class Player {
     }
 
     lives--;
-    this.x = 50;
-    this.y = 200;
+    this.x = this.respawnPoint.x;
+    this.y = this.respawnPoint.y;
     this.velocityY = 0;
+    this.isJumping = false;
     this.makeInvulnerable();
 
     return lives;

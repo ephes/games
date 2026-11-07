@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep boss head-only stomps stable when production builds rename constructors.
+- Respawn at the active level start after damage, clearing vertical movement and
+  jumping state, including after level transitions and LDtk replacement.
+- Construct LDtk replacement objects before publishing them; retain a valid
+  current index or select zero, preserve play on failure, and return a boolean
+  replacement result.
+- Stop the death frame immediately after lethal enemy, boss or fireball damage
+  so it cannot also advance a level or win.
 - Clear held keys on window blur or hidden tabs and support explicit input/game
   disposal with animation cancellation.
 - Refresh camera and player bounds from current platform geometry on level

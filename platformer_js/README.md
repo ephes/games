@@ -174,6 +174,24 @@ resets, and LDtk replacement. The right edge is the farthest platform's
 `x + width`, with at least one viewport of width; vertical bounds stay fixed to
 the canvas height.
 
+Damage respawns the player at the active level's start, clearing vertical speed
+and jumping state while retaining the usual life loss and invulnerability.
+Bosses expose `kind: 'boss'` for collision rules, so production minification
+preserves the central 40% head zone and top 20% stomp restriction.
+
+`await game.loadLDtkLevels(url)` returns `true` when replacement succeeds or
+`false` on an empty world, load/conversion error, or object construction failure.
+It retains the current level index if available, otherwise starts at index zero.
+Replacement objects are constructed before publishing the new levels; failure
+keeps the previous level table, objects, camera and loaded world intact. Success
+clears player projectiles and resets the camera, preserving score, lives and
+shooting ability.
+
+Lethal enemy, boss or boss-projectile contact ends that update immediately;
+the player cannot enter a portal or win on the death frame. Coins are checked
+before enemy/boss contact, while boss projectiles are checked before player
+projectiles and other collisions. Surviving contact still permits portal entry.
+
 ## 🚀 GitHub Pages Deployment
 
 Pull requests and pushes to `main` run read-only quality checks. Publishing is

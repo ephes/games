@@ -31,11 +31,10 @@ async function addLDtkLevelsToGame() {
 async function loadLDtkWithFallback() {
   const game = window.game;
 
-  try {
-    await game.loadLDtkLevels('./assets/levels/platformer.ldtk');
+  if (await game.loadLDtkLevels('./assets/levels/platformer.ldtk')) {
     console.log('LDtk levels loaded successfully');
-  } catch (error) {
-    console.error('Failed to load LDtk levels, using built-in levels', error);
+  } else {
+    console.warn('Failed to load LDtk levels, retaining current levels');
   }
 }
 
@@ -47,16 +46,17 @@ window.toggleLevelSource = async function () {
     // Switch back to built-in levels
     game.levels = LEVELS;
     game.totalLevels = LEVELS.length;
+    game.currentLevel = 0;
+    game.resetLevel();
     game.usingLDtk = false;
     console.log('Switched to built-in levels');
-  } else {
+  } else if (await game.loadLDtkLevels('./assets/levels/platformer.ldtk')) {
     // Switch to LDtk levels
-    await game.loadLDtkLevels('./assets/levels/platformer.ldtk');
     game.usingLDtk = true;
     console.log('Switched to LDtk levels');
+  } else {
+    console.warn('Failed to switch to LDtk levels, retaining current levels');
   }
-
-  game.resetLevel();
 };
 
 // Add to main.js after game initialization:

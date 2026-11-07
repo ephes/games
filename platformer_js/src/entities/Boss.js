@@ -16,6 +16,7 @@ export class Boss extends Enemy {
    */
   constructor(config) {
     super(config);
+    this.kind = 'boss';
 
     // Override default size
     this.width = 64;
