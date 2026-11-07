@@ -58,7 +58,7 @@ describe('LDtk entity fields', () => {
         },
         {
           __identifier: 'Platforms',
-          __gridSize: 16,
+          __gridSize: 64,
           __cWid: 11,
           __cHei: 1,
           intGridCsv: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1]

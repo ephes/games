@@ -71,6 +71,17 @@ real LDtk world/level conversion, entity field lookup and IntGrid collision mesh
 merging against synthetic records, mocking only `World.fromURL`. Sprite loader
 tests use explicitly triggered Image load/error events to check cache identity,
 out-of-order completion and failed startup without network requests or timers.
+Direct Enemy tests control `Date.now()`: running frames 0–9 advance only after
+more than 1/15 second; a hit resets to frame 0 and cycles frames 0–4 after
+more than 50 ms per frame during the 300 ms hit window. These are wall-clock
+thresholds, independent of the simulation delta.
+Player Projectile tests cover a fixed 10 px step in either direction and
+inclusive viewport margins: x at `cameraX - 100` or
+`cameraX + screenWidth + 100` remains in bounds; only points beyond retire.
+These player-shot limits differ from boss shots' world bounds. Drawing subtracts
+cameraX once without moving world coordinates. Camera tests use translated
+bounds and a recording canvas to check follow/clamp, touching-edge visibility,
+coordinate conversion, transforms and reset, without changing camera policy.
 
 ```bash
 # Run tests in watch mode
@@ -216,6 +227,10 @@ Recognized entities require finite numeric x/y coordinates. Enemy `Speed` must
 be a finite number (zero stays stationary); enemy and boss `PlatformIndex` must
 be an integer in the final merged platform array. Missing fields default to speed
 2 and platform index 0; present strings, nulls or nonfinite values are rejected.
+The referenced merged patrol platform must be at least 44 px wide for an enemy
+or 64 px for a boss, including stationary enemies. Exact-width surfaces are
+valid; narrower surfaces fail conversion with an authoring error naming the
+entity and minimum width before the candidate world is accepted.
 Conversion throws on invalid data, and `game.loadLDtkLevels(url)` returns `false`
 while retaining the previous playable state, including the loaded world.
 
