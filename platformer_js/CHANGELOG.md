@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject malformed LDtk IntGrid dimensions, unsafe pixel extents, grids over
+  1,000,000 cells and cell arrays that do not match the declared dimensions
+  before scanning or replacing the active world. Normalize the bundled empty
+  starter grid to 5,000 zero cells so it remains compatible.
+- Reject nonnumeric/nonfinite imported entity coordinates and enemy speeds,
+  and enemy/boss references outside the converted platform mesh. Keep missing
+  field defaults, preserve explicit zero enemy speed and retain play on failure.
+
 - Keep boss head-only stomps stable when production builds rename constructors.
 - Respawn at the active level start after damage, clearing vertical movement and
   jumping state, including after level transitions and LDtk replacement.

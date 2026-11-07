@@ -19,7 +19,7 @@ export class Enemy {
     this.y = config.y;
     this.width = 44;
     this.height = 30;
-    this.speed = config.speed || 2;
+    this.speed = config.speed ?? 2;
     this.direction = 1;
     this.platformIndex = config.platformIndex;
     this.alive = true;

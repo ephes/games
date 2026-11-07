@@ -26,7 +26,11 @@ export class LDtkLoader {
   }
 
   /**
-   * Convert LDtk level to game format
+   * Convert LDtk level to game format, validating geometry and entity numbers.
+   * Coordinates and enemy speeds must be finite numbers; enemy/boss platform
+   * indices must reference the completed collision mesh. Only absent fields
+   * use defaults (Speed: 2, PlatformIndex: 0); malformed present values fail.
+   * @throws {Error} If the level has invalid IntGrid or entity numeric data
    * @param {Object} ldtkLevel - LDtk level data
    * @returns {Object} Game level format
    */
@@ -41,15 +45,6 @@ export class LDtkLoader {
       portal: null
     };
 
-    // Process entities layer
-    const entitiesLayer = ldtkLevel.layerInstances.find(
-      layer => layer.__identifier === 'Entities'
-    );
-
-    if (entitiesLayer) {
-      this.processEntities(entitiesLayer, level);
-    }
-
     // Process platforms layer
     const platformsLayer = ldtkLevel.layerInstances.find(
       layer => layer.__identifier === 'Platforms'
@@ -57,6 +52,15 @@ export class LDtkLoader {
 
     if (platformsLayer) {
       this.processPlatforms(platformsLayer, level);
+    }
+
+    // Process entities layer
+    const entitiesLayer = ldtkLevel.layerInstances.find(
+      layer => layer.__identifier === 'Entities'
+    );
+
+    if (entitiesLayer) {
+      this.processEntities(entitiesLayer, level);
     }
 
     return level;
@@ -75,49 +79,81 @@ export class LDtkLoader {
   }
 
   /**
-   * Process entities from LDtk
+   * Process and validate recognized entities after the platform mesh is built.
+   * @throws {Error} If coordinates, enemy speed or patrol references are invalid
    * @param {Object} entitiesLayer - Entities layer
    * @param {Object} level - Level object to populate
    */
   processEntities(entitiesLayer, level) {
     entitiesLayer.entityInstances.forEach(entity => {
+      if (
+        !['Player', 'Enemy', 'Boss', 'Coin', 'Portal'].includes(
+          entity.__identifier
+        )
+      ) {
+        return;
+      }
+      const [x, y] = entity.px;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        throw new Error('Invalid LDtk entity coordinates');
+      }
+      const patrol =
+        entity.__identifier === 'Enemy' || entity.__identifier === 'Boss';
+      const platformIndex = patrol
+        ? this.getFieldValue(entity, 'PlatformIndex', 0)
+        : null;
+      if (
+        patrol &&
+        (!Number.isInteger(platformIndex) ||
+          platformIndex < 0 ||
+          platformIndex >= level.platforms.length)
+      ) {
+        throw new Error('Invalid LDtk entity platform reference');
+      }
+      const speed =
+        entity.__identifier === 'Enemy'
+          ? this.getFieldValue(entity, 'Speed', 2)
+          : null;
+      if (entity.__identifier === 'Enemy' && !Number.isFinite(speed)) {
+        throw new Error('Invalid LDtk enemy speed');
+      }
       switch (entity.__identifier) {
         case 'Player':
           level.playerStart = {
-            x: entity.px[0],
-            y: entity.px[1]
+            x,
+            y
           };
           break;
 
         case 'Enemy':
           level.enemies.push({
-            x: entity.px[0],
-            y: entity.px[1],
-            speed: this.getFieldValue(entity, 'Speed', 2),
-            platformIndex: this.getFieldValue(entity, 'PlatformIndex', 0)
+            x,
+            y,
+            speed,
+            platformIndex
           });
           break;
 
         case 'Boss':
           level.boss = {
-            x: entity.px[0],
-            y: entity.px[1],
-            platformIndex: this.getFieldValue(entity, 'PlatformIndex', 0)
+            x,
+            y,
+            platformIndex
           };
           break;
 
         case 'Coin':
           level.coins.push({
-            x: entity.px[0],
-            y: entity.px[1],
+            x,
+            y,
             isPowerUp: this.getFieldValue(entity, 'IsPowerUp', false)
           });
           break;
 
         case 'Portal':
           level.portal = {
-            x: entity.px[0],
-            y: entity.px[1]
+            x,
+            y
           };
           break;
       }
@@ -125,7 +161,10 @@ export class LDtkLoader {
   }
 
   /**
-   * Process platforms from IntGrid
+   * Process a dense IntGrid with positive safe integer dimensions/grid size.
+   * At most 1,000,000 cells and safe integer pixel extents are supported.
+   * Validation finishes before scanning cells or replacing geometry.
+   * @throws {Error} If dimensions, cell budget or dense array length are invalid
    * @param {Object} platformsLayer - Platforms layer
    * @param {Object} level - Level object to populate
    */
@@ -133,6 +172,20 @@ export class LDtkLoader {
     const gridSize = platformsLayer.__gridSize;
     const width = platformsLayer.__cWid;
     const height = platformsLayer.__cHei;
+
+    const cellCount = width * height;
+    if (
+      ![gridSize, width, height].every(
+        value => Number.isSafeInteger(value) && value > 0
+      ) ||
+      cellCount > 1_000_000 ||
+      !Number.isSafeInteger(width * gridSize) ||
+      !Number.isSafeInteger(height * gridSize) ||
+      !Array.isArray(platformsLayer.intGridCsv) ||
+      platformsLayer.intGridCsv.length !== cellCount
+    ) {
+      throw new Error('Invalid LDtk IntGrid dimensions or cell data');
+    }
 
     // Convert IntGrid to platforms
     const platforms = [];

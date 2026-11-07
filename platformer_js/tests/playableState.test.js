@@ -5,6 +5,7 @@ import { Boss } from '../src/entities/Boss.js';
 import { BossProjectile } from '../src/entities/BossProjectile.js';
 import { Enemy } from '../src/entities/Enemy.js';
 import { Player } from '../src/entities/Player.js';
+import { Projectile } from '../src/entities/Projectile.js';
 import { CollisionSystem } from '../src/systems/CollisionSystem.js';
 
 const level = (x = 500, y = 40) => ({
@@ -27,9 +28,17 @@ const world = (x = 600, y = 80) => ({
           __identifier: 'Entities',
           entityInstances: [
             { __identifier: 'Player', px: [x, y], fieldInstances: [] },
+            { __identifier: 'Enemy', px: [100, 300], fieldInstances: [] },
             { __identifier: 'Boss', px: [1200, 254], fieldInstances: [] },
             { __identifier: 'Portal', px: [1000, 200], fieldInstances: [] }
           ]
+        },
+        {
+          __identifier: 'Platforms',
+          __gridSize: 16,
+          __cWid: 100,
+          __cHei: 1,
+          intGridCsv: Array(100).fill(1)
         }
       ]
     }
@@ -149,13 +158,22 @@ describe('Playable level state', () => {
     expect([game.player.x, game.player.y]).toEqual([240, 60]);
   });
 
-  it.each(['load', 'conversion', 'construction', 'empty'])(
+  it.each([
+    'load',
+    'conversion',
+    'construction',
+    'empty',
+    'intgrid',
+    'coordinate',
+    'speed',
+    'platform-index'
+  ])(
     'preserves prior playable state after replacement %s failure',
     async failure => {
       game.loadNextLevel();
       game.score = 150;
       game.canShoot = true;
-      game.projectiles.push({ x: 20, y: 30 });
+      game.projectiles.push(new Projectile(20, 30, 1));
       game.camera.x = 150;
       game.ldtkLoader.world = world(300, 120);
       const previousWorld = game.ldtkLoader.world;
@@ -177,6 +195,27 @@ describe('Playable level state', () => {
         fault = game.spriteLoader.getSprite.mockImplementation(() => {
           throw new Error('Synthetic sprite failure');
         });
+      } else if (failure === 'intgrid') {
+        const malformed = world();
+        malformed.levels[0].layerInstances[1].intGridCsv = [1];
+        fromURL.mockResolvedValue(malformed);
+      } else if (['coordinate', 'speed', 'platform-index'].includes(failure)) {
+        const malformed = world();
+        const entities = malformed.levels[0].layerInstances[0].entityInstances;
+        if (failure === 'coordinate') {
+          entities[0].px[0] = null;
+        }
+        if (failure === 'speed') {
+          entities[1].fieldInstances = [
+            { __identifier: 'Speed', __value: 'fast' }
+          ];
+        }
+        if (failure === 'platform-index') {
+          entities[2].fieldInstances = [
+            { __identifier: 'PlatformIndex', __value: 1 }
+          ];
+        }
+        fromURL.mockResolvedValue(malformed);
       } else {
         fromURL.mockResolvedValue({ levels: [] });
       }
@@ -211,6 +250,9 @@ describe('Playable level state', () => {
       if (failure !== 'empty') {
         expect(errorLog).toHaveBeenCalled();
       }
+      // The prior level remains usable after a rejected import.
+      expect(() => game.update(16)).not.toThrow();
+      expect(Number.isFinite(game.player.x)).toBe(true);
     }
   );
 

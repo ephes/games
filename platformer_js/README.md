@@ -187,6 +187,18 @@ keeps the previous level table, objects, camera and loaded world intact. Success
 clears player projectiles and resets the camera, preserving score, lives and
 shooting ability.
 
+LDtk Platforms layers require positive safe integer grid size, width and height,
+with safe integer pixel extents and at most 1,000,000 cells per layer.
+`intGridCsv` must be an array containing exactly `width * height` cells, including
+zero cells for empty space; value 1 creates collision geometry. A level may omit
+the Platforms layer entirely when no enemy or boss needs a patrol surface.
+Recognized entities require finite numeric x/y coordinates. Enemy `Speed` must
+be a finite number (zero stays stationary); enemy and boss `PlatformIndex` must
+be an integer in the final merged platform array. Missing fields default to speed
+2 and platform index 0; present strings, nulls or nonfinite values are rejected.
+Conversion throws on invalid data, and `game.loadLDtkLevels(url)` returns `false`
+while retaining the previous playable state, including the loaded world.
+
 Lethal enemy, boss or boss-projectile contact ends that update immediately;
 the player cannot enter a portal or win on the death frame. Coins are checked
 before enemy/boss contact, while boss projectiles are checked before player

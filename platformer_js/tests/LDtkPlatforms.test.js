@@ -3,7 +3,7 @@ import { LDtkLoader } from '../src/systems/LDtkLoader.js';
 
 describe('LDtk collision mesh', () => {
   it.each([
-    ['empty grid', 16, 0, 0, [], []],
+    ['empty grid', 16, 1, 1, [0], []],
     ['no solid cells', 16, 3, 1, [0, 2, 0], []],
     [
       'adjacent cells',
@@ -82,5 +82,91 @@ describe('LDtk collision mesh', () => {
       { x: 0, y: 20, width: 30, height: 10 }
     ]);
     expect(loader.mergePlatforms([])).toEqual([]);
+  });
+});
+
+describe('LDtk IntGrid validation', () => {
+  const grid = overrides => ({
+    __gridSize: 16,
+    __cWid: 2,
+    __cHei: 2,
+    intGridCsv: [1, 1, 0, 0],
+    ...overrides
+  });
+
+  it.each([
+    { __cWid: -1 },
+    { __cHei: 0 },
+    { __cWid: 1.5 },
+    { __cHei: 2.5 },
+    { __cWid: NaN },
+    { __cHei: null },
+    { __cWid: '2' },
+    { __gridSize: 0 },
+    { __gridSize: -16 },
+    { __gridSize: 1.5 },
+    { __gridSize: Infinity },
+    { __gridSize: Number.MAX_SAFE_INTEGER },
+    { intGridCsv: [1] },
+    { intGridCsv: [1, 1, 0, 0, 0] },
+    { intGridCsv: null },
+    { intGridCsv: '1100' }
+  ])('rejects malformed grid %j without changing geometry', overrides => {
+    const loader = new LDtkLoader();
+    const platforms = [{ x: 0, y: 20, width: 100, height: 10 }];
+    const level = { platforms };
+    expect(() => loader.processPlatforms(grid(overrides), level)).toThrow(
+      'Invalid LDtk IntGrid'
+    );
+    expect(level.platforms).toBe(platforms);
+  });
+
+  it.each([1_000_001, Number.MAX_SAFE_INTEGER, Infinity])(
+    'refuses width %s before reading any cells',
+    width => {
+      // A premature scan fails immediately, even for an unbounded dimension.
+      const cells = [0];
+      for (const index of ['0', 'NaN']) {
+        Object.defineProperty(cells, index, {
+          get() {
+            throw new Error('Unexpected cell read');
+          }
+        });
+      }
+      expect(() =>
+        new LDtkLoader().processPlatforms(
+          grid({
+            __cWid: width,
+            __cHei: 1,
+            intGridCsv: cells
+          }),
+          { platforms: [] }
+        )
+      ).toThrow('Invalid LDtk IntGrid');
+    }
+  );
+
+  it('accepts the cell budget boundary and rejects one cell more', () => {
+    const loader = new LDtkLoader();
+    const level = { platforms: [] };
+    loader.processPlatforms(
+      grid({
+        __cWid: 1_000_000,
+        __cHei: 1,
+        intGridCsv: Array(1_000_000).fill(0)
+      }),
+      level
+    );
+    expect(level.platforms).toEqual([]);
+    expect(() =>
+      loader.processPlatforms(
+        grid({
+          __cWid: 1_000_001,
+          __cHei: 1,
+          intGridCsv: Array(1_000_001).fill(0)
+        }),
+        level
+      )
+    ).toThrow('Invalid LDtk IntGrid');
   });
 });
