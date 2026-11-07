@@ -57,7 +57,15 @@ Note: Due to ES module CORS restrictions, the game must be served via HTTP. Open
 
 ## Testing
 
-The project includes a comprehensive test suite with 56+ tests using Vitest:
+The Vitest suite includes focused tests of the real CollisionSystem, Renderer,
+Coin and Game collection path. Platform fixtures pin strict overlap, the 50%
+support boundary, downward landing, upward ceiling contact and unchanged state
+when there is no contact. Renderer tests use a recording canvas context and
+synthetic sprite provider to check source cells, destinations, left-facing
+transforms and save/restore balance, including boss hit compositing before health
+bars and later entities. Coin tests pin one award per coin, no collected drawing,
+and shooting enabled only by power-ups across repeated Game collision frames.
+Keep these fixtures synthetic, dispose each Game and restore timer/global mocks.
 
 ```bash
 # Run tests in watch mode (for development)

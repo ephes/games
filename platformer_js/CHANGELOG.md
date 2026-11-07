@@ -50,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Development
 
+- Test production platform contact boundaries and entity mutation, sprite geometry
+  and canvas state isolation, and one-time coin awards/power-ups through Game.
+
 - Remove the unused duplicate level coordinator and describe Game's maintained
   progression/import ownership in levels.md.
 

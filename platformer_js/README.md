@@ -66,7 +66,14 @@ npm run preview
 
 ## 🧪 Testing
 
-The project uses Vitest for unit testing covering game logic. Loader tests run
+The project uses Vitest for unit testing covering game logic. Collision tests call
+the production system with synthetic rectangles: touching edges do not overlap,
+landing needs at least 50% horizontal support while falling, and an upward
+ceiling hit stops vertical speed without clearing jumping state. Renderer tests
+record sprite source/destination geometry, facing transforms and canvas state
+restoration without pixel snapshots. Coin tests verify one award, hidden
+collected geometry and real Game scoring/power-up behavior across repeated
+collision frames. All fixtures are synthetic and need no network assets. Loader tests run
 real LDtk world/level conversion, entity field lookup and IntGrid collision mesh
 merging against synthetic records, mocking only `World.fromURL`. Sprite loader
 tests use explicitly triggered Image load/error events to check cache identity,
