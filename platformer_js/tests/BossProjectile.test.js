@@ -46,15 +46,15 @@ describe('BossProjectile', () => {
     expect(frames.size).toBe(4);
   });
 
-  test('should deactivate when off screen', () => {
+  test('should deactivate beyond default viewport margins', () => {
     // Moving left - will be at -205 after update (boundary is -200)
     projectile.x = -200;
     projectile.velocityX = -5;
     projectile.update(16);
     expect(projectile.active).toBe(false);
 
-    // Moving right - will be at 3203 after update (boundary is 3200)
-    const rightProjectile = new BossProjectile(3200, 200, 1, 3);
+    // Moving right - will be at 1003 after update (boundary is 1000)
+    const rightProjectile = new BossProjectile(1000, 200, 1, 3);
     rightProjectile.update(16);
     expect(rightProjectile.active).toBe(false);
 
@@ -64,7 +64,7 @@ describe('BossProjectile', () => {
     expect(topProjectile.active).toBe(false);
 
     // Already off screen bottom
-    const bottomProjectile = new BossProjectile(100, 801, 1);
+    const bottomProjectile = new BossProjectile(100, 501, 1);
     bottomProjectile.update(16);
     expect(bottomProjectile.active).toBe(false);
   });

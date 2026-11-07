@@ -10,21 +10,21 @@
 - **Level transitions**: Portal-based level progression implemented
 - **Player state persistence**: Power-ups are kept between levels
 - **Level indicator UI**: Shows current level name and number
-- **Test-driven development**: Full test coverage for level system
+- **Progression tests**: Synthetic tests exercise transitions, resets and imports
 - **Camera reset**: Camera resets position when loading new level
 - **Victory condition**: Game shows win screen after completing all levels
 
 ### ✅ Additional Completed Features
 
-- **LevelManager refactoring**: Created separate system for level management
-- **Test-Driven Development**: All features implemented with tests written first
-- **Code quality**: Fixed all linting errors and warnings
+- **Single coordinator**: Game owns construction, transitions, resets and LDtk replacement
+- **Validation**: Unit tests, lint/format and production/documentation builds
+  cover the maintained coordinator; lint retains three console warnings
+- **LDtk imports**: Validated conversion with latest-request publication
 
 ### 📋 TODO
 
 - Add level transition animations/effects
 - Create more levels (Level 3+)
-- Implement LDtk editor integration
 - Add level select menu
 - Save/load progress between sessions
 
@@ -63,31 +63,15 @@
 
 ### Implementation Features
 
-- **Dynamic level loading**: Levels are loaded from the LEVELS array
+- **Dynamic level loading**: Game starts with LEVELS and can replace or append LDtk levels
 - **State preservation**: Player abilities persist between levels
 - **Clean transitions**: Objects are cleared before loading new level
 - **Victory detection**: Game detects when all levels are completed
 
-## LDtk Editor Integration (Future)
+## LDtk Editor Integration
 
-LDtk is a modern 2D level editor that outputs JSON. To integrate:
-
-1. **Install LDtk parser**: `npm install ldtk`
-2. **Create level loader**: Parse LDtk JSON format
-3. **Map entities**: Convert LDtk entities to game objects
-4. **Benefits**:
-   - Visual level editing
-   - Easy level iteration
-   - Tileset support
-   - Entity properties
-
-### Example LDtk Integration
-
-```javascript
-import { World } from 'ldtk';
-
-World.fromURL('assets/levels.ldtk').then(world => {
-  const level = world.levels[0];
-  // Convert LDtk data to game format
-});
-```
+Use `await game.loadLDtkLevels(url)` to replace levels or
+`await game.addLDtkLevels(url)` to append them. See [LDTK_GUIDE.md](LDTK_GUIDE.md)
+for editor setup. Game constructs replacement objects before publishing, and
+only the latest requested import may publish. Synthetic progression and import
+tests exercise those paths; this does not claim exhaustive coverage.
