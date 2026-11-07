@@ -57,7 +57,14 @@ Note: Due to ES module CORS restrictions, the game must be served via HTTP. Open
 
 ## Testing
 
-The project includes a comprehensive test suite with 56+ tests using Vitest:
+The Vitest suite imports the real Player and InputManager for animation, timer
+and action delivery contracts. Renewing invulnerability cancels the previous hit
+and protection timeouts; each new call owns both expirations. Animation state
+priority is hit, jump/fall, run, idle, with state changes resetting frame and timer.
+Frames advance at 15 FPS with idle/run/hit counts 11/12/7 and single-frame jump/fall.
+Use fake wall time for hit/protection tests independently of fixed simulation steps.
+Action dispatch snapshots subscribers per edge; self-removal cannot skip peers.
+Dispose each test input manager and restore fake timers after each case.
 
 ```bash
 # Run tests in watch mode (for development)

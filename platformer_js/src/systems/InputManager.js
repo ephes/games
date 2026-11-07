@@ -102,7 +102,7 @@ export class InputManager {
   triggerAction(action, type) {
     const actionKey = `${action}:${type}`;
     if (this.listeners.has(actionKey)) {
-      this.listeners.get(actionKey).forEach(callback => callback());
+      [...this.listeners.get(actionKey)].forEach(callback => callback());
     }
   }
 
