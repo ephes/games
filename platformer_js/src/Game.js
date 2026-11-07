@@ -75,41 +75,22 @@ export class Game {
   }
 
   /**
-   * Create level from data
+   * Construct all level objects before replacing the current playable state.
+   * @param {Object} levelData - Level data (defaults to the current level)
    */
-  createLevel() {
-    const levelData = this.levels[this.currentLevel];
-
-    // Create player
-    this.player = new Player(levelData.playerStart.x, levelData.playerStart.y);
-
-    // Create platforms
-    levelData.platforms.forEach(data => {
-      this.platforms.push(
-        new Platform(data.x, data.y, data.width, data.height)
-      );
-    });
-
-    // Create coins
-    levelData.coins.forEach(data => {
-      this.coins.push(new Coin(data.x, data.y, data.isPowerUp));
-    });
-
-    // Create enemies
-    levelData.enemies.forEach(data => {
-      this.enemies.push(new Enemy(data));
-    });
-
-    // Create boss
-    this.boss = new Boss(levelData.boss);
-
-    // Create portal
-    this.portal = new Portal(levelData.portal.x, levelData.portal.y);
-    this.portal.setSprite(this.spriteLoader.getSprite('portal'));
-
-    // Set camera bounds
-
-    this.camera.setBounds({
+  createLevel(levelData = this.levels[this.currentLevel]) {
+    const player = new Player(levelData.playerStart.x, levelData.playerStart.y);
+    const platforms = levelData.platforms.map(
+      data => new Platform(data.x, data.y, data.width, data.height)
+    );
+    const coins = levelData.coins.map(
+      data => new Coin(data.x, data.y, data.isPowerUp)
+    );
+    const enemies = levelData.enemies.map(data => new Enemy(data));
+    const boss = new Boss(levelData.boss);
+    const portal = new Portal(levelData.portal.x, levelData.portal.y);
+    portal.setSprite(this.spriteLoader.getSprite('portal'));
+    const bounds = {
       minX: 0,
       maxX: Math.max(
         this.canvas.width,
@@ -117,7 +98,15 @@ export class Game {
       ),
       minY: 0,
       maxY: this.canvas.height
-    });
+    };
+
+    this.player = player;
+    this.platforms = platforms;
+    this.coins = coins;
+    this.enemies = enemies;
+    this.boss = boss;
+    this.portal = portal;
+    this.camera.setBounds(bounds);
   }
 
   /**
@@ -252,7 +241,7 @@ export class Game {
 
     // Get boss projectiles and check collisions
     const bossProjectiles = this.boss.getProjectiles();
-    bossProjectiles.forEach(projectile => {
+    for (const projectile of bossProjectiles) {
       if (
         projectile.active &&
         CollisionSystem.checkCollision(this.player, projectile)
@@ -261,9 +250,10 @@ export class Game {
         this.lives = this.player.takeDamage(this.lives);
         if (this.lives <= 0) {
           this.gameOver = true;
+          return;
         }
       }
-    });
+    }
 
     // Update projectiles
     this.updateProjectiles(deltaTime);
@@ -316,6 +306,10 @@ export class Game {
    * Check all collisions
    */
   checkCollisions() {
+    if (this.gameOver || this.gameWon) {
+      return;
+    }
+
     // Coin collisions
     this.coins.forEach(coin => {
       if (
@@ -335,7 +329,7 @@ export class Game {
     });
 
     // Enemy collisions
-    this.enemies.forEach(enemy => {
+    for (const enemy of this.enemies) {
       const collision = CollisionSystem.checkEnemyCollision(this.player, enemy);
       if (collision === 'stomp') {
         enemy.hit();
@@ -345,9 +339,10 @@ export class Game {
         this.lives = this.player.takeDamage(this.lives);
         if (this.lives <= 0) {
           this.gameOver = true;
+          return;
         }
       }
-    });
+    }
 
     // Boss collision
     const bossCollision = CollisionSystem.checkEnemyCollision(
@@ -367,6 +362,7 @@ export class Game {
       this.lives = this.player.takeDamage(this.lives);
       if (this.lives <= 0) {
         this.gameOver = true;
+        return;
       }
     }
 
@@ -471,25 +467,38 @@ export class Game {
   /**
    * Load and use LDtk levels
    * @param {string} url - URL to LDtk file
-   * @returns {Promise<void>}
+   * @returns {Promise<boolean>} True on replacement; false leaves play unchanged
    */
   async loadLDtkLevels(url) {
+    const previousWorld = this.ldtkLoader.world;
     try {
       await this.ldtkLoader.loadWorld(url);
       const ldtkLevels = this.ldtkLoader.getAllLevels();
 
       if (ldtkLevels.length > 0) {
+        const index =
+          Number.isInteger(this.currentLevel) &&
+          this.currentLevel >= 0 &&
+          this.currentLevel < ldtkLevels.length
+            ? this.currentLevel
+            : 0;
+
+        // Construction may fail; do not publish the new table until it succeeds.
+        this.createLevel(ldtkLevels[index]);
         this.levels = ldtkLevels;
         this.totalLevels = ldtkLevels.length;
-
-        // Reload current level with LDtk data
-        this.resetLevel();
+        this.currentLevel = index;
+        this.projectiles = [];
+        this.camera.reset();
 
         console.log(`Loaded ${ldtkLevels.length} levels from LDtk`);
+        return true;
       }
     } catch (error) {
       console.error('Failed to load LDtk levels:', error);
     }
+    this.ldtkLoader.world = previousWorld;
+    return false;
   }
 
   /**
@@ -517,14 +526,9 @@ export class Game {
    * Reset current level
    */
   resetLevel() {
-    // Clear existing objects
-    this.platforms = [];
-    this.coins = [];
-    this.enemies = [];
-    this.projectiles = [];
-
     // Recreate level
     this.createLevel();
+    this.projectiles = [];
 
     // Reset camera
     this.camera.reset();

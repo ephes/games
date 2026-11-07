@@ -107,7 +107,7 @@ export class CollisionSystem {
         playerBottom - enemyTop <= player.velocityY + 10
       ) {
         // For boss enemies, only allow stomp on head area (top 20%)
-        if (enemy.constructor.name === 'Boss') {
+        if (enemy.kind === 'boss') {
           const playerCenterX = player.x + player.width / 2;
           const enemyCenterX = enemy.x + enemy.width / 2;
           const headZoneWidth = enemy.width * 0.4; // Only central 40% counts as head
