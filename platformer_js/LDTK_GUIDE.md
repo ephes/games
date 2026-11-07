@@ -62,8 +62,10 @@ The LDtk project is configured with:
   for empty cells
 - Entities need finite numeric x/y coordinates. Enemy and boss `PlatformIndex`
   values must index the final merged platform array (default 0 when absent).
-  Invalid present numeric fields reject the import, retaining the active game
-  and world when using `game.loadLDtkLevels(url)`
+  That merged patrol platform must be at least 44 px wide for an Enemy or
+  64 px for a Boss, including stationary enemies; exact-width surfaces are valid.
+  Invalid present numeric fields or too-narrow patrol surfaces reject the import,
+  retaining the active game and world when using `game.loadLDtkLevels(url)`
 
 ## Creating Levels
 
@@ -126,7 +128,8 @@ For game imports use `await game.loadLDtkLevels(url)` or
 
 ### Platform Design
 
-- Keep platforms at least 3 tiles wide for enemies
+- At a 16 px grid size, use at least 3 tiles (48 px) for enemies and
+  4 tiles (64 px) for bosses; other grid sizes must meet the 44/64 px minimums
 - Leave space between platforms for jumping challenges
 - Use different heights for variety
 

@@ -37,7 +37,8 @@ export class LDtkLoader {
   /**
    * Convert LDtk level to game format, validating geometry and entity numbers.
    * Coordinates and enemy speeds must be finite numbers; enemy/boss platform
-   * indices must reference the completed collision mesh. Only absent fields
+   * indices must reference the completed collision mesh with at least 44 px
+   * patrol width for enemies or 64 px for bosses. Only absent fields
    * use defaults (Speed: 2, PlatformIndex: 0); malformed present values fail.
    * @throws {Error} If the level has invalid IntGrid or entity numeric data
    * @param {Object} ldtkLevel - LDtk level data
@@ -89,7 +90,7 @@ export class LDtkLoader {
 
   /**
    * Process and validate recognized entities after the platform mesh is built.
-   * @throws {Error} If coordinates, enemy speed or patrol references are invalid
+   * @throws {Error} If coordinates, enemy speed, patrol references or widths are invalid
    * @param {Object} entitiesLayer - Entities layer
    * @param {Object} level - Level object to populate
    */
@@ -118,6 +119,14 @@ export class LDtkLoader {
           platformIndex >= level.platforms.length)
       ) {
         throw new Error('Invalid LDtk entity platform reference');
+      }
+      if (patrol) {
+        const minimumWidth = entity.__identifier === 'Boss' ? 64 : 44;
+        if (level.platforms[platformIndex].width < minimumWidth) {
+          throw new Error(
+            `${entity.__identifier} patrol platform must be at least ${minimumWidth} px wide`
+          );
+        }
       }
       const speed =
         entity.__identifier === 'Enemy'

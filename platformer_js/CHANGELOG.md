@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject imported patrol surfaces narrower than their enemy (44 px) or boss
+  (64 px), preserving the previous playable world on failure.
+
 - Award an enemy's defeat once and remove collisions immediately while its hit
   animation finishes, preserving boss health behavior.
 - Bound boss shots by the active level with finite off-world margins, and
@@ -49,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   creation, transitions, resets and LDtk replacement.
 
 ### Development
+
+- Cover real Enemy running/hit animation cycles, player Projectile movement,
+  culling and drawing, and Camera bounds, visibility and coordinate transforms
+  with synthetic fixtures and controlled clocks/canvas contexts.
 
 - Remove the unused duplicate level coordinator and describe Game's maintained
   progression/import ownership in levels.md.
