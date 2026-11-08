@@ -64,19 +64,20 @@ fn main() {
         .add_systems(Startup, setup)
         // Add our gameplay simulation systems to the fixed timestep schedule
         // which runs at 64 Hz by default
-        .add_systems(
-            FixedUpdate,
-            (
-                apply_velocity,
-                move_paddle,
-                check_for_collisions,
-                play_collision_sound,
-            )
-                // `chain`ing systems together runs them in order
-                .chain(),
-        )
+        .add_systems(FixedUpdate, gameplay_systems())
         .add_systems(Update, (update_scoreboard, bevy::window::close_on_esc))
         .run();
+}
+
+// Keep the live game and headless schedule tests on the same ordered systems.
+fn gameplay_systems() -> bevy::ecs::schedule::SystemConfigs {
+    (
+        apply_velocity,
+        move_paddle,
+        check_for_collisions,
+        play_collision_sound,
+    )
+        .chain()
 }
 
 #[derive(Component)]
@@ -411,9 +412,9 @@ fn play_collision_sound(
     mut collision_events: EventReader<CollisionEvent>,
     sound: Res<CollisionSound>,
 ) {
-    // Play a sound once per frame if a collision occurred.
+    // Coalesce contacts into one sound per fixed tick.
     if !collision_events.is_empty() {
-        // This prevents events staying active on the next frame.
+        // This prevents consumed events replaying on the next fixed tick.
         collision_events.clear();
         commands.spawn(AudioBundle {
             source: sound.0.clone(),
@@ -540,6 +541,69 @@ mod tests {
                         "offset={offset:?}, radius={radius}, center={center:?}, scale={scale}"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn catch_up_ticks_despawn_score_once_and_drain_sound_events() {
+        let mut app = App::new();
+        let sound = Handle::<AudioSource>::default();
+        let mut time = Time::<()>::default();
+        time.advance_by(std::time::Duration::from_secs_f64(1. / 64.));
+        app.insert_resource(time)
+            .insert_resource(ButtonInput::<KeyCode>::default())
+            .insert_resource(Scoreboard { score: 0 })
+            .insert_resource(CollisionSound(sound.clone()))
+            .add_event::<CollisionEvent>()
+            .add_systems(FixedUpdate, gameplay_systems());
+        let ball = app
+            .world
+            .spawn((Ball, Transform::default(), Velocity(Vec2::new(100., 100.))))
+            .id();
+        app.world
+            .spawn((Paddle, Transform::from_xyz(0., -200., 0.)));
+        let brick = app
+            .world
+            .spawn((
+                Brick,
+                Collider,
+                Transform::from_xyz(12., 0., 0.).with_scale(Vec3::new(20., 40., 1.)),
+            ))
+            .id();
+        let wall = app
+            .world
+            .spawn((
+                Collider,
+                Transform::from_xyz(0., 12., 0.).with_scale(Vec3::new(40., 20., 1.)),
+            ))
+            .id();
+
+        // All ticks occur without an Update/render or event-maintenance pass.
+        for tick in 0..3 {
+            if tick == 1 {
+                // Stay at the hit brick's location for another tick: failure to
+                // flush despawn commands would incorrectly award it again.
+                app.world.get_mut::<Transform>(ball).unwrap().translation = Vec3::ZERO;
+                app.world.get_mut::<Velocity>(ball).unwrap().0 = Vec2::new(100., 100.);
+            }
+            if tick == 2 {
+                // A quiet tick must not replay either preceding tick's events.
+                app.world.get_mut::<Transform>(ball).unwrap().translation =
+                    Vec3::new(-200., -100., 0.);
+            }
+            app.world.run_schedule(FixedUpdate);
+            assert!(app.world.get_entity(brick).is_none());
+            assert!(app.world.get_entity(wall).is_some());
+            assert_eq!(app.world.resource::<Scoreboard>().score, 1);
+            let expected_sounds = if tick == 0 { 1 } else { 2 };
+            let mut audio = app
+                .world
+                .query::<(&Handle<AudioSource>, &PlaybackSettings)>();
+            assert_eq!(audio.iter(&app.world).count(), expected_sounds);
+            for (source, settings) in audio.iter(&app.world) {
+                assert_eq!(source, &sound);
+                assert!(matches!(settings.mode, bevy::audio::PlaybackMode::Despawn));
             }
         }
     }

@@ -33,3 +33,19 @@ All contacts in one fixed tick use the incoming ball velocity. A contact only
 requests reflection when that velocity points into its face, and each axis is
 reflected at most once after collecting contacts. Each hit brick scores once
 and is despawned; each contact still emits its own event for the sound consumer.
+
+## Stepping UI and fixed-tick effects
+
+Press backquote to toggle stepping, S to step a system and Space to continue the
+frame. UI initialization waits until all selected schedules are initialized.
+Incomplete attempts publish no mappings or ready state and can retry; even an
+empty selection creates one UI. UI construction and updates run in an ordered
+chain so deferred entity creation is visible to the updater.
+
+Gameplay uses the same chained FixedUpdate systems in the game and its schedule
+test. Brick despawns are applied before later fixed ticks, so each brick awards
+once during catch-up. Walls survive and never score. The sound consumer drains
+all contacts into one audio entity per **fixed tick**, not per rendered frame;
+a quiet following tick cannot replay them. Tests run multiple fixed ticks
+without an Update/render pass and inspect audio entities without an audio
+plugin. Stepping tests use an in-memory asset reader; no game files are read.
