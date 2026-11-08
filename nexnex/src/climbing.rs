@@ -1,8 +1,8 @@
-use bevy::prelude::*;
 use bevy::ecs::message::MessageReader;
-use std::collections::HashSet;
+use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
+use std::collections::HashSet;
 
 use crate::colliders::SensorBundle;
 
@@ -42,19 +42,19 @@ pub fn detect_climb_range(
                 };
             }
             CollisionEvent::Stopped(collider_a, collider_b, _) => {
-                if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(collider_a), climbables.get(collider_b))
-                {
-                    climber.intersecting_climbables.remove(&climbable);
+                if let Ok(mut climber) = climbers.get_mut(collider_a) {
+                    climber.intersecting_climbables.remove(&collider_b);
                 }
-
-                if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(collider_b), climbables.get(collider_a))
-                {
-                    climber.intersecting_climbables.remove(&climbable);
+                if let Ok(mut climber) = climbers.get_mut(collider_b) {
+                    climber.intersecting_climbables.remove(&collider_a);
                 }
             }
         }
+    }
+    for mut climber in &mut climbers {
+        climber
+            .intersecting_climbables
+            .retain(|entity| climbables.contains(*entity));
     }
 }
 
@@ -74,8 +74,14 @@ pub struct ClimbingPlugin;
 
 impl Plugin for ClimbingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, detect_climb_range)
-            .add_systems(Update, ignore_gravity_if_climbing)
-            .register_ldtk_int_cell::<LadderBundle>(2);
+        app.add_systems(
+            Update,
+            detect_climb_range.in_set(crate::ControlSet::Observe),
+        )
+        .add_systems(
+            Update,
+            ignore_gravity_if_climbing.in_set(crate::ControlSet::Gravity),
+        )
+        .register_ldtk_int_cell::<LadderBundle>(2);
     }
 }
