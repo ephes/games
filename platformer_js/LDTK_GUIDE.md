@@ -28,6 +28,7 @@ The LDtk project is configured with:
 
 - Start position for the player
 - Only one allowed per level
+- Optional; when omitted, the start defaults to (50, 200)
 
 #### Enemy (Red Rectangle)
 
@@ -40,16 +41,25 @@ The LDtk project is configured with:
 - Properties:
   - `PlatformIndex`: Which platform to stand on
 - Only one allowed per level
+- Required in every imported level, including future levels
 
 #### Coin (Yellow Circle)
 
 - Properties:
-  - `IsPowerUp`: Boolean for power-up coins
+  - `IsPowerUp`: Boolean for power-up coins (default false when absent;
+    strings such as `"false"` are rejected)
 
 #### Portal (Purple Circle)
 
 - Level exit portal
 - Only one allowed per level
+- Required in every imported level, including future levels
+
+Duplicate Player/Boss/Portal entities reject the entire import. Recognized fields
+must occur at most once on their owning level/entity: LevelName, enemy Speed,
+enemy/boss PlatformIndex and coin IsPowerUp. Replacement and append both validate
+all candidate levels before publishing, retaining the previous world and play on
+failure.
 
 ### Platform Layer
 

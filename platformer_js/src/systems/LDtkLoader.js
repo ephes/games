@@ -138,12 +138,14 @@ export class LDtkLoader {
   }
 
   /**
-   * Convert LDtk level to game format, validating geometry and entity numbers.
+   * Convert LDtk level to game format, validating geometry, singletons and fields.
    * Coordinates and enemy speeds must be finite numbers; enemy/boss platform
    * indices must reference the completed collision mesh with at least 44 px
    * patrol width for enemies or 64 px for bosses. Only absent fields
-   * use defaults (Speed: 2, PlatformIndex: 0); malformed present values fail.
-   * @throws {Error} If the level has invalid IntGrid or entity numeric data
+   * use defaults (Speed: 2, PlatformIndex: 0, IsPowerUp: false).
+   * IsPowerUp must be boolean; duplicate singletons/recognized fields fail.
+   * Game additionally requires Boss and Portal before accepting an import.
+   * @throws {Error} If the level has invalid geometry, entities or fields
    * @param {Object} ldtkLevel - LDtk level data
    * @returns {Object} Game level format
    */
@@ -185,19 +187,17 @@ export class LDtkLoader {
    * @returns {string} Level name
    */
   getLevelName(ldtkLevel) {
-    const nameField = ldtkLevel.fieldInstances.find(
-      field => field.__identifier === 'LevelName'
-    );
-    return nameField ? nameField.__value : ldtkLevel.identifier;
+    return this.getFieldValue(ldtkLevel, 'LevelName', ldtkLevel.identifier);
   }
 
   /**
    * Process and validate recognized entities after the platform mesh is built.
-   * @throws {Error} If coordinates, enemy speed, patrol references or widths are invalid
+   * @throws {Error} If singleton counts, fields, coordinates or patrol geometry are invalid
    * @param {Object} entitiesLayer - Entities layer
    * @param {Object} level - Level object to populate
    */
   processEntities(entitiesLayer, level) {
+    const singletons = new Set();
     entitiesLayer.entityInstances.forEach(entity => {
       if (
         !['Player', 'Enemy', 'Boss', 'Coin', 'Portal'].includes(
@@ -205,6 +205,12 @@ export class LDtkLoader {
         )
       ) {
         return;
+      }
+      if (['Player', 'Boss', 'Portal'].includes(entity.__identifier)) {
+        if (singletons.has(entity.__identifier)) {
+          throw new Error(`Duplicate LDtk singleton ${entity.__identifier}`);
+        }
+        singletons.add(entity.__identifier);
       }
       const [x, y] = entity.px;
       if (!Number.isFinite(x) || !Number.isFinite(y)) {
@@ -238,6 +244,13 @@ export class LDtkLoader {
       if (entity.__identifier === 'Enemy' && !Number.isFinite(speed)) {
         throw new Error('Invalid LDtk enemy speed');
       }
+      const isPowerUp =
+        entity.__identifier === 'Coin'
+          ? this.getFieldValue(entity, 'IsPowerUp', false)
+          : null;
+      if (entity.__identifier === 'Coin' && typeof isPowerUp !== 'boolean') {
+        throw new Error('Invalid LDtk coin IsPowerUp: expected boolean');
+      }
       switch (entity.__identifier) {
         case 'Player':
           level.playerStart = {
@@ -267,7 +280,7 @@ export class LDtkLoader {
           level.coins.push({
             x,
             y,
-            isPowerUp: this.getFieldValue(entity, 'IsPowerUp', false)
+            isPowerUp
           });
           break;
 
@@ -395,14 +408,20 @@ export class LDtkLoader {
 
   /**
    * Get field value from entity
+   * @throws {Error} If the requested field occurs more than once
    * @param {Object} entity - Entity instance
    * @param {string} fieldName - Field identifier
    * @param {*} defaultValue - Default value if field not found
    * @returns {*} Field value
    */
   getFieldValue(entity, fieldName, defaultValue) {
-    const field = entity.fieldInstances.find(f => f.__identifier === fieldName);
-    return field ? field.__value : defaultValue;
+    const fields = entity.fieldInstances.filter(
+      f => f.__identifier === fieldName
+    );
+    if (fields.length > 1) {
+      throw new Error(`Duplicate LDtk field ${fieldName}`);
+    }
+    return fields.length ? fields[0].__value : defaultValue;
   }
 
   /**

@@ -134,10 +134,11 @@ export class Game {
    * Load next level
    */
   loadNextLevel() {
-    this.currentLevel++;
+    const nextLevel = this.currentLevel + 1;
 
-    if (this.currentLevel >= this.levels.length) {
+    if (nextLevel >= this.levels.length) {
       // All levels completed!
+      this.currentLevel = nextLevel;
       this.gameWon = true;
       // Clear objects when game is won
       this.platforms = [];
@@ -147,20 +148,10 @@ export class Game {
       return;
     }
 
-    // Clear existing objects
-    this.platforms = [];
-    this.coins = [];
-    this.enemies = [];
+    // Construction may fail; keep the current index and objects until it succeeds.
+    this.createLevel(this.levels[nextLevel]);
+    this.currentLevel = nextLevel;
     this.projectiles = [];
-
-    // Keep player stats but reset position
-    const keepShootAbility = this.canShoot;
-
-    // Create new level
-    this.createLevel();
-
-    // Restore abilities
-    this.canShoot = keepShootAbility;
 
     // Reset camera
     this.camera.reset();
@@ -534,6 +525,24 @@ export class Game {
   }
 
   /**
+   * Require playable exits and bosses in every converted import level.
+   * Numeric fields, patrol geometry and optional defaults are checked by the loader.
+   * @param {Array} levels - Converted candidate levels
+   */
+  validateLDtkLevels(levels) {
+    for (const level of levels) {
+      for (const [entity, value] of [
+        ['Boss', level.boss],
+        ['Portal', level.portal]
+      ]) {
+        if (!value) {
+          throw new Error(`LDtk level ${level.name} requires ${entity}`);
+        }
+      }
+    }
+  }
+
+  /**
    * Load and use LDtk levels
    * @param {string} url - URL to LDtk file
    * @returns {Promise<boolean>} True on replacement; false leaves play unchanged
@@ -549,6 +558,7 @@ export class Game {
         return false;
       }
       const ldtkLevels = this.ldtkLoader.getAllLevels(world);
+      this.validateLDtkLevels(ldtkLevels);
 
       if (ldtkLevels.length > 0) {
         const index =
@@ -592,6 +602,7 @@ export class Game {
         return;
       }
       const ldtkLevels = this.ldtkLoader.getAllLevels(world);
+      this.validateLDtkLevels(ldtkLevels);
 
       if (ldtkLevels.length > 0) {
         const combined = [...this.levels, ...ldtkLevels];

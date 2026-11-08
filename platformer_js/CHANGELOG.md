@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Validate Boss/Portal presence in every replacement/appended LDtk level before
+  publication, and preserve the current index and objects on transition failure.
+- Reject duplicate LDtk Player/Boss/Portal entities and recognized fields;
+  require boolean coin IsPowerUp values while retaining absent-field defaults.
+
 - Bound LDtk transfers to 16 MiB and 10 seconds; abort superseded/disposed loads
   and parse modern raw LDtk records without publishing partial imports.
   The unused `ldtk` runtime dependency is removed.

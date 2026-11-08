@@ -247,6 +247,15 @@ source totals. Append also caps the combined table at 64 levels and 20,000
 recognized entities. Over-budget imports report the exceeded budget and retain
 the current playable world.
 
+Replacement and append imports validate every candidate level, including future
+levels, before publishing. Each level requires one Boss and one Portal; Player
+may be omitted to use the default start at (50, 200). Duplicate Player, Boss or
+Portal entities are rejected. Recognized fields (`LevelName`, enemy `Speed`,
+enemy/boss `PlatformIndex`, coin `IsPowerUp`) must occur at most once on their
+owning level/entity. `IsPowerUp` must be a boolean when present and defaults to
+false when absent. A failed next-level construction leaves the current index,
+objects, projectiles and camera intact; the caller receives the error and may retry.
+
 LDtk Platforms layers require positive safe integer grid size, width and height,
 with safe integer pixel extents and at most 1,000,000 cells per layer.
 `intGridCsv` must be an array containing exactly `width * height` cells, including
