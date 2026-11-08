@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { World } from 'ldtk';
+import { mockWorldFetch } from './worldFetch.js';
 import starterWorld from '../assets/levels/platformer.ldtk?raw';
 import { LDtkLoader } from '../src/systems/LDtkLoader.js';
 
@@ -19,10 +19,13 @@ describe('LDtk world conversion', () => {
 
   beforeEach(() => {
     loader = new LDtkLoader();
-    fromURL = vi.spyOn(World, 'fromURL');
+    fromURL = mockWorldFetch();
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it('returns no levels before loading', () => {
     expect(loader.getAllLevels()).toEqual([]);
@@ -65,7 +68,7 @@ describe('LDtk world conversion', () => {
     };
     fromURL.mockResolvedValue(world);
 
-    await expect(loader.loadWorld('synthetic.ldtk')).resolves.toBe(world);
+    await expect(loader.loadWorld('synthetic.ldtk')).resolves.toEqual(world);
     expect(fromURL).toHaveBeenCalledExactlyOnceWith('synthetic.ldtk');
     const expected = [
       emptyLevel('First in world'),

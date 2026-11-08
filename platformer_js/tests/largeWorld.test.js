@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { World } from 'ldtk';
+import { mockWorldFetch } from './worldFetch.js';
 import { Game } from '../src/Game.js';
 
 function largeWorld() {
@@ -12,9 +12,9 @@ function largeWorld() {
           {
             __identifier: 'Platforms',
             __gridSize: 64,
-            __cWid: 400001,
+            __cWid: 8191,
             __cHei: 1,
-            intGridCsv: Array.from({ length: 400001 }, (_, i) =>
+            intGridCsv: Array.from({ length: 8191 }, (_, i) =>
               i % 2 === 0 ? 1 : 0
             )
           },
@@ -44,22 +44,23 @@ describe('Large imported world bounds', () => {
   afterEach(() => {
     game.dispose();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  it('imports 200001 platforms through real conversion and retains them on a later invalid grid', async () => {
+  it('imports the maximum 4096 platforms and retains them on a later invalid grid', async () => {
     const candidate = largeWorld();
-    const fromURL = vi.spyOn(World, 'fromURL').mockResolvedValue(candidate);
+    const fromURL = mockWorldFetch().mockResolvedValue(candidate);
     expect(await game.loadLDtkLevels('synthetic-large')).toBe(true);
-    expect(game.platforms).toHaveLength(200001);
+    expect(game.platforms).toHaveLength(4096);
     expect(game.camera.bounds).toEqual({
       minX: 0,
       minY: 0,
-      maxX: 25600064,
+      maxX: 524224,
       maxY: 400
     });
     expect(game.boss.bounds).toBe(game.camera.bounds);
-    game.camera.follow({ x: 25601000 });
-    expect(game.camera.x).toBe(25599264);
+    game.camera.follow({ x: 525224 });
+    expect(game.camera.x).toBe(523424);
     const before = { ...game };
     const bounds = game.camera.bounds;
     const invalid = structuredClone(candidate);
@@ -77,14 +78,27 @@ describe('Large imported world bounds', () => {
       expect(game[key]).toBe(before[key]);
     }
     expect(game.camera.bounds).toBe(bounds);
-    expect(game.camera.x).toBe(25599264);
-    expect(game.ldtkLoader.world).toBe(candidate);
+    expect(game.camera.x).toBe(523424);
+    expect(game.ldtkLoader.world).toEqual(candidate);
     expect(console.error).toHaveBeenCalledWith(
       'Failed to load LDtk levels:',
       expect.objectContaining({
         message: 'Invalid LDtk IntGrid dimensions or cell data'
       })
     );
+  });
+
+  it('reduces programmatic geometry beyond function argument limits', () => {
+    game.createLevel({
+      ...game.levels[0],
+      platforms: Array.from({ length: 200001 }, (_, x) => ({
+        x,
+        y: 0,
+        width: 1,
+        height: 64
+      }))
+    });
+    expect(game.camera.bounds.maxX).toBe(200001);
   });
 
   it.each([

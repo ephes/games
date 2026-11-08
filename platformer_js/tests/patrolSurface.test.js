@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { World } from 'ldtk';
+import { mockWorldFetch } from './worldFetch.js';
 import { Game } from '../src/Game.js';
 import { LDtkLoader } from '../src/systems/LDtkLoader.js';
 import { Enemy } from '../src/entities/Enemy.js';
@@ -41,7 +41,10 @@ const source = (kind, width, left = 100) => {
   };
 };
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('LDtk patrol surface admission', () => {
   it.each([
@@ -88,7 +91,7 @@ describe('LDtk patrol surface admission', () => {
       document.body.innerHTML =
         '<canvas id="patrol" width="800" height="400"></canvas>';
       const game = new Game('patrol');
-      const fromURL = vi.spyOn(World, 'fromURL');
+      const fromURL = mockWorldFetch();
       vi.spyOn(console, 'error').mockImplementation(() => {});
       vi.spyOn(console, 'log').mockImplementation(() => {});
       try {
@@ -108,7 +111,7 @@ describe('LDtk patrol surface admission', () => {
         const width = kind === 'Enemy' ? 43 : 63;
         fromURL.mockResolvedValue({ levels: [source(kind, width)] });
         expect(await game.loadLDtkLevels('invalid.ldtk')).toBe(false);
-        expect(game.ldtkLoader.world).toBe(previousWorld);
+        expect(game.ldtkLoader.world).toEqual(previousWorld);
         for (const key of [
           'levels',
           'player',

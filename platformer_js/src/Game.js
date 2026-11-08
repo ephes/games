@@ -15,7 +15,7 @@ import { Camera } from './systems/Camera.js';
 import { SpriteLoader } from './systems/SpriteLoader.js';
 import { Renderer } from './rendering/Renderer.js';
 import { GAME_CONFIG, LEVELS } from './utils/constants.js';
-import { LDtkLoader } from './systems/LDtkLoader.js';
+import { LDtkLoader, WORLD_LIMITS } from './systems/LDtkLoader.js';
 
 /**
  * Main game class that coordinates all game systems
@@ -528,6 +528,7 @@ export class Game {
     this.running = false;
     this.loopGeneration++;
     this.importGeneration++;
+    this.ldtkLoader.cancelLoad();
     cancelAnimationFrame(this.animationFrameId);
     this.inputManager.dispose();
   }
@@ -593,8 +594,21 @@ export class Game {
       const ldtkLevels = this.ldtkLoader.getAllLevels(world);
 
       if (ldtkLevels.length > 0) {
+        const combined = [...this.levels, ...ldtkLevels];
+        if (combined.length > WORLD_LIMITS.levels) {
+          throw new Error('LDtk level budget exceeded');
+        }
+        if (
+          combined.reduce(
+            (count, level) =>
+              count + level.enemies.length + level.coins.length + 3,
+            0
+          ) > WORLD_LIMITS.entities
+        ) {
+          throw new Error('LDtk world entity budget exceeded');
+        }
         this.ldtkLoader.world = world;
-        this.levels = [...this.levels, ...ldtkLevels];
+        this.levels = combined;
         this.totalLevels = this.levels.length;
 
         console.log(`Added ${ldtkLevels.length} levels from LDtk`);

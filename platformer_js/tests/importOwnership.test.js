@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { World } from 'ldtk';
+import { mockWorldFetch } from './worldFetch.js';
 import { Game } from '../src/Game.js';
 import { LDtkLoader } from '../src/systems/LDtkLoader.js';
 
@@ -46,7 +46,7 @@ describe('Latest world import owns publication', () => {
     game.createLevel();
     a = deferred();
     b = deferred();
-    vi.spyOn(World, 'fromURL').mockImplementation(url =>
+    mockWorldFetch().mockImplementation(url =>
       url === 'A' ? a.promise : b.promise
     );
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -54,6 +54,7 @@ describe('Latest world import owns publication', () => {
   afterEach(() => {
     game.dispose();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
   it.each(['success', 'failure', 'malformed'])(
     'keeps B objects, camera and world after obsolete A %s',
@@ -73,7 +74,7 @@ describe('Latest world import owns publication', () => {
       }
       expect(await first).toBe(false);
       expect(game.levels[0].name).toBe('B');
-      expect(game.ldtkLoader.world).toBe(latest);
+      expect(game.ldtkLoader.world).toEqual(latest);
       expect(game.player).toBe(player);
       expect(game.camera.bounds).toBe(bounds);
       expect(game.camera.x).toBe(123);
@@ -96,7 +97,7 @@ describe('Latest world import owns publication', () => {
       await second;
       a.resolve(world('A'));
       await first;
-      expect(game.ldtkLoader.world).toBe(latest);
+      expect(game.ldtkLoader.world).toEqual(latest);
       expect(game.levels.map(level => level.name)).toEqual(
         order === 'add-first'
           ? ['B']
@@ -115,13 +116,13 @@ describe('Latest world import owns publication', () => {
   });
   it('also fences standalone loader publications', async () => {
     const loader = new LDtkLoader();
-    const first = loader.loadWorld('A'),
+    const first = loader.loadWorld('A').catch(error => error),
       second = loader.loadWorld('B');
     const latest = world('B');
     b.resolve(latest);
     await second;
     a.resolve(world('A'));
-    await first;
-    expect(loader.world).toBe(latest);
+    expect(await first).toBeInstanceOf(Error);
+    expect(loader.world).toEqual(latest);
   });
 });
