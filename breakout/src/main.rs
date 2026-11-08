@@ -364,7 +364,11 @@ fn check_for_collisions(
 ) {
     let (mut ball_velocity, ball_transform) = ball_query.single_mut();
 
-    // check collision with walls
+    let incoming_velocity = ball_velocity.0;
+    let mut reflect_x = false;
+    let mut reflect_y = false;
+
+    // Collect contacts before changing velocity so traversal order cannot affect reflection.
     for (collider_entity, transform, maybe_brick) in &collider_query {
         let collision = collide_with_side(
             BoundingCircle::new(ball_transform.translation.truncate(), BALL_DIAMETER / 2.),
@@ -384,29 +388,21 @@ fn check_for_collisions(
                 commands.entity(collider_entity).despawn();
             }
 
-            // reflect the ball when it collides
-            let mut reflect_x = false;
-            let mut reflect_y = false;
-
-            // only reflect if the ball's velocity is going in the opposite direction of the
-            // collision
+            // Only reflect when the incoming velocity points into this face.
             match collision {
-                Collision::Left => reflect_x = ball_velocity.x > 0.0,
-                Collision::Right => reflect_x = ball_velocity.x < 0.0,
-                Collision::Top => reflect_y = ball_velocity.y < 0.0,
-                Collision::Bottom => reflect_y = ball_velocity.y > 0.0,
-            }
-
-            // reflect velocity on the x-axis if we hit something on the x-axis
-            if reflect_x {
-                ball_velocity.x = -ball_velocity.x;
-            }
-
-            // reflect velocity on the y-axis if we hit something on the y-axis
-            if reflect_y {
-                ball_velocity.y = -ball_velocity.y;
+                Collision::Left => reflect_x |= incoming_velocity.x > 0.0,
+                Collision::Right => reflect_x |= incoming_velocity.x < 0.0,
+                Collision::Top => reflect_y |= incoming_velocity.y < 0.0,
+                Collision::Bottom => reflect_y |= incoming_velocity.y > 0.0,
             }
         }
+    }
+
+    if reflect_x {
+        ball_velocity.x = -incoming_velocity.x;
+    }
+    if reflect_y {
+        ball_velocity.y = -incoming_velocity.y;
     }
 }
 
@@ -457,4 +453,94 @@ fn collide_with_side(ball: BoundingCircle, wall: Aabb2d) -> Option<Collision> {
     };
 
     Some(side)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn opposing_brick_contacts(reverse: bool, vertical: bool) -> (Vec2, usize, usize, usize) {
+        let mut app = App::new();
+        app.insert_resource(Scoreboard { score: 0 })
+            .add_event::<CollisionEvent>()
+            .add_systems(FixedUpdate, check_for_collisions);
+        let ball = app
+            .world
+            .spawn((Ball, Transform::default(), Velocity(Vec2::new(100., 25.))))
+            .id();
+        let mut positions = [-12., 12.];
+        if reverse {
+            positions.reverse();
+        }
+        for x in positions {
+            app.world.spawn((
+                Collider,
+                Brick,
+                if vertical {
+                    Transform::from_xyz(0., x, 0.).with_scale(Vec3::new(40., 20., 1.))
+                } else {
+                    Transform::from_xyz(x, 0., 0.).with_scale(Vec3::new(20., 40., 1.))
+                },
+            ));
+        }
+        app.world.run_schedule(FixedUpdate);
+        (
+            app.world.get::<Velocity>(ball).unwrap().0,
+            app.world.resource::<Scoreboard>().score,
+            app.world.query::<&Brick>().iter(&app.world).count(),
+            app.world.resource::<Events<CollisionEvent>>().len(),
+        )
+    }
+
+    #[test]
+    fn simultaneous_contacts_use_incoming_velocity_in_either_entity_order() {
+        let expected = (Vec2::new(-100., 25.), 2, 0, 2);
+        assert_eq!(opposing_brick_contacts(false, false), expected);
+        assert_eq!(opposing_brick_contacts(true, false), expected);
+        let expected = (Vec2::new(100., -25.), 2, 0, 2);
+        assert_eq!(opposing_brick_contacts(false, true), expected);
+        assert_eq!(opposing_brick_contacts(true, true), expected);
+    }
+
+    #[test]
+    fn contact_geometry_matches_face_corner_tangent_and_inside_oracles() {
+        // Coordinates are relative to a box with half extents (2, 1).
+        // The 3/4/5 corner triangle uses exactly representable binary values.
+        let cases = [
+            (Vec2::new(-3., 0.), 1., Some(Collision::Left)),
+            (Vec2::new(3., 0.), 1., Some(Collision::Right)),
+            (Vec2::new(0., 2.), 1., Some(Collision::Top)),
+            (Vec2::new(0., -2.), 1., Some(Collision::Bottom)),
+            (Vec2::new(-3.25, 0.), 1., None),
+            (Vec2::new(3.25, 0.), 1., None),
+            (Vec2::new(0., 2.25), 1., None),
+            (Vec2::new(0., -2.25), 1., None),
+            (Vec2::new(2.75, 2.), 1.25, Some(Collision::Top)),
+            (Vec2::new(-2.75, 2.), 1.25, Some(Collision::Top)),
+            (Vec2::new(2.75, -2.), 1.25, Some(Collision::Bottom)),
+            (Vec2::new(-2.75, -2.), 1.25, Some(Collision::Bottom)),
+            (Vec2::new(3., 1.75), 1.25, Some(Collision::Right)),
+            (Vec2::new(-3., 1.75), 1.25, Some(Collision::Left)),
+            (Vec2::new(3., -1.75), 1.25, Some(Collision::Right)),
+            (Vec2::new(-3., -1.75), 1.25, Some(Collision::Left)),
+            (Vec2::new(3., 2.), 1.25, None),
+            (Vec2::new(2.5, 1.5), 1., Some(Collision::Top)),
+            (Vec2::new(-2.5, -1.5), 1., Some(Collision::Bottom)),
+            (Vec2::ZERO, 0.25, Some(Collision::Bottom)),
+            (Vec2::new(1., 0.5), 0.25, Some(Collision::Bottom)),
+        ];
+        for center in [Vec2::ZERO, Vec2::new(32., -16.)] {
+            for scale in [0.5, 1., 4.] {
+                let wall = Aabb2d::new(center, Vec2::new(2., 1.) * scale);
+                for (offset, radius, expected) in cases {
+                    let ball = BoundingCircle::new(center + offset * scale, radius * scale);
+                    assert_eq!(
+                        collide_with_side(ball, wall),
+                        expected,
+                        "offset={offset:?}, radius={radius}, center={center:?}, scale={scale}"
+                    );
+                }
+            }
+        }
+    }
 }
