@@ -1,6 +1,6 @@
 use crate::player::Player;
-use bevy::prelude::*;
 use bevy::input::ButtonInput;
+use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
 
@@ -9,7 +9,6 @@ pub fn setup(
     asset_server: Res<AssetServer>,
     mut rapier_config: Query<&mut RapierConfiguration>,
 ) {
-    
     commands.spawn(Camera2d);
 
     if let Ok(mut config) = rapier_config.single_mut() {
@@ -32,7 +31,11 @@ pub fn update_level_selection(
 ) {
     for (level_iid, level_transform) in &level_query {
         let ldtk_project = ldtk_project_assets
-            .get(ldtk_projects.single().expect("LdtkProjectHandle should exist"))
+            .get(
+                ldtk_projects
+                    .single()
+                    .expect("LdtkProjectHandle should exist"),
+            )
             .expect("Project should be loaded if level has spawned");
 
         let level = ldtk_project

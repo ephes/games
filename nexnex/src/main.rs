@@ -45,3 +45,6 @@ fn main() {
         .add_plugins(misc_objects::MiscObjectsPlugin)
         .run();
 }
+
+#[cfg(test)]
+mod testing;

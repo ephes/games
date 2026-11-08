@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use bevy::input::ButtonInput;
+use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 
 use crate::player::Player;

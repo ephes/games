@@ -1,8 +1,8 @@
-use bevy::prelude::*;
 use bevy::ecs::message::MessageReader;
-use std::collections::HashSet;
+use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
+use std::collections::HashSet;
 
 use crate::colliders::SensorBundle;
 
