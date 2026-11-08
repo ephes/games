@@ -62,27 +62,36 @@ export class Game {
     this.disposed = false;
     this.loopGeneration = 0;
     this.importGeneration = 0;
+    this.initPromise = null;
+    this.initialized = false;
   }
 
   /**
    * Initialize game
    */
-  async init() {
+  init() {
+    if (this.initPromise) {
+      return this.initPromise;
+    }
     if (this.disposed) {
-      return;
+      return Promise.resolve();
     }
-    try {
-      await this.spriteLoader.loadAll();
-      if (this.disposed) {
-        return;
+    this.initPromise = (async () => {
+      try {
+        await this.spriteLoader.loadAll();
+        if (this.disposed) {
+          return;
+        }
+        this.renderer = new Renderer(this.canvas, this.spriteLoader);
+        this.createLevel();
+        this.setupInputHandlers();
+        this.initialized = true;
+      } catch (error) {
+        this.dispose();
+        throw error;
       }
-      this.renderer = new Renderer(this.canvas, this.spriteLoader);
-      this.createLevel();
-      this.setupInputHandlers();
-    } catch (error) {
-      this.dispose();
-      throw error;
-    }
+    })();
+    return this.initPromise;
   }
 
   /**
@@ -102,9 +111,9 @@ export class Game {
     portal.setSprite(this.spriteLoader.getSprite('portal'));
     const bounds = {
       minX: 0,
-      maxX: Math.max(
-        this.canvas.width,
-        ...levelData.platforms.map(platform => platform.x + platform.width)
+      maxX: levelData.platforms.reduce(
+        (right, platform) => Math.max(right, platform.x + platform.width),
+        this.canvas.width
       ),
       minY: 0,
       maxY: this.canvas.height
@@ -163,9 +172,7 @@ export class Game {
   setupInputHandlers() {
     // Shooting
     this.inputManager.on('shoot:down', () => {
-      if (this.canShoot && !this.gameOver && !this.gameWon) {
-        this.shoot();
-      }
+      this.shoot();
     });
   }
 
@@ -173,7 +180,13 @@ export class Game {
    * Create projectile
    */
   shoot() {
-    if (!this.canShoot) {
+    if (
+      !this.initialized ||
+      this.disposed ||
+      this.gameOver ||
+      this.gameWon ||
+      !this.canShoot
+    ) {
       return;
     }
 
@@ -200,29 +213,38 @@ export class Game {
     if (!this.running || this.disposed || generation !== this.loopGeneration) {
       return;
     }
-    const step = 1000 / 60;
-    const elapsed = Math.max(0, timestamp - this.lastTime);
-    this.lastTime = timestamp;
-    // Drop suspension time; ordinary slow frames can catch up at most five steps.
-    if (elapsed > 250) {
-      this.accumulator = 0;
-    } else {
-      this.accumulator += Math.min(elapsed, step * 5);
-    }
-    let steps = 0;
-    while (this.accumulator + 1e-7 >= step && steps < 5) {
-      this.accumulator = Math.max(0, this.accumulator - step);
-      this.update(step);
-      steps++;
-      if (!this.running || this.disposed) {
-        return;
+    try {
+      const step = 1000 / 60;
+      const elapsed = Math.max(0, timestamp - this.lastTime);
+      this.lastTime = timestamp;
+      // Drop suspension time; ordinary slow frames can catch up at most five steps.
+      if (elapsed > 250) {
+        this.accumulator = 0;
+      } else {
+        this.accumulator += Math.min(elapsed, step * 5);
       }
-    }
-    this.render();
-    if (this.running && !this.disposed && generation === this.loopGeneration) {
-      this.animationFrameId = requestAnimationFrame(time =>
-        this.gameLoop(time, generation)
-      );
+      let steps = 0;
+      while (this.accumulator + 1e-7 >= step && steps < 5) {
+        this.accumulator = Math.max(0, this.accumulator - step);
+        this.update(step);
+        steps++;
+        if (!this.running || this.disposed) {
+          return;
+        }
+      }
+      this.render();
+      if (
+        this.running &&
+        !this.disposed &&
+        generation === this.loopGeneration
+      ) {
+        this.animationFrameId = requestAnimationFrame(time =>
+          this.gameLoop(time, generation)
+        );
+      }
+    } catch (error) {
+      this.dispose();
+      throw error;
     }
   };
 

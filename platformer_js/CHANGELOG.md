@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject player-shot creation before initialization and after win, death or
+  disposal, including direct calls; retain live power-up and cooldown behavior.
+
+- Reduce platform right edges without argument-count limits for large LDtk worlds.
+- Keep defeated boss health at zero and reject further damage/rewards without
+  repeating hit effects or projectile cleanup.
+
+- Share concurrent and repeated initialization, register controls once, and retain
+  startup failures without retrying a disposed game.
+- Dispose input and animation ownership on update/render failure while
+  propagating the original error to the caller or browser.
+
 - Reject imported patrol surfaces narrower than their enemy (44 px) or boss
   (64 px), preserving the previous playable world on failure.
 
@@ -52,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   creation, transitions, resets and LDtk replacement.
 
 ### Development
+
+- Test boss-shot sprite and fallback composition through Game.render with a
+  translated recording context, immutable world coordinates and inactive shots.
 
 - Cover real Enemy running/hit animation cycles, player Projectile movement,
   culling and drawing, and Camera bounds, visibility and coordinate transforms

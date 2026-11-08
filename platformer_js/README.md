@@ -82,6 +82,10 @@ These player-shot limits differ from boss shots' world bounds. Drawing subtracts
 cameraX once without moving world coordinates. Camera tests use translated
 bounds and a recording canvas to check follow/clamp, touching-edge visibility,
 coordinate conversion, transforms and reset, without changing camera policy.
+Game rendering integration tests record boss-shot fallback arcs and sprite frame
+coordinates under the parent camera transform: each path translates world space
+once, leaves shot coordinates unchanged and balances context save/restore.
+Inactive boss shots draw nothing.
 
 ```bash
 # Run tests in watch mode
@@ -177,12 +181,21 @@ platformer_js/
 - **Arrow Keys**: Move left/right and jump
 - **Space**: Shoot (after collecting power-up)
 
+Shooting requires successful initialization and a playable game. Both direct
+`game.shoot()` calls and input actions ignore win, death, disposal and pending or
+failed initialization without allocating projectiles or consuming cooldown.
+Live level resets/replacements preserve power-up and cooldown behavior.
+
 Switching windows or hiding the tab clears held movement and shooting keys.
 Press again after returning. Call `game.dispose()` before replacing a game to
 cancel its animation and remove input listeners; standalone input managers have
 `dispose()` too. Starting twice keeps one animation chain. Disposal is terminal:
-create a fresh Game to restart. Failed initialization disposes input and preserves
-the startup error; disposal during sprite loading prevents later activation.
+create a fresh Game to restart. Concurrent and later `init()` calls share one initialization and register controls
+once. Failed initialization disposes input; every later `init()` call rejects
+with the same startup error. Create a fresh Game to retry. Disposal during sprite
+loading prevents later activation. Update/render failures also dispose the game
+and rethrow the original error: synchronous startup errors reach the caller of
+`start()`, and scheduled-frame errors reach the browser error surface.
 
 Simulation uses fixed 60 Hz steps and renders once per animation frame. A frame
 can run at most five simulation steps; gaps over 250 ms discard accumulated time
@@ -192,13 +205,17 @@ invulnerability and hit animations continue to use wall-clock time.
 Camera and player horizontal bounds refresh on level creation, transitions,
 resets, and LDtk replacement. The right edge is the farthest platform's
 `x + width`, with at least one viewport of width; vertical bounds stay fixed to
-the canvas height.
+the canvas height. Bounds are reduced over platforms without spreading them into
+a function call, including large valid imported collision meshes.
 
 Damage respawns the player at the active level's start, clearing vertical speed
 and jumping state while retaining the usual life loss and invulnerability.
 Enemies accept one defeat and award 50 points once, even when bullets and a
 stomp overlap. Defeated enemies stop moving/colliding immediately while their
-300 ms hit animation remains visible. Boss health and per-hit scoring are unchanged.
+300 ms hit animation remains visible. Boss damage awards 20 points per nonfatal
+hit and 200 once on defeat. Health stops at zero; subsequent `hit()` or
+`takeDamage()` calls return zero without changing hit state or repeating projectile
+cleanup.
 Programmatic enemy and boss configurations preserve speed zero as stationary;
 omitted speed defaults to 2. Boss shots use the active level's camera bounds,
 with a 200 px horizontal and 100 px vertical off-world margin. Recreating a level

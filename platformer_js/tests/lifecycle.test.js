@@ -92,6 +92,107 @@ describe('Owned game lifecycle and simulation clock', () => {
     game.start();
     expect(frames.size).toBe(0);
   });
+  it('shares initialization and registers controls once across concurrent and later calls', async () => {
+    const loading = deferred();
+    vi.spyOn(game.spriteLoader, 'loadAll').mockReturnValue(loading.promise);
+    const create = vi.spyOn(game, 'createLevel');
+    const first = game.init();
+    const second = game.init();
+    loading.resolve();
+    await Promise.all([first, second]);
+    const player = game.player;
+    await game.init();
+    expect(game.spriteLoader.loadAll).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(game.player).toBe(player);
+    expect(game.inputManager.listeners.get('shoot:down')).toHaveLength(1);
+    const shoot = vi.spyOn(game, 'shoot').mockImplementation(() => {});
+    game.canShoot = true;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+    expect(shoot).toHaveBeenCalledTimes(1);
+  });
+  it('retains failed initialization for every caller without retrying', async () => {
+    const loading = deferred();
+    vi.spyOn(game.spriteLoader, 'loadAll').mockReturnValue(loading.promise);
+    const error = new Error('synthetic shared startup failure');
+    const first = game.init().catch(failure => failure);
+    const second = game.init().catch(failure => failure);
+    loading.reject(error);
+    expect(await first).toBe(error);
+    expect(await second).toBe(error);
+    expect(await game.init().catch(failure => failure)).toBe(error);
+    expect(game.spriteLoader.loadAll).toHaveBeenCalledTimes(1);
+    expect(game.disposed).toBe(true);
+    expect(game.inputManager.listeners.size).toBe(0);
+  });
+  it('cancels both initialization callers when disposed while loading', async () => {
+    const loading = deferred();
+    vi.spyOn(game.spriteLoader, 'loadAll').mockReturnValue(loading.promise);
+    const create = vi.spyOn(game, 'createLevel');
+    const first = game.init();
+    const second = game.init();
+    game.dispose();
+    loading.resolve();
+    await Promise.all([first, second]);
+    await game.init();
+    expect(game.spriteLoader.loadAll).toHaveBeenCalledTimes(1);
+    expect(create).not.toHaveBeenCalled();
+    expect(game.inputManager.listeners.size).toBe(0);
+  });
+  it.each(['startup', 'later frame'])(
+    'releases game ownership on a real render failure at %s',
+    async when => {
+      vi.spyOn(game.spriteLoader, 'loadAll').mockResolvedValue();
+      await game.init();
+      game.render.mockRestore();
+      const error = new Error('synthetic canvas failure');
+      const clear = vi.spyOn(game.renderer, 'clear');
+      if (when === 'later frame') {
+        // Reach a scheduled frame using the real rendering path.
+        for (const method of ['translate', 'stroke', 'moveTo', 'lineTo']) {
+          game.ctx[method] = vi.fn();
+        }
+        game.start();
+      }
+      clear.mockImplementation(() => {
+        throw error;
+      });
+      const stale = frames.values().next().value;
+      let failure;
+      try {
+        if (when === 'startup') {
+          game.start();
+        } else {
+          frame(1);
+        }
+      } catch (caught) {
+        failure = caught;
+      }
+      expect(failure).toBe(error);
+      expect(game.running).toBe(false);
+      expect(game.disposed).toBe(true);
+      expect(frames.size).toBe(0);
+      expect(game.inputManager.enabled).toBe(false);
+      expect(game.inputManager.listeners.size).toBe(0);
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight' })
+      );
+      expect(game.inputManager.getKeys()).toEqual({});
+      game.dispose();
+      game.start();
+      stale?.(100);
+      expect(frames.size).toBe(0);
+      const fresh = new Game('lifecycle');
+      try {
+        vi.spyOn(fresh.spriteLoader, 'loadAll').mockResolvedValue();
+        await fresh.init();
+        expect(fresh.player).not.toBeNull();
+        expect(fresh.inputManager.listeners.get('shoot:down')).toHaveLength(1);
+      } finally {
+        fresh.dispose();
+      }
+    }
+  );
   it.each([30, 60, 144])(
     'preserves 60 Hz movement, gravity and shots at %s Hz',
     hz => {
