@@ -51,6 +51,7 @@ impl Plugin for SteppingPlugin {
             ui_top: self.top,
             ui_left: self.left,
             systems: Vec::new(),
+            initialized: false,
         })
         .add_systems(Startup, build_help)
         .add_systems(
@@ -68,6 +69,7 @@ impl Plugin for SteppingPlugin {
 /// Struct for maintaining stepping state
 #[derive(Resource, Debug)]
 struct State {
+    initialized: bool,
     // vector of schedule/nodeid -> text index offset
     systems: Vec<(InternedScheduleLabel, NodeId, usize)>,
 
@@ -78,7 +80,7 @@ struct State {
 
 /// condition to check if the stepping UI has been constructed
 fn initialized(state: Res<State>) -> bool {
-    !state.systems.is_empty()
+    state.initialized
 }
 
 const FONT_SIZE: f32 = 20.0;
@@ -103,6 +105,7 @@ fn build_ui(
 ) {
     let mut text_sections = Vec::new();
     let mut always_run = Vec::new();
+    let mut system_mappings = Vec::new();
 
     let Ok(schedule_order) = stepping.schedules() else {
         return;
@@ -111,7 +114,9 @@ fn build_ui(
     // go through the stepping schedules and construct a list of systems for
     // each label
     for label in schedule_order {
-        let schedule = schedules.get(*label).unwrap();
+        let Some(schedule) = schedules.get(*label) else {
+            return;
+        };
         text_sections.push(TextSection::new(
             format!("{:?}\n", label),
             TextStyle {
@@ -136,7 +141,7 @@ fn build_ui(
 
             // Add an entry to our systems list so we can find where to draw
             // the cursor when the stepping cursor is at this system
-            state.systems.push((*label, node_id, text_sections.len()));
+            system_mappings.push((*label, node_id, text_sections.len()));
 
             // Add a text section for displaying the cursor for this system
             text_sections.push(TextSection::new(
@@ -180,6 +185,8 @@ fn build_ui(
             ..default()
         },
     ));
+    state.systems = system_mappings;
+    state.initialized = true;
 }
 
 fn build_help(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -269,5 +276,126 @@ fn update_ui(
             "   "
         };
         text.sections[*text_index].value = mark.to_string();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::{
+        asset::{
+            io::{memory::MemoryAssetReader, AssetSource, AssetSourceId},
+            AssetApp,
+        },
+        ecs::system::RunSystemOnce,
+    };
+
+    #[derive(Debug, Hash, PartialEq, Eq, Clone, ScheduleLabel)]
+    struct FirstSchedule;
+    #[derive(Debug, Hash, PartialEq, Eq, Clone, ScheduleLabel)]
+    struct SecondSchedule;
+
+    // Shares the production readiness guard and runs just before the updater.
+    fn assert_ui_ready(ui: Query<(), With<SteppingUi>>) {
+        assert_eq!(ui.iter().count(), 1);
+    }
+
+    fn first_system() {}
+    fn second_system() {}
+
+    fn headless_app(plugin: SteppingPlugin) -> App {
+        let mut app = App::new();
+        let reader = MemoryAssetReader::default();
+        app.add_plugins(MinimalPlugins)
+            .register_asset_source(
+                AssetSourceId::Default,
+                AssetSource::build().with_reader(move || Box::new(reader.clone())),
+            )
+            .add_plugins(AssetPlugin::default())
+            .init_asset::<Font>()
+            .init_resource::<ButtonInput<KeyCode>>()
+            .add_plugins(plugin)
+            .add_systems(
+                DebugSchedule,
+                assert_ui_ready
+                    .run_if(initialized)
+                    .after(build_ui)
+                    .before(update_ui),
+            );
+        app
+    }
+
+    fn ui_count(app: &mut App) -> usize {
+        app.world
+            .query_filtered::<Entity, With<SteppingUi>>()
+            .iter(&app.world)
+            .count()
+    }
+
+    #[test]
+    fn incomplete_schedule_attempts_publish_nothing_and_retry_once() {
+        let mut app = headless_app(
+            SteppingPlugin::default()
+                .add_schedule(FirstSchedule)
+                .add_schedule(SecondSchedule),
+        );
+        app.add_systems(FirstSchedule, first_system)
+            .add_systems(SecondSchedule, second_system);
+        app.world.resource_mut::<Stepping>().enable();
+        app.world.run_system_once(Stepping::begin_frame);
+        // Establish the selected schedule order through Bevy's public API.
+        app.world.run_schedule(FirstSchedule);
+        app.world.run_schedule(SecondSchedule);
+        assert_eq!(
+            app.world.resource::<Stepping>().schedules().unwrap(),
+            &vec![FirstSchedule.intern(), SecondSchedule.intern()]
+        );
+        // Replace the later schedule with a not-yet-initialized instance.
+        let mut later = Schedule::new(SecondSchedule);
+        later.add_systems(second_system);
+        app.world.resource_mut::<Schedules>().insert(later);
+
+        for _ in 0..2 {
+            app.world.run_schedule(DebugSchedule);
+            assert!(app.world.resource::<State>().systems.is_empty());
+            assert!(!app.world.run_system_once(initialized));
+            assert_eq!(ui_count(&mut app), 0);
+        }
+
+        app.world.run_schedule(SecondSchedule);
+        app.world.run_schedule(DebugSchedule);
+        assert!(app.world.run_system_once(initialized));
+        assert_eq!(ui_count(&mut app), 1);
+        let mappings = &app.world.resource::<State>().systems;
+        assert_eq!(mappings.len(), 2);
+        assert_eq!(mappings[0].0, FirstSchedule.intern());
+        assert_eq!(mappings[1].0, SecondSchedule.intern());
+        let mut texts = app.world.query_filtered::<&Text, With<SteppingUi>>();
+        let text = texts.single(&app.world);
+        assert!(text
+            .sections
+            .iter()
+            .any(|s| s.value.contains("first_system")));
+        assert!(text
+            .sections
+            .iter()
+            .any(|s| s.value.contains("second_system")));
+        for (_, _, index) in &app.world.resource::<State>().systems {
+            assert!(*index < text.sections.len());
+        }
+        app.world.run_schedule(DebugSchedule);
+        assert_eq!(ui_count(&mut app), 1);
+        assert_eq!(app.world.resource::<State>().systems.len(), 2);
+    }
+
+    #[test]
+    fn empty_selection_creates_only_one_ui() {
+        let mut app = headless_app(SteppingPlugin::default());
+        for _ in 0..2 {
+            app.world.run_schedule(DebugSchedule);
+            assert!(app.world.run_system_once(initialized));
+            assert_eq!(ui_count(&mut app), 1);
+            assert!(app.world.resource::<State>().systems.is_empty());
+        }
     }
 }
