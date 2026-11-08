@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bound LDtk transfers to 16 MiB and 10 seconds; abort superseded/disposed loads
   and parse modern raw LDtk records without publishing partial imports.
+  The unused `ldtk` runtime dependency is removed.
 - Preflight aggregate world levels, cells and entities, bound active platforms
   and entities, and cap appended level tables while preserving play on refusal.
 
