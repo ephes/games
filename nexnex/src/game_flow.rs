@@ -203,11 +203,11 @@ impl Plugin for GameFlowPlugin {
             .add_systems(Update, update_level_selection)
             .add_systems(
                 Update,
+                // After every contact observation and control step, so no
+                // contact read later in this frame survives the reset.
                 restart_level
                     .after(update_level_selection)
-                    .after(crate::player::player_movement)
-                    .after(crate::climbing::ignore_gravity_if_climbing)
-                    .after(crate::ground_detection::update_on_ground),
+                    .after(crate::ControlSet::Gravity),
             );
     }
 }
