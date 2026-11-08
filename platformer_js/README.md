@@ -82,6 +82,10 @@ These player-shot limits differ from boss shots' world bounds. Drawing subtracts
 cameraX once without moving world coordinates. Camera tests use translated
 bounds and a recording canvas to check follow/clamp, touching-edge visibility,
 coordinate conversion, transforms and reset, without changing camera policy.
+Game rendering integration tests record boss-shot fallback arcs and sprite frame
+coordinates under the parent camera transform: each path translates world space
+once, leaves shot coordinates unchanged and balances context save/restore.
+Inactive boss shots draw nothing.
 
 ```bash
 # Run tests in watch mode
@@ -176,6 +180,11 @@ platformer_js/
 
 - **Arrow Keys**: Move left/right and jump
 - **Space**: Shoot (after collecting power-up)
+
+Shooting requires successful initialization and a playable game. Both direct
+`game.shoot()` calls and input actions ignore win, death, disposal and pending or
+failed initialization without allocating projectiles or consuming cooldown.
+Live level resets/replacements preserve power-up and cooldown behavior.
 
 Switching windows or hiding the tab clears held movement and shooting keys.
 Press again after returning. Call `game.dispose()` before replacing a game to

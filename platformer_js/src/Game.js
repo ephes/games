@@ -63,6 +63,7 @@ export class Game {
     this.loopGeneration = 0;
     this.importGeneration = 0;
     this.initPromise = null;
+    this.initialized = false;
   }
 
   /**
@@ -84,6 +85,7 @@ export class Game {
         this.renderer = new Renderer(this.canvas, this.spriteLoader);
         this.createLevel();
         this.setupInputHandlers();
+        this.initialized = true;
       } catch (error) {
         this.dispose();
         throw error;
@@ -170,9 +172,7 @@ export class Game {
   setupInputHandlers() {
     // Shooting
     this.inputManager.on('shoot:down', () => {
-      if (this.canShoot && !this.gameOver && !this.gameWon) {
-        this.shoot();
-      }
+      this.shoot();
     });
   }
 
@@ -180,7 +180,13 @@ export class Game {
    * Create projectile
    */
   shoot() {
-    if (!this.canShoot) {
+    if (
+      !this.initialized ||
+      this.disposed ||
+      this.gameOver ||
+      this.gameWon ||
+      !this.canShoot
+    ) {
       return;
     }
 
