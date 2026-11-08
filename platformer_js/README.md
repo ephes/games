@@ -196,13 +196,17 @@ invulnerability and hit animations continue to use wall-clock time.
 Camera and player horizontal bounds refresh on level creation, transitions,
 resets, and LDtk replacement. The right edge is the farthest platform's
 `x + width`, with at least one viewport of width; vertical bounds stay fixed to
-the canvas height.
+the canvas height. Bounds are reduced over platforms without spreading them into
+a function call, including large valid imported collision meshes.
 
 Damage respawns the player at the active level's start, clearing vertical speed
 and jumping state while retaining the usual life loss and invulnerability.
 Enemies accept one defeat and award 50 points once, even when bullets and a
 stomp overlap. Defeated enemies stop moving/colliding immediately while their
-300 ms hit animation remains visible. Boss health and per-hit scoring are unchanged.
+300 ms hit animation remains visible. Boss damage awards 20 points per nonfatal
+hit and 200 once on defeat. Health stops at zero; subsequent `hit()` or
+`takeDamage()` calls return zero without changing hit state or repeating projectile
+cleanup.
 Programmatic enemy and boss configurations preserve speed zero as stationary;
 omitted speed defaults to 2. Boss shots use the active level's camera bounds,
 with a 200 px horizontal and 100 px vertical off-world margin. Recreating a level

@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reduce platform right edges without argument-count limits for large LDtk worlds.
+- Keep defeated boss health at zero and reject further damage/rewards without
+  repeating hit effects or projectile cleanup.
+
 - Share concurrent and repeated initialization, register controls once, and retain
   startup failures without retrying a disposed game.
 - Dispose input and animation ownership on update/render failure while

@@ -109,9 +109,9 @@ export class Game {
     portal.setSprite(this.spriteLoader.getSprite('portal'));
     const bounds = {
       minX: 0,
-      maxX: Math.max(
-        this.canvas.width,
-        ...levelData.platforms.map(platform => platform.x + platform.width)
+      maxX: levelData.platforms.reduce(
+        (right, platform) => Math.max(right, platform.x + platform.width),
+        this.canvas.width
       ),
       minY: 0,
       maxY: this.canvas.height

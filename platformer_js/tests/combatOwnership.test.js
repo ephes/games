@@ -71,6 +71,42 @@ describe('Combat transitions and world-owned projectiles', () => {
       expect(renderer.ctx.drawImage).not.toHaveBeenCalled();
     }
   );
+  it('makes boss damage terminal without replaying defeat cleanup or changing hit state', () => {
+    const boss = game.boss;
+    boss.shoot(game.player);
+    const shot = boss.projectiles[0];
+    const cleanup = vi.spyOn(boss.projectiles, 'forEach');
+    expect([boss.takeDamage(), boss.hit(), boss.takeDamage()]).toEqual([
+      20, 20, 200
+    ]);
+    expect(boss.health).toBe(0);
+    expect(boss.getHealthPercentage()).toBe(0);
+    expect(boss.alive).toBe(false);
+    expect(shot.active).toBe(false);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    const state = { ...boss };
+    vi.advanceTimersByTime(1000);
+    expect([boss.hit(), boss.takeDamage(), boss.hit()]).toEqual([0, 0, 0]);
+    expect(boss).toEqual(state);
+    expect(boss.projectiles).toBe(state.projectiles);
+    boss.update(game.platforms, 16, game.player);
+    boss.updateShooting(game.player);
+    expect(boss.projectiles).toEqual([]);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+  it('retains boss per-hit scoring and one defeat through real projectile collisions', () => {
+    game.camera.x = 3800;
+    const rewards = [];
+    for (let i = 0; i < 4; i++) {
+      game.projectiles = [new Projectile(game.boss.x, game.boss.y + 10, 1)];
+      const score = game.score;
+      game.updateProjectiles(16);
+      rewards.push(game.score - score);
+    }
+    expect(rewards).toEqual([20, 20, 200, 0]);
+    expect(game.boss.health).toBe(0);
+    expect(game.portal.isLocked).toBe(false);
+  });
   it('keeps wide-world shots active and culls them past the actual level margin', () => {
     game.boss.shoot(game.player);
     const shot = game.boss.projectiles[0];

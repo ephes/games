@@ -170,9 +170,12 @@ export class Boss extends Enemy {
    * @returns {number} Points awarded for hit
    */
   takeDamage() {
+    if (!this.alive) {
+      return 0;
+    }
     this.isHit = true;
     this.hitTimer = Date.now();
-    this.health--;
+    this.health = Math.max(0, this.health - 1);
 
     if (this.health <= 0) {
       this.alive = false;
