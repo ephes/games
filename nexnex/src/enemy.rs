@@ -74,33 +74,40 @@ impl LdtkEntity for Patrol {
 pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
     for (mut transform, mut velocity, mut patrol) in &mut query {
         if patrol.points.len() <= 1 {
+            velocity.linvel = Vec2::ZERO;
             continue;
         }
+        patrol.index %= patrol.points.len();
+        let delta = patrol.points[patrol.index] - transform.translation.truncate();
+        if let Some(direction) = delta.try_normalize() {
+            if delta.dot(velocity.linvel) >= 0. {
+                velocity.linvel = direction * 75.;
+                continue;
+            }
+        }
 
-        let mut new_velocity =
-            (patrol.points[patrol.index] - transform.translation.truncate()).normalize() * 75.;
-
-        if new_velocity.dot(velocity.linvel) < 0. {
+        // Arrived at or crossed the current target. Skip coincident targets,
+        // bounded by one complete out-and-back traversal of the route.
+        transform.translation.x = patrol.points[patrol.index].x;
+        transform.translation.y = patrol.points[patrol.index].y;
+        velocity.linvel = Vec2::ZERO;
+        for _ in 0..2 * patrol.points.len() {
             if patrol.index == 0 {
                 patrol.forward = true;
             } else if patrol.index == patrol.points.len() - 1 {
                 patrol.forward = false;
             }
-
-            transform.translation.x = patrol.points[patrol.index].x;
-            transform.translation.y = patrol.points[patrol.index].y;
-
             if patrol.forward {
                 patrol.index += 1;
             } else {
                 patrol.index -= 1;
             }
-
-            new_velocity =
-                (patrol.points[patrol.index] - transform.translation.truncate()).normalize() * 75.;
+            let delta = patrol.points[patrol.index] - transform.translation.truncate();
+            if let Some(direction) = delta.try_normalize() {
+                velocity.linvel = direction * 75.;
+                break;
+            }
         }
-
-        velocity.linvel = new_velocity;
     }
 }
 
@@ -110,5 +117,80 @@ impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, patrol)
             .register_ldtk_entity::<MobBundle>("Mob");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arrival_and_repeated_waypoints_stay_finite() {
+        for points in [
+            vec![Vec2::ZERO, Vec2::X],
+            vec![Vec2::ZERO, Vec2::ZERO, Vec2::X],
+            vec![Vec2::ZERO; 4],
+        ] {
+            let mut app = App::new();
+            app.add_systems(Update, patrol);
+            let entity = app
+                .world_mut()
+                .spawn((
+                    Transform::default(),
+                    Velocity::zero(),
+                    Patrol {
+                        points: points.clone(),
+                        index: 0,
+                        forward: false,
+                    },
+                ))
+                .id();
+            for _ in 0..8 {
+                app.update();
+                let velocity = app.world().get::<Velocity>(entity).unwrap().linvel;
+                assert!(velocity.is_finite());
+                assert!(app
+                    .world()
+                    .get::<Transform>(entity)
+                    .unwrap()
+                    .translation
+                    .is_finite());
+                assert_eq!(
+                    velocity,
+                    if points.iter().any(|point| *point != Vec2::ZERO) {
+                        Vec2::X * 75.
+                    } else {
+                        Vec2::ZERO
+                    }
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn crossing_endpoint_snaps_and_turns_back() {
+        let mut app = App::new();
+        app.add_systems(Update, patrol);
+        let entity = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(11., 0., 0.),
+                Velocity::linear(Vec2::X * 75.),
+                Patrol {
+                    points: vec![Vec2::ZERO, Vec2::X * 10.],
+                    index: 1,
+                    forward: true,
+                },
+            ))
+            .id();
+        app.update();
+        assert_eq!(
+            app.world().get::<Transform>(entity).unwrap().translation.x,
+            10.
+        );
+        assert_eq!(
+            app.world().get::<Velocity>(entity).unwrap().linvel,
+            -Vec2::X * 75.
+        );
     }
 }

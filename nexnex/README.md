@@ -12,7 +12,14 @@ gravity, in that order, at the existing Update cadence. Physics messages produce
 in Rapier's PostUpdate are consumed on the next Update. Removed ground/ladder
 contacts are pruned even when no stopped message arrives.
 
-Local checks (headless tests use synthetic ECS entities, no window or GPU):
+Patrols turn at endpoints and skip coincident waypoints within a bounded
+out-and-back traversal; an entirely coincident route stops.
+The camera uses a rounded 16:9 viewport of at least 16 by 9 world units. When
+rounding makes the viewport larger than a level, that axis stays at the level
+origin. Scroll extents never become negative.
+
+Local checks (headless tests use synthetic ECS entities and geometry, no window
+or GPU):
 
 ```sh
 cargo fmt --check
