@@ -16,10 +16,13 @@ use std::{
 };
 
 pub fn project_app(levels: Vec<Level>) -> (App, Handle<LdtkProject>) {
-    let project = LdtkJson {
+    project_data_app(LdtkJson {
         levels,
         ..default()
-    };
+    })
+}
+
+pub fn project_data_app(project: LdtkJson) -> (App, Handle<LdtkProject>) {
     let dir = Dir::default();
     dir.insert_asset_text(
         Path::new("synthetic.ldtk"),

@@ -28,19 +28,22 @@ pub fn camera_fit_inside_current_level(
 
         if let Projection::Orthographic(ref mut orthographic_projection) = *projection {
             for (level_transform, level_iid) in &level_query {
-                let ldtk_project = ldtk_project_assets
-                    .get(
-                        ldtk_projects
-                            .single()
-                            .expect("LdtkProjectHandle should exist"),
-                    )
-                    .expect("Project should be loaded if level has spawned");
+                let Ok(handle) = ldtk_projects.single() else {
+                    return;
+                };
+                let Some(ldtk_project) = ldtk_project_assets.get(handle) else {
+                    return;
+                };
+                let Some(selected) =
+                    ldtk_project.find_raw_level_by_level_selection(&level_selection)
+                else {
+                    return;
+                };
+                let Some(level) = ldtk_project.get_raw_level_by_iid(level_iid.get()) else {
+                    continue;
+                };
 
-                let level = ldtk_project
-                    .get_raw_level_by_iid(&level_iid.to_string())
-                    .expect("Spawned level should exist in LDtk project");
-
-                if level_selection.is_match(&LevelIndices::default(), level) {
+                if selected.iid == level.iid {
                     let level_ratio = level.px_wid as f32 / level.px_hei as f32;
                     orthographic_projection.viewport_origin = Vec2::ZERO;
                     if level_ratio > ASPECT_RATIO {

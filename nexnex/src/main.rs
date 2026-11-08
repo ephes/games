@@ -48,3 +48,6 @@ fn main() {
 
 #[cfg(test)]
 mod testing;
+
+#[cfg(test)]
+mod journey_tests;
