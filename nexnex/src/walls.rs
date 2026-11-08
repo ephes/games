@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use bevy::prelude::*;
-use std::collections::HashMap;
 use bevy_ecs_ldtk::prelude::*;
+use std::collections::HashMap;
 
 use bevy_rapier2d::prelude::*;
 
@@ -79,7 +79,11 @@ pub fn spawn_wall_collision(
         level_query.iter().for_each(|(level_entity, level_iid)| {
             if let Some(level_walls) = level_to_wall_locations.get(&level_entity) {
                 let ldtk_project = ldtk_project_assets
-                    .get(ldtk_projects.single().expect("LdtkProjectHandle should exist"))
+                    .get(
+                        ldtk_projects
+                            .single()
+                            .expect("LdtkProjectHandle should exist"),
+                    )
                     .expect("Project should be loaded if level has spawned");
 
                 let level = ldtk_project

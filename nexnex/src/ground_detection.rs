@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use bevy::prelude::*;
 use bevy::ecs::message::MessageReader;
+use bevy::prelude::*;
 
 use bevy_rapier2d::prelude::*;
 
