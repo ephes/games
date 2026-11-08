@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Share concurrent and repeated initialization, register controls once, and retain
+  startup failures without retrying a disposed game.
+- Dispose input and animation ownership on update/render failure while
+  propagating the original error to the caller or browser.
+
 - Reject imported patrol surfaces narrower than their enemy (44 px) or boss
   (64 px), preserving the previous playable world on failure.
 

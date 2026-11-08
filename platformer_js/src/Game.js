@@ -62,27 +62,34 @@ export class Game {
     this.disposed = false;
     this.loopGeneration = 0;
     this.importGeneration = 0;
+    this.initPromise = null;
   }
 
   /**
    * Initialize game
    */
-  async init() {
+  init() {
+    if (this.initPromise) {
+      return this.initPromise;
+    }
     if (this.disposed) {
-      return;
+      return Promise.resolve();
     }
-    try {
-      await this.spriteLoader.loadAll();
-      if (this.disposed) {
-        return;
+    this.initPromise = (async () => {
+      try {
+        await this.spriteLoader.loadAll();
+        if (this.disposed) {
+          return;
+        }
+        this.renderer = new Renderer(this.canvas, this.spriteLoader);
+        this.createLevel();
+        this.setupInputHandlers();
+      } catch (error) {
+        this.dispose();
+        throw error;
       }
-      this.renderer = new Renderer(this.canvas, this.spriteLoader);
-      this.createLevel();
-      this.setupInputHandlers();
-    } catch (error) {
-      this.dispose();
-      throw error;
-    }
+    })();
+    return this.initPromise;
   }
 
   /**
@@ -200,29 +207,38 @@ export class Game {
     if (!this.running || this.disposed || generation !== this.loopGeneration) {
       return;
     }
-    const step = 1000 / 60;
-    const elapsed = Math.max(0, timestamp - this.lastTime);
-    this.lastTime = timestamp;
-    // Drop suspension time; ordinary slow frames can catch up at most five steps.
-    if (elapsed > 250) {
-      this.accumulator = 0;
-    } else {
-      this.accumulator += Math.min(elapsed, step * 5);
-    }
-    let steps = 0;
-    while (this.accumulator + 1e-7 >= step && steps < 5) {
-      this.accumulator = Math.max(0, this.accumulator - step);
-      this.update(step);
-      steps++;
-      if (!this.running || this.disposed) {
-        return;
+    try {
+      const step = 1000 / 60;
+      const elapsed = Math.max(0, timestamp - this.lastTime);
+      this.lastTime = timestamp;
+      // Drop suspension time; ordinary slow frames can catch up at most five steps.
+      if (elapsed > 250) {
+        this.accumulator = 0;
+      } else {
+        this.accumulator += Math.min(elapsed, step * 5);
       }
-    }
-    this.render();
-    if (this.running && !this.disposed && generation === this.loopGeneration) {
-      this.animationFrameId = requestAnimationFrame(time =>
-        this.gameLoop(time, generation)
-      );
+      let steps = 0;
+      while (this.accumulator + 1e-7 >= step && steps < 5) {
+        this.accumulator = Math.max(0, this.accumulator - step);
+        this.update(step);
+        steps++;
+        if (!this.running || this.disposed) {
+          return;
+        }
+      }
+      this.render();
+      if (
+        this.running &&
+        !this.disposed &&
+        generation === this.loopGeneration
+      ) {
+        this.animationFrameId = requestAnimationFrame(time =>
+          this.gameLoop(time, generation)
+        );
+      }
+    } catch (error) {
+      this.dispose();
+      throw error;
     }
   };
 

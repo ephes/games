@@ -181,8 +181,12 @@ Switching windows or hiding the tab clears held movement and shooting keys.
 Press again after returning. Call `game.dispose()` before replacing a game to
 cancel its animation and remove input listeners; standalone input managers have
 `dispose()` too. Starting twice keeps one animation chain. Disposal is terminal:
-create a fresh Game to restart. Failed initialization disposes input and preserves
-the startup error; disposal during sprite loading prevents later activation.
+create a fresh Game to restart. Concurrent and later `init()` calls share one initialization and register controls
+once. Failed initialization disposes input; every later `init()` call rejects
+with the same startup error. Create a fresh Game to retry. Disposal during sprite
+loading prevents later activation. Update/render failures also dispose the game
+and rethrow the original error: synchronous startup errors reach the caller of
+`start()`, and scheduled-frame errors reach the browser error surface.
 
 Simulation uses fixed 60 Hz steps and renders once per animation frame. A frame
 can run at most five simulation steps; gaps over 250 ms discard accumulated time
