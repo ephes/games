@@ -68,7 +68,7 @@ npm run preview
 
 The project uses Vitest for unit testing covering game logic. Loader tests run
 real LDtk world/level conversion, entity field lookup and IntGrid collision mesh
-merging against synthetic records, mocking only `World.fromURL`. Sprite loader
+merging against synthetic records, mocking only streamed `fetch` responses. Sprite loader
 tests use explicitly triggered Image load/error events to check cache identity,
 out-of-order completion and failed startup without network requests or timers.
 Direct Enemy tests control `Date.now()`: running frames 0–9 advance only after
@@ -233,7 +233,19 @@ clears player projectiles and resets the camera, preserving score, lives and
 shooting ability. Replacement and append imports share latest-request ownership:
 only the most recently requested import can publish its candidate world and
 levels. Superseded replacements return false, even if the newer request fails;
-imports completed after disposal do not publish.
+imports completed after disposal do not publish. Supersession and disposal abort
+pending transfers. Each transfer has a 10-second total deadline and a 16 MiB
+streamed response limit (actual bytes, even without an accurate Content-Length).
+The loader uses the public `JSON.parse` API and raw LDtk records, including modern
+`intGridCsv`, rather than the dependency's legacy wrapper objects.
+
+Before conversion, each imported world is limited to 64 levels, 2,000,000 total
+IntGrid cells and 20,000 total entities across all layers. A level may contain at
+most 1,024 source entities and 4,096 horizontal collision runs/platforms, bounding
+active collision/render scans. These limits include unknown entities/layers in
+source totals. Append also caps the combined table at 64 levels and 20,000
+recognized entities. Over-budget imports report the exceeded budget and retain
+the current playable world.
 
 LDtk Platforms layers require positive safe integer grid size, width and height,
 with safe integer pixel extents and at most 1,000,000 cells per layer.

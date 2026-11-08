@@ -2,7 +2,15 @@
  * @module systems/LDtkLoader
  */
 
-import { World } from 'ldtk';
+export const WORLD_LIMITS = Object.freeze({
+  bytes: 16 * 1024 * 1024,
+  timeoutMs: 10_000,
+  levels: 64,
+  cells: 2_000_000,
+  entities: 20_000,
+  activeEntities: 1024,
+  activePlatforms: 4096
+});
 
 /**
  * LDtk level loader
@@ -14,6 +22,7 @@ export class LDtkLoader {
   constructor() {
     this.world = null;
     this.loadGeneration = 0;
+    this.loadController = null;
   }
 
   /**
@@ -26,12 +35,106 @@ export class LDtkLoader {
    * @returns {Promise<World>} This request's candidate world
    */
   async loadWorld(url, { publish = true } = {}) {
-    const generation = ++this.loadGeneration;
-    const world = await World.fromURL(url);
-    if (publish && generation === this.loadGeneration) {
-      this.world = world;
+    this.cancelLoad();
+    const generation = this.loadGeneration;
+    const controller = new AbortController();
+    this.loadController = controller;
+    const timer = setTimeout(
+      () => controller.abort(new Error('LDtk transfer deadline exceeded')),
+      WORLD_LIMITS.timeoutMs
+    );
+    let reader;
+    const cancelReader = () => {
+      void reader?.cancel(controller.signal.reason).catch(() => {});
+    };
+    controller.signal.addEventListener('abort', cancelReader, { once: true });
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      controller.signal.throwIfAborted();
+      if (!response.ok) {
+        throw new Error('LDtk transfer failed');
+      }
+      reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('LDtk response requires a streamed body');
+      }
+      if (Number(response.headers.get('content-length')) > WORLD_LIMITS.bytes) {
+        throw new Error('LDtk byte budget exceeded');
+      }
+      const chunks = [];
+      let bytes = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        controller.signal.throwIfAborted();
+        if (done) {
+          break;
+        }
+        bytes += value.byteLength;
+        if (bytes > WORLD_LIMITS.bytes) {
+          throw new Error('LDtk byte budget exceeded');
+        }
+        chunks.push(value);
+      }
+      const buffer = new Uint8Array(bytes);
+      let offset = 0;
+      for (const chunk of chunks) {
+        buffer.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      const data = JSON.parse(new TextDecoder().decode(buffer));
+      this.preflightWorld(data);
+      const world = data;
+      if (publish && generation === this.loadGeneration) {
+        this.world = world;
+      }
+      return world;
+    } finally {
+      clearTimeout(timer);
+      controller.abort();
+      controller.signal.removeEventListener('abort', cancelReader);
+      reader?.releaseLock();
+      if (this.loadController === controller) {
+        this.loadController = null;
+      }
     }
-    return world;
+  }
+
+  /** Cancel an in-flight transfer and retire its publication ownership. */
+  cancelLoad() {
+    this.loadGeneration++;
+    this.loadController?.abort(new Error('LDtk load cancelled'));
+    this.loadController = null;
+  }
+
+  /** Check aggregate source budgets before the LDtk parser constructs objects. */
+  preflightWorld(data) {
+    if (
+      !Array.isArray(data.levels) ||
+      data.levels.length > WORLD_LIMITS.levels
+    ) {
+      throw new Error('LDtk level budget exceeded');
+    }
+    let cells = 0,
+      entities = 0;
+    for (const level of data.levels) {
+      let activeEntities = 0;
+      for (const layer of level.layerInstances ?? []) {
+        if (layer.intGridCsv) {
+          cells += layer.intGridCsv.length;
+        }
+        activeEntities += layer.entityInstances?.length ?? 0;
+      }
+      entities += activeEntities;
+      if (cells > WORLD_LIMITS.cells) {
+        throw new Error('LDtk world cell budget exceeded');
+      }
+      if (entities > WORLD_LIMITS.entities) {
+        throw new Error('LDtk world entity budget exceeded');
+      }
+      if (activeEntities > WORLD_LIMITS.activeEntities) {
+        throw new Error('LDtk active entity budget exceeded');
+      }
+    }
   }
 
   /**
@@ -236,6 +339,9 @@ export class LDtkLoader {
 
       // Convert row platforms to game format
       rowPlatforms.forEach(p => {
+        if (platforms.length >= WORLD_LIMITS.activePlatforms) {
+          throw new Error('LDtk active platform budget exceeded');
+        }
         platforms.push({
           x: p.startX * gridSize,
           y: p.y * gridSize,
@@ -309,7 +415,9 @@ export class LDtkLoader {
       return [];
     }
 
-    return world.levels.map(ldtkLevel => this.convertLevel(ldtkLevel));
+    const data = world.data ?? world;
+    this.preflightWorld(data);
+    return data.levels.map(ldtkLevel => this.convertLevel(ldtkLevel));
   }
 
   /**
@@ -322,6 +430,6 @@ export class LDtkLoader {
       return null;
     }
 
-    return this.convertLevel(this.world.levels[index]);
+    return this.convertLevel((this.world.data ?? this.world).levels[index]);
   }
 }

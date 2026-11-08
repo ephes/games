@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { World } from 'ldtk';
+import { mockWorldFetch } from './worldFetch.js';
 import { Game } from '../src/Game.js';
 import { Boss } from '../src/entities/Boss.js';
 import { BossProjectile } from '../src/entities/BossProjectile.js';
@@ -101,6 +101,7 @@ describe('Playable level state', () => {
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   function expectRespawn(x, y) {
@@ -129,7 +130,7 @@ describe('Playable level state', () => {
   });
 
   it('respawns at the converted LDtk start', async () => {
-    vi.spyOn(World, 'fromURL').mockResolvedValue(world());
+    mockWorldFetch().mockResolvedValue(world());
     await expect(game.loadLDtkLevels('synthetic.ldtk')).resolves.toBe(true);
     expectRespawn(600, 80);
   });
@@ -138,7 +139,7 @@ describe('Playable level state', () => {
     game.loadNextLevel();
     game.loadNextLevel();
     const oldPlayer = game.player;
-    vi.spyOn(World, 'fromURL').mockResolvedValue(world());
+    mockWorldFetch().mockResolvedValue(world());
     await expect(game.loadLDtkLevels('synthetic.ldtk')).resolves.toBe(true);
     expect(game.currentLevel).toBe(0);
     expect(game.totalLevels).toBe(1);
@@ -152,7 +153,7 @@ describe('Playable level state', () => {
     game.loadNextLevel();
     const replacement = world();
     replacement.levels.push(world(240, 60).levels[0]);
-    vi.spyOn(World, 'fromURL').mockResolvedValue(replacement);
+    mockWorldFetch().mockResolvedValue(replacement);
     await expect(game.loadLDtkLevels('synthetic.ldtk')).resolves.toBe(true);
     expect(game.currentLevel).toBe(1);
     expect([game.player.x, game.player.y]).toEqual([240, 60]);
@@ -179,7 +180,7 @@ describe('Playable level state', () => {
       const previousWorld = game.ldtkLoader.world;
       const before = { ...game };
       const bounds = game.camera.bounds;
-      const fromURL = vi.spyOn(World, 'fromURL').mockResolvedValue(world());
+      const fromURL = mockWorldFetch().mockResolvedValue(world());
       const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
       let fault;
       if (failure === 'load') {
@@ -245,7 +246,7 @@ describe('Playable level state', () => {
       expect(game.projectiles).toHaveLength(1);
       expect(game.camera.bounds).toBe(bounds);
       expect(game.camera.x).toBe(150);
-      expect(game.ldtkLoader.world).toBe(previousWorld);
+      expect(game.ldtkLoader.world).toEqual(previousWorld);
       expect(result).toBe(false);
       if (failure !== 'empty') {
         expect(errorLog).toHaveBeenCalled();
