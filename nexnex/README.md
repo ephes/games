@@ -27,6 +27,23 @@ corrected. Cells without source layer metadata are refused with a warning. Live
 layer metadata allows collision state to survive temporary project-asset
 unavailability.
 
+R resets the surviving Worldly player to the selected level's authored Player
+spawn and respawns the loaded levels. Velocity, ground contacts, climb contacts,
+and climbing gravity are cleared. If the selected level has no unique Player
+spawn, restart uses the first level with a unique Player spawn in project order
+(the shipped neighboring levels have no Player spawn). The player is retained;
+LDtk's Worldly identity prevents a second player during level respawn. Restart
+supports exactly one authored Player per project, as in the shipped game;
+missing project data or missing/ambiguous spawn evidence leaves restart
+unavailable until valid data returns.
+
+Missing or inconsistent project handles/assets temporarily leave level selection,
+camera, and live collision geometry unchanged. When a loaded replacement project
+no longer contains the selection, selection falls back to its first level in
+project order; an empty project stays unavailable. Camera fitting resumes when
+the selected level is spawned. Headless journey tests run LDtk 0.14's public
+spawn, cleanup, and Worldly-adoption systems with synthetic in-memory projects.
+
 Local checks (headless tests use synthetic ECS entities, geometry and in-memory
 LDtk data, no window or GPU):
 
