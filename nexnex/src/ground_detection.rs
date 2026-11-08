@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use bevy::prelude::*;
 use bevy::ecs::message::MessageReader;
+use bevy::prelude::*;
 
 use bevy_rapier2d::prelude::*;
 
@@ -67,17 +67,19 @@ pub fn ground_detection(
                 }
             }
             CollisionEvent::Stopped(e1, e2, _) => {
-                if collidables.contains(e1) {
-                    if let Ok(mut sensor) = ground_sensors.get_mut(e2) {
-                        sensor.intersecting_ground_entities.remove(&e1);
-                    }
-                } else if collidables.contains(e2) {
-                    if let Ok(mut sensor) = ground_sensors.get_mut(e1) {
-                        sensor.intersecting_ground_entities.remove(&e2);
-                    }
+                if let Ok(mut sensor) = ground_sensors.get_mut(e2) {
+                    sensor.intersecting_ground_entities.remove(&e1);
+                }
+                if let Ok(mut sensor) = ground_sensors.get_mut(e1) {
+                    sensor.intersecting_ground_entities.remove(&e2);
                 }
             }
         }
+    }
+    for mut sensor in &mut ground_sensors {
+        sensor
+            .intersecting_ground_entities
+            .retain(|entity| collidables.contains(*entity));
     }
 }
 
@@ -97,8 +99,21 @@ pub struct GroundDetectionPlugin;
 
 impl Plugin for GroundDetectionPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, spawn_ground_sensor)
-            .add_systems(Update, ground_detection)
-            .add_systems(Update, update_on_ground);
+        app.configure_sets(
+            Update,
+            (
+                crate::ControlSet::Observe,
+                crate::ControlSet::Grounded,
+                crate::ControlSet::Movement,
+                crate::ControlSet::Gravity,
+            )
+                .chain(),
+        )
+        .add_systems(
+            Update,
+            spawn_ground_sensor.before(crate::ControlSet::Observe),
+        )
+        .add_systems(Update, ground_detection.in_set(crate::ControlSet::Observe))
+        .add_systems(Update, update_on_ground.in_set(crate::ControlSet::Grounded));
     }
 }

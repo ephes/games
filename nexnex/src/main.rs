@@ -19,6 +19,14 @@ mod misc_objects;
 mod player;
 mod walls;
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ControlSet {
+    Observe,
+    Grounded,
+    Movement,
+    Gravity,
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
@@ -45,3 +53,6 @@ fn main() {
         .add_plugins(misc_objects::MiscObjectsPlugin)
         .run();
 }
+
+#[cfg(test)]
+mod control_tests;
