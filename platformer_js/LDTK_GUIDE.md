@@ -107,8 +107,10 @@ failure.
 
 Both options reject a world unless every level contains exactly one Boss and one
 Portal (and at most one Player). The bundled starter
-`assets/levels/platformer.ldtk` contains only a Player, so add a Boss and a
-Portal to `Level_0` before importing it.
+`assets/levels/platformer.ldtk` contains only a Player and no painted
+platforms. Before importing it, paint at least one platform on the Platforms
+layer that is at least 64 px wide, then add a Boss whose `PlatformIndex` points
+at that platform (0 when omitted) and a Portal to `Level_0`.
 
 ### Option 1: Replace Built-in Levels
 
