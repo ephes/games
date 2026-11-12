@@ -70,7 +70,8 @@ The project uses Vitest for unit testing covering game logic. Tests exercise
 the production Player and InputManager, including animation precedence/frame counts,
 renewed hit/protection timers and self-removing action subscribers. Player tests
 keep fixed simulation steps separate from fake wall time; input tests dispose
-every DOM listener after each case. Collision tests call the production system with synthetic rectangles: touching edges do not overlap,
+every DOM listener after each case. Collision tests call the production system
+with synthetic rectangles: touching edges do not overlap,
 landing needs at least 50% horizontal support while falling, and an upward
 ceiling hit stops vertical speed without clearing jumping state. Renderer tests
 record sprite source/destination geometry, facing transforms and canvas state
