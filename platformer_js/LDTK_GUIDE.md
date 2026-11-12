@@ -105,6 +105,11 @@ failure.
 
 ## Using LDtk Levels in Game
 
+Both options reject a world unless every level contains exactly one Boss and one
+Portal (and at most one Player). The bundled starter
+`assets/levels/platformer.ldtk` contains only a Player, so add a Boss and a
+Portal to `Level_0` before importing it.
+
 ### Option 1: Replace Built-in Levels
 
 ```javascript

@@ -254,7 +254,9 @@ Portal entities are rejected. Recognized fields (`LevelName`, enemy `Speed`,
 enemy/boss `PlatformIndex`, coin `IsPowerUp`) must occur at most once on their
 owning level/entity. `IsPowerUp` must be a boolean when present and defaults to
 false when absent. A failed next-level construction leaves the current index,
-objects, projectiles and camera intact; the caller receives the error and may retry.
+objects, projectiles and camera intact and rethrows the error. Direct
+`loadNextLevel()` callers may retry; during normal play the game loop disposes the
+game on that error, so a live game does not recover by itself.
 
 LDtk Platforms layers require positive safe integer grid size, width and height,
 with safe integer pixel extents and at most 1,000,000 cells per layer.
