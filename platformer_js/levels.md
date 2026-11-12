@@ -65,7 +65,7 @@
 
 - **Dynamic level loading**: Game starts with LEVELS and can replace or append LDtk levels
 - **State preservation**: Player abilities persist between levels
-- **Clean transitions**: Objects are cleared before loading new level
+- **Clean transitions**: Construct the next level before publishing its index and objects
 - **Victory detection**: Game detects when all levels are completed
 
 ## LDtk Editor Integration
@@ -75,3 +75,9 @@ Use `await game.loadLDtkLevels(url)` to replace levels or
 for editor setup. Game constructs replacement objects before publishing, and
 only the latest requested import may publish. Synthetic progression and import
 tests exercise those paths; this does not claim exhaustive coverage.
+Both import paths require Boss and Portal in every candidate level before
+acceptance, including levels after the selected one. Duplicate singleton entities
+and recognized fields, or nonboolean coin IsPowerUp values, reject the import
+while preserving play. Missing Player and optional entity fields retain their
+documented defaults. If next-level construction throws, the current level index,
+objects, projectiles and camera remain available for a retry.

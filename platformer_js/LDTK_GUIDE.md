@@ -28,6 +28,7 @@ The LDtk project is configured with:
 
 - Start position for the player
 - Only one allowed per level
+- Optional; when omitted, the start defaults to (50, 200)
 
 #### Enemy (Red Rectangle)
 
@@ -40,16 +41,25 @@ The LDtk project is configured with:
 - Properties:
   - `PlatformIndex`: Which platform to stand on
 - Only one allowed per level
+- Required in every imported level, including future levels
 
 #### Coin (Yellow Circle)
 
 - Properties:
-  - `IsPowerUp`: Boolean for power-up coins
+  - `IsPowerUp`: Boolean for power-up coins (default false when absent;
+    strings such as `"false"` are rejected)
 
 #### Portal (Purple Circle)
 
 - Level exit portal
 - Only one allowed per level
+- Required in every imported level, including future levels
+
+Duplicate Player/Boss/Portal entities reject the entire import. Recognized fields
+must occur at most once on their owning level/entity: LevelName, enemy Speed,
+enemy/boss PlatformIndex and coin IsPowerUp. Replacement and append both validate
+all candidate levels before publishing, retaining the previous world and play on
+failure.
 
 ### Platform Layer
 
@@ -94,6 +104,13 @@ The LDtk project is configured with:
 - The `.ldtk` file is automatically updated
 
 ## Using LDtk Levels in Game
+
+Both options reject a world unless every level contains exactly one Boss and one
+Portal (and at most one Player). The bundled starter
+`assets/levels/platformer.ldtk` contains only a Player and no painted
+platforms. Before importing it, paint at least one platform on the Platforms
+layer that is at least 64 px wide, then add a Boss whose `PlatformIndex` points
+at that platform (0 when omitted) and a Portal to `Level_0`.
 
 ### Option 1: Replace Built-in Levels
 
