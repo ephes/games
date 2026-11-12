@@ -57,7 +57,24 @@ Note: Due to ES module CORS restrictions, the game must be served via HTTP. Open
 
 ## Testing
 
-The project includes a comprehensive test suite with 56+ tests using Vitest:
+The Vitest suite imports the real Player and InputManager for animation, timer
+and action delivery contracts. Renewing invulnerability cancels the previous hit
+and protection timeouts; each new call owns both expirations. Animation state
+priority is hit, jump/fall, run, idle, with state changes resetting frame and timer.
+Frames advance at 15 FPS with idle/run/hit counts 11/12/7 and single-frame jump/fall.
+Use fake wall time for hit/protection tests independently of fixed simulation steps.
+Action dispatch snapshots subscribers per edge; self-removal cannot skip peers.
+Dispose each test input manager and restore fake timers after each case.
+
+The Vitest suite also includes focused tests of the real CollisionSystem, Renderer,
+Coin and Game collection path. Platform fixtures pin strict overlap, the 50%
+support boundary, downward landing, upward ceiling contact and unchanged state
+when there is no contact. Renderer tests use a recording canvas context and
+synthetic sprite provider to check source cells, destinations, left-facing
+transforms and save/restore balance, including boss hit compositing before health
+bars and later entities. Coin tests pin one award per coin, no collected drawing,
+and shooting enabled only by power-ups across repeated Game collision frames.
+Keep these fixtures synthetic, dispose each Game and restore timer/global mocks.
 
 ```bash
 # Run tests in watch mode (for development)

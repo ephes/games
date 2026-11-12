@@ -1,112 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// Input Manager that would be extracted from the game
-class InputManager {
-  constructor() {
-    this.keys = {};
-    this.keyBindings = new Map();
-    this.listeners = new Map();
-    this.enabled = true;
-
-    this.setupDefaultBindings();
-  }
-
-  setupDefaultBindings() {
-    this.keyBindings.set('ArrowLeft', 'moveLeft');
-    this.keyBindings.set('ArrowRight', 'moveRight');
-    this.keyBindings.set('ArrowUp', 'jump');
-    this.keyBindings.set(' ', 'shoot');
-    this.keyBindings.set('Space', 'shoot'); // Alternative
-    this.keyBindings.set('Escape', 'pause');
-  }
-
-  bindKey(key, action) {
-    this.keyBindings.set(key, action);
-  }
-
-  unbindKey(key) {
-    this.keyBindings.delete(key);
-  }
-
-  on(action, callback) {
-    if (!this.listeners.has(action)) {
-      this.listeners.set(action, []);
-    }
-    this.listeners.get(action).push(callback);
-  }
-
-  off(action, callback) {
-    if (this.listeners.has(action)) {
-      const callbacks = this.listeners.get(action);
-      const index = callbacks.indexOf(callback);
-      if (index > -1) {
-        callbacks.splice(index, 1);
-      }
-    }
-  }
-
-  handleKeyDown(event) {
-    if (!this.enabled) {
-      return;
-    }
-
-    const key = event.key;
-    const wasPressed = this.keys[key];
-    this.keys[key] = true;
-
-    const action = this.keyBindings.get(key);
-    if (action && !wasPressed) {
-      this.triggerAction(action, 'down');
-    }
-  }
-
-  handleKeyUp(event) {
-    if (!this.enabled) {
-      return;
-    }
-
-    const key = event.key;
-    this.keys[key] = false;
-
-    const action = this.keyBindings.get(key);
-    if (action) {
-      this.triggerAction(action, 'up');
-    }
-  }
-
-  triggerAction(action, type) {
-    const actionKey = `${action}:${type}`;
-    if (this.listeners.has(actionKey)) {
-      this.listeners.get(actionKey).forEach(callback => callback());
-    }
-  }
-
-  isKeyPressed(key) {
-    return !!this.keys[key];
-  }
-
-  isActionActive(action) {
-    for (const [key, boundAction] of this.keyBindings) {
-      if (boundAction === action && this.keys[key]) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  enable() {
-    this.enabled = true;
-  }
-
-  disable() {
-    this.enabled = false;
-    this.keys = {};
-  }
-
-  reset() {
-    this.keys = {};
-  }
-}
+import { InputManager } from '../src/systems/InputManager.js';
 
 describe('Input Manager', () => {
   let inputManager;
@@ -115,22 +9,33 @@ describe('Input Manager', () => {
     inputManager = new InputManager();
   });
 
+  afterEach(() => {
+    inputManager.dispose();
+  });
+
   describe('Key bindings', () => {
     it('should have default bindings', () => {
       expect(inputManager.keyBindings.get('ArrowLeft')).toBe('moveLeft');
       expect(inputManager.keyBindings.get('ArrowRight')).toBe('moveRight');
       expect(inputManager.keyBindings.get('ArrowUp')).toBe('jump');
       expect(inputManager.keyBindings.get(' ')).toBe('shoot');
+      expect(inputManager.keyBindings.get('Escape')).toBe('pause');
     });
 
     it('should bind new keys', () => {
-      inputManager.bindKey('w', 'jump');
-      expect(inputManager.keyBindings.get('w')).toBe('jump');
+      inputManager.keyBindings.set('w', 'jump');
+      const jump = vi.fn();
+      inputManager.on('jump:down', jump);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }));
+      expect(jump).toHaveBeenCalledTimes(1);
     });
 
     it('should unbind keys', () => {
-      inputManager.unbindKey('ArrowUp');
-      expect(inputManager.keyBindings.has('ArrowUp')).toBe(false);
+      inputManager.keyBindings.delete('ArrowUp');
+      const jump = vi.fn();
+      inputManager.on('jump:down', jump);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+      expect(jump).not.toHaveBeenCalled();
     });
   });
 
@@ -175,7 +80,7 @@ describe('Input Manager', () => {
     });
 
     it('should detect multiple keys for same action', () => {
-      inputManager.bindKey('a', 'moveLeft');
+      inputManager.keyBindings.set('a', 'moveLeft');
 
       inputManager.handleKeyDown({ key: 'a' });
       expect(inputManager.isActionActive('moveLeft')).toBe(true);
@@ -187,6 +92,26 @@ describe('Input Manager', () => {
   });
 
   describe('Event listeners', () => {
+    it('delivers a key edge to all subscribers when the first removes itself', () => {
+      const first = vi.fn(() => inputManager.off('shoot:down', first));
+      const second = vi.fn();
+      inputManager.on('shoot:down', first);
+      inputManager.on('shoot:down', second);
+      inputManager.off('shoot:down', vi.fn());
+      inputManager.off('unrelated:down', second);
+      const press = () =>
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+      press();
+      expect(first).toHaveBeenCalledTimes(1);
+      expect(second).toHaveBeenCalledTimes(1);
+      press();
+      expect(second).toHaveBeenCalledTimes(1);
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: ' ' }));
+      press();
+      expect(first).toHaveBeenCalledTimes(1);
+      expect(second).toHaveBeenCalledTimes(2);
+    });
+
     it('should register and trigger action listeners', () => {
       const callback = vi.fn();
       inputManager.on('jump:down', callback);

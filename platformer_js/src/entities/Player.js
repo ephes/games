@@ -27,6 +27,8 @@ export class Player {
     this.direction = 1; // 1 for right, -1 for left
     this.isHit = false;
     this.hitAnimationTimer = 0;
+    this.hitTimeout = null;
+    this.invulnerabilityTimeout = null;
     this.hitAnimationDuration = 500; // Duration of hit animation in milliseconds
 
     // Animation properties
@@ -140,17 +142,19 @@ export class Player {
    * @param {number} duration - Duration in milliseconds
    */
   makeInvulnerable(duration = 2000) {
+    clearTimeout(this.hitTimeout);
+    clearTimeout(this.invulnerabilityTimeout);
     this.isInvulnerable = true;
     this.isHit = true;
     this.hitAnimationTimer = Date.now();
 
     // Reset hit animation
-    setTimeout(() => {
+    this.hitTimeout = setTimeout(() => {
       this.isHit = false;
     }, this.hitAnimationDuration);
 
     // Reset invulnerability
-    setTimeout(() => {
+    this.invulnerabilityTimeout = setTimeout(() => {
       this.isInvulnerable = false;
     }, duration);
   }

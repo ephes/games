@@ -41,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject imported patrol surfaces narrower than their enemy (44 px) or boss
   (64 px), preserving the previous playable world on failure.
 
+- Restart player hit and invulnerability timers on renewal so older expirations
+  cannot clear newer protection or hit visuals.
+- Deliver input actions to a stable subscriber snapshot so self-removal does not
+  skip the next listener.
+
 - Award an enemy's defeat once and remove collisions immediately while its hit
   animation finishes, preserving boss health behavior.
 - Bound boss shots by the active level with finite off-world margins, and
@@ -82,6 +87,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cover real Enemy running/hit animation cycles, player Projectile movement,
   culling and drawing, and Camera bounds, visibility and coordinate transforms
   with synthetic fixtures and controlled clocks/canvas contexts.
+
+- Replace surrogate animation/input tests with production Player and InputManager
+  coverage for animation priority, frame counts, renewal and action delivery.
+
+- Test production platform contact boundaries and entity mutation, sprite geometry
+  and canvas state isolation, and one-time coin awards/power-ups through Game.
 
 - Remove the unused duplicate level coordinator and describe Game's maintained
   progression/import ownership in levels.md.
