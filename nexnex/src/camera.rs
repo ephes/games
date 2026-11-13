@@ -84,7 +84,8 @@ pub fn camera_fit_inside_current_level(
     camera_transform.translation.x = position.x;
     camera_transform.translation.y = position.y;
     // This system follows propagated world transforms. Publish the camera's
-    // global pose too, so extraction sees this frame's target without a frame lag.
+    // global pose too, so extraction sees this frame's target without a frame lag;
+    // main.rs orders it before the projection update and frustum culling.
     *camera_global = parent
         .and_then(|parent| globals.get(parent.parent()).ok())
         .map(|parent| parent.mul_transform(*camera_transform))

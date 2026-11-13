@@ -27,7 +27,9 @@ level, the current selection is retained.
 Selection and camera fitting use propagated world coordinates after physics and
 transform propagation. Level bounds include parent translation and scale; the
 camera fits the world-space bounds and converts its position into its own
-parent's coordinates. Its global pose is published in the same frame. Restart
+parent's coordinates. Its global pose is published in the same frame, before
+Bevy's camera projection update and frustum culling, so both use the fitted
+view. Restart
 transforms the authored spawn plus layer offsets through the level and back into
 the surviving Worldly player's parent space. Headless integration tests cover
 translated/scaled worlds, independent layer and camera offsets, level crossings
@@ -74,7 +76,8 @@ messages. Ladder IntGrid value 2 creates a 16 by 16 sensor, never solid ground.
 Headless fixtures load synthetic Player/Chest/Mob and IntGrid entries through
 LDtk's public spawning APIs into Rapier. Fixed simulation steps verify chest
 support and actual ladder/foot-sensor overlap without synthetic collision messages.
-The collider oracle also rejects a deliberate player-width mutation.
+The collider oracle pins exact extents; a one-off manual mutation of the player
+width made it fail, but no automated test mutates colliders.
 
 Local checks (headless tests use synthetic ECS entities, geometry and in-memory
 LDtk data, no window or GPU):
