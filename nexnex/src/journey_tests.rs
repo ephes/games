@@ -946,3 +946,71 @@ fn authored_bundles_create_rapier_bodies_and_one_ground_sensor() {
         );
     }
 }
+
+#[test]
+fn malformed_authored_patrols_are_stationary_and_do_not_block_siblings() {
+    for value in [
+        None,
+        Some(FieldValue::Int(Some(7))),
+        Some(FieldValue::Points(vec![None])),
+        Some(FieldValue::Points(vec![Some(IVec2::new(6, 1)), None])),
+    ] {
+        let mut data = physics_project();
+        let entities = &mut data.levels[0].layer_instances.as_mut().unwrap()[0].entity_instances;
+        let mut invalid = entities[2].clone();
+        invalid.iid = "invalid-mob".into();
+        invalid.field_instances = value
+            .map(|value| FieldInstance {
+                identifier: "patrol".into(),
+                field_instance_type: if matches!(value, FieldValue::Int(_)) {
+                    "Int"
+                } else {
+                    "Array<Point>"
+                }
+                .into(),
+                value,
+                tile: None,
+                def_uid: 7,
+                real_editor_values: vec![],
+            })
+            .into_iter()
+            .collect();
+        entities.push(invalid);
+        let (mut app, handle) = testing::project_data_app(data);
+        lifecycle(&mut app);
+        app.add_plugins(enemy::EnemyPlugin);
+        let world = app
+            .world_mut()
+            .spawn(LdtkWorldBundle {
+                ldtk_handle: handle.into(),
+                ..default()
+            })
+            .id();
+        app.world_mut().spawn((
+            LevelIid::new("synthetic-level"),
+            Transform::default(),
+            Respawn,
+            ChildOf(world),
+        ));
+        for _ in 0..4 {
+            app.update();
+        }
+        let mobs: Vec<_> = app
+            .world_mut()
+            .query::<(&EntityIid, &enemy::Patrol, &Velocity, &Transform)>()
+            .iter(app.world())
+            .collect();
+        assert_eq!(mobs.len(), 2);
+        for (iid, patrol, velocity, transform) in mobs {
+            assert!(transform.translation.is_finite());
+            if iid.as_str() == "invalid-mob" {
+                assert_eq!(patrol.points.len(), 1);
+                assert_eq!(patrol.points[0], transform.translation.truncate());
+                assert_eq!(velocity.linvel, Vec2::ZERO);
+            } else {
+                assert_eq!(patrol.points.len(), 2);
+                assert!(velocity.linvel.length() > 0.);
+            }
+        }
+    }
+}

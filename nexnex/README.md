@@ -12,6 +12,11 @@ gravity, in that order, at the existing Update cadence. Physics messages produce
 in Rapier's PostUpdate are consumed on the next Update. Removed ground/ladder
 contacts are pruned even when no stopped message arrives.
 
+Missing, wrongly typed or null-containing Mob `patrol` arrays produce one
+authoring warning and a stationary route at the spawn, without partially
+importing points or preventing valid sibling mobs from loading. Empty arrays
+also stay at the spawn.
+
 Patrols turn at endpoints and skip coincident waypoints within a bounded
 out-and-back traversal; an entirely coincident route stops.
 The camera uses a rounded 16:9 viewport of at least 16 by 9 world units. When
