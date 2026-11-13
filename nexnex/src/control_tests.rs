@@ -132,3 +132,93 @@ fn landing_allows_jump_in_the_observation_update() {
         assert_eq!(app.world().get::<Velocity>(player).unwrap().linvel.y, 500.);
     }
 }
+
+#[test]
+fn ladder_up_keys_share_climb_precedence_and_space_exits() {
+    for grounded in [false, true] {
+        for up in [KeyCode::KeyW, KeyCode::ArrowUp] {
+            for jump in [false, true] {
+                let mut app = app();
+                let ladder = app.world_mut().spawn(Climbable).id();
+                let player = app
+                    .world_mut()
+                    .spawn((
+                        Player,
+                        Velocity::linear(Vec2::new(0., -25.)),
+                        Climber {
+                            climbing: false,
+                            intersecting_climbables: HashSet::from([ladder]),
+                        },
+                        GroundDetection {
+                            on_ground: grounded,
+                        },
+                        GravityScale(1.),
+                    ))
+                    .id();
+                app.world_mut()
+                    .resource_mut::<ButtonInput<KeyCode>>()
+                    .press(up);
+                if jump {
+                    app.world_mut()
+                        .resource_mut::<ButtonInput<KeyCode>>()
+                        .press(KeyCode::Space);
+                }
+                app.update();
+                assert_eq!(
+                    app.world().get::<Climber>(player).unwrap().climbing,
+                    !jump,
+                    "up={up:?}, grounded={grounded}, jump={jump}"
+                );
+                assert_eq!(
+                    app.world().get::<Velocity>(player).unwrap().linvel.y,
+                    if jump { 500. } else { 200. }
+                );
+                assert_eq!(
+                    app.world().get::<GravityScale>(player).unwrap().0,
+                    if jump { 1. } else { 0. }
+                );
+                // Holding up after a deliberate jump must not immediately re-enter.
+                app.world_mut()
+                    .resource_mut::<ButtonInput<KeyCode>>()
+                    .clear();
+                app.update();
+                assert_eq!(app.world().get::<Climber>(player).unwrap().climbing, !jump);
+            }
+        }
+    }
+}
+
+#[test]
+fn up_away_from_ladders_only_jumps_from_ground() {
+    for grounded in [false, true] {
+        for key in [KeyCode::KeyW, KeyCode::ArrowUp, KeyCode::Space] {
+            let mut app = app();
+            let player = app
+                .world_mut()
+                .spawn((
+                    Player,
+                    Velocity::linear(Vec2::new(0., -25.)),
+                    Climber::default(),
+                    GroundDetection {
+                        on_ground: grounded,
+                    },
+                    GravityScale(1.),
+                ))
+                .id();
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(key);
+            app.update();
+            assert!(!app.world().get::<Climber>(player).unwrap().climbing);
+            assert_eq!(app.world().get::<GravityScale>(player).unwrap().0, 1.);
+            assert_eq!(
+                app.world().get::<Velocity>(player).unwrap().linvel.y,
+                if grounded && key != KeyCode::KeyW {
+                    500.
+                } else {
+                    -25.
+                }
+            );
+        }
+    }
+}

@@ -4,7 +4,11 @@ A Bevy/LDtk platformer using Rapier. From this directory run
 `cargo run --release` (requires a graphical display). Assets are loaded from
 `assets/Typical_2D_platformer_example.ldtk`.
 
-Move with A/D or left/right; W/S or up/down climbs ladders; Space/up jumps;
+Move with A/D or left/right. W/S or up/down enters and climbs ladders. While
+in ladder range, up has the same climb action as W, including from the ground;
+Space jumps off and restores gravity (also when up is pressed simultaneously).
+Away from ladders, Space or up jumps from the ground; neither allows an air jump.
+Holding up after jumping off does not re-enter until another climb key press.
 R restarts loaded levels.
 
 Collision observations run before grounded state, player movement, and climbing

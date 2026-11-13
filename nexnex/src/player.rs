@@ -48,17 +48,21 @@ pub fn player_movement(
 
         velocity.linvel.x = (right - left) * 200.;
 
-        if climber.intersecting_climbables.is_empty() {
-            climber.climbing = false;
-        } else if input.just_pressed(KeyCode::KeyW)
+        let at_ladder = !climber.intersecting_climbables.is_empty();
+        let climb_pressed = input.just_pressed(KeyCode::KeyW)
             || input.just_pressed(KeyCode::ArrowUp)
             || input.just_pressed(KeyCode::KeyS)
-            || input.just_pressed(KeyCode::ArrowDown)
-        {
-            climber.climbing = true;
-        }
-
-        if climber.climbing {
+            || input.just_pressed(KeyCode::ArrowDown);
+        let climbing = at_ladder && (climber.climbing || climb_pressed);
+        // Up belongs to the ladder while in range. Space always requests a
+        // jump; away from ladders, Up retains the grounded jump shortcut.
+        let jump = (input.just_pressed(KeyCode::Space)
+            || (!at_ladder && input.just_pressed(KeyCode::ArrowUp)))
+            && (ground_detection.on_ground || climbing);
+        climber.climbing = climbing && !jump;
+        if jump {
+            velocity.linvel.y = 500.;
+        } else if climber.climbing {
             let up = if input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp) {
                 1.
             } else {
@@ -71,13 +75,6 @@ pub fn player_movement(
             };
 
             velocity.linvel.y = (up - down) * 200.;
-        }
-
-        if (input.just_pressed(KeyCode::Space) || input.just_pressed(KeyCode::ArrowUp))
-            && (ground_detection.on_ground || climber.climbing)
-        {
-            velocity.linvel.y = 500.;
-            climber.climbing = false;
         }
     }
 }
