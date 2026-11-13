@@ -16,34 +16,61 @@ pub struct GroundDetection {
     pub on_ground: bool,
 }
 
+#[allow(clippy::type_complexity)]
 pub fn spawn_ground_sensor(
     mut commands: Commands,
-    detect_ground_for: Query<(Entity, &Collider), Added<GroundDetection>>,
+    mut detect_ground_for: Query<
+        (Entity, &Collider, &mut GroundDetection),
+        Or<(Added<GroundDetection>, Changed<Collider>)>,
+    >,
+    sensors: Query<(Entity, &GroundSensor, Option<&Collider>, Option<&Transform>)>,
 ) {
-    for (entity, shape) in &detect_ground_for {
-        if let Some(cuboid) = shape.as_cuboid() {
-            let Vec2 {
-                x: half_extents_x,
-                y: half_extents_y,
-            } = cuboid.half_extents();
-
-            let detector_shape = Collider::cuboid(half_extents_x / 2.0, 2.);
-
-            let sensor_translation = Vec3::new(0., -half_extents_y, 0.);
-
+    for (entity, shape, mut ground_detection) in &mut detect_ground_for {
+        let geometry = shape.as_cuboid().map(|cuboid| {
+            let half_extents = cuboid.half_extents();
+            (
+                Vec2::new(half_extents.x / 2., 2.),
+                Vec3::new(0., -half_extents.y, 0.),
+            )
+        });
+        let owned: Vec<_> = sensors
+            .iter()
+            .filter(|(_, sensor, _, _)| sensor.ground_detection_entity == entity)
+            .collect();
+        if let Some((extents, translation)) = geometry {
+            if owned.len() == 1 {
+                let (_, _, collider, transform) = owned[0];
+                if collider
+                    .and_then(Collider::as_cuboid)
+                    .is_some_and(|shape| shape.half_extents() == extents)
+                    && transform.is_some_and(|transform| transform.translation == translation)
+                {
+                    continue;
+                }
+            }
+        }
+        // Retire the old collider entity, so queued collision messages for it
+        // cannot repopulate contacts belonging to the replacement geometry.
+        for (sensor, _, _, _) in owned {
+            commands.entity(sensor).despawn();
+        }
+        ground_detection.on_ground = false;
+        if let Some((extents, translation)) = geometry {
             commands.entity(entity).with_children(|builder| {
-                builder
-                    .spawn_empty()
-                    .insert(ActiveEvents::COLLISION_EVENTS)
-                    .insert(detector_shape)
-                    .insert(Sensor)
-                    .insert(Transform::from_translation(sensor_translation))
-                    .insert(GlobalTransform::default())
-                    .insert(GroundSensor {
+                builder.spawn((
+                    ActiveEvents::COLLISION_EVENTS,
+                    Collider::cuboid(extents.x, extents.y),
+                    Sensor,
+                    Transform::from_translation(translation),
+                    GlobalTransform::default(),
+                    GroundSensor {
                         ground_detection_entity: entity,
                         intersecting_ground_entities: HashSet::new(),
-                    });
+                    },
+                ));
             });
+        } else {
+            warn!("Ground detection requires a cuboid collider on {entity:?}; leaving ungrounded");
         }
     }
 }
