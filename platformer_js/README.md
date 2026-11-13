@@ -82,6 +82,11 @@ real LDtk world/level conversion, entity field lookup and IntGrid collision mesh
 merging against synthetic records, mocking only streamed `fetch` responses. Sprite loader
 tests use explicitly triggered Image load/error events to check cache identity,
 out-of-order completion and failed startup without network requests or timers.
+SpriteLoader batches can be retried after failure. Each batch starts incomplete;
+only the newest complete batch sets `loaded`. Each sprite key belongs to its
+latest request: retired completions cannot replace the cache, and failed
+replacements retain the last valid image. Game initialization remains terminal
+on failure as described below; retry the loader directly or create a fresh Game.
 Direct Enemy tests control `Date.now()`: running frames 0–9 advance only after
 more than 1/15 second; a hit resets to frame 0 and cycles frames 0–4 after
 more than 50 ms per frame during the 300 ms hit window. These are wall-clock

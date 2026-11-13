@@ -90,4 +90,59 @@ describe('Real sprite loading', () => {
     expect(loader.getSprite('player.idle')).toBe(images[0]);
     expect(loader.getSprite('enemy.run')).toBeNull();
   });
+  it('can retry a failed batch without retaining its rejected promises', async () => {
+    const first = loader.loadAll().catch(error => error);
+    images[0].onerror();
+    expect(await first).toBeInstanceOf(Error);
+    const retry = loader.loadAll();
+    images.slice(10).forEach(image => image.onload());
+    await expect(retry).resolves.toBeUndefined();
+    expect(loader.loaded).toBe(true);
+    images.slice(1, 10).forEach(image => image.onload());
+    expect(loader.getSprite('player.run')).toBe(images[11]);
+  });
+
+  it('only the current batch can mark the loader complete', async () => {
+    const first = loader.loadAll();
+    const second = loader.loadAll();
+    images.slice(0, 10).forEach(image => image.onload());
+    await first;
+    expect(loader.loaded).toBe(false);
+    images.slice(10).forEach(image => image.onload());
+    await second;
+    expect(loader.loaded).toBe(true);
+    const third = loader.loadAll().catch(error => error);
+    expect(loader.loaded).toBe(false);
+    images[20].onerror();
+    expect(await third).toBeInstanceOf(Error);
+    expect(loader.loaded).toBe(false);
+  });
+
+  it.each([true, false])(
+    'keeps the newest requested sprite (old finishes first: %s)',
+    async oldFirst => {
+      const old = loader.loadSprite('same', 'old.png');
+      const latest = loader.loadSprite('same', 'new.png');
+      for (const i of oldFirst ? [0, 1] : [1, 0]) {
+        images[i].onload();
+      }
+      await Promise.all([old, latest]);
+      expect(loader.getSprite('same')).toBe(images[1]);
+    }
+  );
+
+  it('preserves cached data when a replacement fails and ignores retired success', async () => {
+    const initial = loader.loadSprite('same', 'valid.png');
+    images[0].onload();
+    await initial;
+    const retired = loader.loadSprite('same', 'retired.png');
+    const replacement = loader
+      .loadSprite('same', 'broken.png')
+      .catch(error => error);
+    images[2].onerror();
+    images[1].onload();
+    await retired;
+    expect(await replacement).toBeInstanceOf(Error);
+    expect(loader.getSprite('same')).toBe(images[0]);
+  });
 });

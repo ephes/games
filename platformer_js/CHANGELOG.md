@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Release failed sprite batches for retry and let only the current batch mark
+  loading complete. Keep the latest requested sprite and retain cached images
+  when a replacement fails.
+
 - Validate Boss/Portal presence in every replacement/appended LDtk level before
   publication, and preserve the current index and objects on transition failure.
 - Reject duplicate LDtk Player/Boss/Portal entities and recognized fields;

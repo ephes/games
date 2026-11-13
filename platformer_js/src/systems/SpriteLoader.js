@@ -10,6 +10,8 @@ export class SpriteLoader {
     this.sprites = new Map();
     this.loaded = false;
     this.loadPromises = [];
+    this.requests = new Map();
+    this.batch = 0;
   }
 
   /**
@@ -19,17 +21,26 @@ export class SpriteLoader {
    * @returns {Promise} Load promise
    */
   loadSprite(name, path) {
+    const request = Symbol(name);
+    this.requests.set(name, request);
     const img = new Image();
     const promise = new Promise((resolve, reject) => {
       img.onload = () => {
-        this.sprites.set(name, img);
+        if (this.requests.get(name) === request) {
+          this.sprites.set(name, img);
+          this.requests.delete(name);
+        }
         resolve(img);
       };
-      img.onerror = () => reject(new Error(`Failed to load sprite: ${path}`));
+      img.onerror = () => {
+        if (this.requests.get(name) === request) {
+          this.requests.delete(name);
+        }
+        reject(new Error(`Failed to load sprite: ${path}`));
+      };
     });
 
     img.src = path;
-    this.loadPromises.push(promise);
     return promise;
   }
 
@@ -38,28 +49,42 @@ export class SpriteLoader {
    * @returns {Promise} Promise that resolves when all sprites are loaded
    */
   async loadAll() {
+    const batch = ++this.batch;
+    this.loaded = false;
+    const promises = [];
+    this.loadPromises = promises;
+    const load = (name, path) => promises.push(this.loadSprite(name, path));
+
     // Player sprites
-    this.loadSprite('player.idle', 'assets/sprites/pink-man-idle.png');
-    this.loadSprite('player.run', 'assets/sprites/pink-man-run.png');
-    this.loadSprite('player.jump', 'assets/sprites/pink-man-jump.png');
-    this.loadSprite('player.fall', 'assets/sprites/pink-man-fall.png');
-    this.loadSprite('player.hit', 'assets/sprites/pink-man-hit.png');
+    load('player.idle', 'assets/sprites/pink-man-idle.png');
+    load('player.run', 'assets/sprites/pink-man-run.png');
+    load('player.jump', 'assets/sprites/pink-man-jump.png');
+    load('player.fall', 'assets/sprites/pink-man-fall.png');
+    load('player.hit', 'assets/sprites/pink-man-hit.png');
 
     // Enemy sprites
-    this.loadSprite('enemy.run', 'assets/sprites/slime-run.png');
-    this.loadSprite('enemy.hit', 'assets/sprites/slime-hit.png');
+    load('enemy.run', 'assets/sprites/slime-run.png');
+    load('enemy.hit', 'assets/sprites/slime-hit.png');
 
     // Boss sprite
-    this.loadSprite('boss', 'assets/sprites/boss_kobra_64x96-sheet.png');
+    load('boss', 'assets/sprites/boss_kobra_64x96-sheet.png');
 
     // Portal sprite
-    this.loadSprite('portal', 'assets/sprites/level_portal_128.png');
+    load('portal', 'assets/sprites/level_portal_128.png');
 
     // Boss fireball sprite
-    this.loadSprite('boss.fireball', 'assets/sprites/boss-fireball.png');
+    load('boss.fireball', 'assets/sprites/boss-fireball.png');
 
-    await Promise.all(this.loadPromises);
-    this.loaded = true;
+    try {
+      await Promise.all(promises);
+      if (this.batch === batch) {
+        this.loaded = true;
+      }
+    } finally {
+      if (this.batch === batch) {
+        this.loadPromises = [];
+      }
+    }
   }
 
   /**
