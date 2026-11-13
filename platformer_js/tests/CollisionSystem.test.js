@@ -92,4 +92,75 @@ describe('Platform contact boundaries', () => {
     );
     expect(entity).toEqual(before);
   });
+  it.each([false, true])(
+    'lands on the first thin surface crossed (reverse: %s)',
+    reverse => {
+      const first = { x: 0, y: 100, width: 100, height: 2 };
+      const second = { ...first, y: 150 };
+      const entity = {
+        x: 20,
+        y: 200,
+        width: 20,
+        height: 20,
+        velocityY: 200,
+        isJumping: true
+      };
+      const result = CollisionSystem.checkPlatformCollisions(
+        entity,
+        reverse ? [second, first] : [first, second],
+        0
+      );
+      expect(result).toEqual({
+        isGrounded: true,
+        platform: first,
+        side: 'top'
+      });
+      expect(entity).toMatchObject({ y: 80, velocityY: 0, isJumping: false });
+    }
+  );
+
+  it.each([false, true])(
+    'hits the first ceiling crossed (reverse: %s)',
+    reverse => {
+      const first = { x: 0, y: 100, width: 100, height: 2 };
+      const second = { ...first, y: 50 };
+      const entity = {
+        x: 20,
+        y: 0,
+        width: 20,
+        height: 20,
+        velocityY: -200,
+        isJumping: true
+      };
+      expect(
+        CollisionSystem.checkPlatformCollisions(
+          entity,
+          reverse ? [second, first] : [first, second],
+          200
+        ).side
+      ).toBe('bottom');
+      expect(entity).toMatchObject({ y: 102, velocityY: 0, isJumping: true });
+    }
+  );
+
+  it('does not pull a falling entity up onto a platform it started below', () => {
+    const entity = { x: 20, y: 105, width: 20, height: 20, velocityY: 5 };
+    expect(
+      CollisionSystem.checkPlatformCollisions(entity, [platform], 101)
+    ).toEqual(noContact);
+    expect(entity.y).toBe(105);
+  });
+
+  it('keeps the half-width support threshold for swept contact', () => {
+    for (const [x, expected] of [
+      [90, true],
+      [90.1, false]
+    ]) {
+      const entity = { x, y: 200, width: 20, height: 20, velocityY: 200 };
+      expect(
+        CollisionSystem.checkPlatformCollisions(entity, [platform], 0)
+          .isGrounded
+      ).toBe(expected);
+    }
+  });
 });

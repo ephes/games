@@ -25,62 +25,51 @@ export class CollisionSystem {
    * Check platform collisions for an entity
    * @param {Object} entity - Entity to check
    * @param {Array} platforms - List of platforms
+   * @param {number} [previousY] - Y before this simulation step (enables swept contact)
    * @returns {Object} Collision info
    */
-  static checkPlatformCollisions(entity, platforms) {
-    const result = {
-      isGrounded: false,
-      platform: null,
-      side: null
-    };
+  static checkPlatformCollisions(entity, platforms, previousY) {
+    const result = { isGrounded: false, platform: null, side: null };
+    const falling = entity.velocityY > 0;
+    if (!falling && entity.velocityY >= 0) {
+      return result;
+    }
+    let contact = null;
+    let surface = falling ? Infinity : -Infinity;
 
     for (const platform of platforms) {
-      if (this.checkCollision(entity, platform)) {
-        const entityBottom = entity.y + entity.height;
-        const entityTop = entity.y;
-
-        const platformTop = platform.y;
-        const platformBottom = platform.y + platform.height;
-
-        // Check vertical collision
-        if (
-          entity.velocityY > 0 &&
-          entityBottom > platformTop &&
-          entityTop < platformTop
-        ) {
-          // Check if player is sufficiently on top of the platform (at least 50% of player width)
-          const entityLeft = entity.x;
-          const entityRight = entity.x + entity.width;
-          const platformLeft = platform.x;
-          const platformRight = platform.x + platform.width;
-
-          const overlapLeft = Math.max(entityLeft, platformLeft);
-          const overlapRight = Math.min(entityRight, platformRight);
-          const overlapWidth = overlapRight - overlapLeft;
-
-          // Only consider grounded if at least 50% of player is on the platform
-          if (overlapWidth >= entity.width * 0.5) {
-            // Landing on platform
-            result.isGrounded = true;
-            result.platform = platform;
-            result.side = 'top';
-            entity.y = platformTop - entity.height;
-            entity.velocityY = 0;
-            entity.isJumping = false;
-          }
-        } else if (
-          entity.velocityY < 0 &&
-          entityTop < platformBottom &&
-          entityBottom > platformBottom
-        ) {
-          // Hitting platform from below
-          result.side = 'bottom';
-          entity.y = platformBottom;
-          entity.velocityY = 0;
-        }
+      const overlap =
+        Math.min(entity.x + entity.width, platform.x + platform.width) -
+        Math.max(entity.x, platform.x);
+      if (falling ? overlap < entity.width * 0.5 : overlap <= 0) {
+        continue;
+      }
+      const edge = falling ? platform.y : platform.y + platform.height;
+      const next = falling ? entity.y + entity.height : entity.y;
+      const previous = falling ? previousY + entity.height : previousY;
+      const crossed =
+        previousY === undefined
+          ? this.checkCollision(entity, platform) &&
+            (falling ? entity.y < edge : entity.y + entity.height > edge)
+          : falling
+            ? previous <= edge && next >= edge
+            : previous >= edge && next <= edge;
+      if (crossed && (falling ? edge < surface : edge > surface)) {
+        contact = platform;
+        surface = edge;
       }
     }
 
+    if (contact) {
+      entity.y = falling ? surface - entity.height : surface;
+      entity.velocityY = 0;
+      result.side = falling ? 'top' : 'bottom';
+      if (falling) {
+        entity.isJumping = false;
+        result.isGrounded = true;
+        result.platform = contact;
+      }
+    }
     return result;
   }
 

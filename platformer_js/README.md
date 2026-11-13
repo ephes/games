@@ -73,7 +73,11 @@ keep fixed simulation steps separate from fake wall time; input tests dispose
 every DOM listener after each case. Collision tests call the production system
 with synthetic rectangles: touching edges do not overlap,
 landing needs at least 50% horizontal support while falling, and an upward
-ceiling hit stops vertical speed without clearing jumping state. Renderer tests
+ceiling hit stops vertical speed without clearing jumping state. Game passes the
+player's previous Y into collision resolution, so fast movement hits the first
+crossed support/ceiling even through thin geometry, independent of platform order.
+Landing still requires 50% horizontal support; ceilings require positive overlap.
+Direct collision callers can omit previous Y to resolve existing overlaps. Renderer tests
 record sprite source/destination geometry, facing transforms and canvas state
 restoration without pixel snapshots. Coin tests verify one award, hidden
 collected geometry and real Game scoring/power-up behavior across repeated
@@ -101,7 +105,9 @@ coordinate conversion, transforms and reset, without changing camera policy.
 Game rendering integration tests record boss-shot fallback arcs and sprite frame
 coordinates under the parent camera transform: each path translates world space
 once, leaves shot coordinates unchanged and balances context save/restore.
-Inactive boss shots draw nothing.
+Inactive boss shots draw nothing. Every saved canvas scope restores in `finally`,
+including nested sprite, portal and fireball scopes. Rendering failures retain
+loop disposal/error propagation and allow a fresh Game to reuse the same canvas.
 
 ```bash
 # Run tests in watch mode

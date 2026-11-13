@@ -72,79 +72,90 @@ export class Portal {
     if (this.sprite && this.sprite.complete) {
       // Create circular clipping region
       ctx.save();
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
+      try {
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
 
-      // Draw portal sprite with locked effect
-      if (this.isLocked) {
-        // Draw darker/grayed out portal
-        ctx.globalAlpha = 0.3;
+        // Draw portal sprite with locked effect
+        if (this.isLocked) {
+          // Draw darker/grayed out portal
+          ctx.globalAlpha = 0.3;
+        }
+
+        ctx.drawImage(
+          this.sprite,
+          this.x - cameraX,
+          this.y,
+          this.width,
+          this.height
+        );
+      } finally {
+        ctx.restore();
       }
-
-      ctx.drawImage(
-        this.sprite,
-        this.x - cameraX,
-        this.y,
-        this.width,
-        this.height
-      );
-
-      ctx.restore();
     } else {
-      // Fallback drawing if sprite not loaded
-      ctx.fillStyle = this.isLocked ? '#4B0082' : '#9400D3';
-      ctx.globalAlpha = this.isLocked ? 0.5 : 1;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      ctx.save();
+      try {
+        // Fallback drawing if sprite not loaded
+        ctx.fillStyle = this.isLocked ? '#4B0082' : '#9400D3';
+        ctx.globalAlpha = this.isLocked ? 0.5 : 1;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } finally {
+        ctx.restore();
+      }
     }
 
     // Draw lock barrier effect
     if (this.isLocked) {
       ctx.save();
+      try {
+        // Red barrier circle
+        ctx.strokeStyle = '#FF0000';
+        ctx.lineWidth = 4;
+        ctx.globalAlpha = 0.6 + Math.sin(this.pulseTime) * 0.2;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius + 5, 0, Math.PI * 2);
+        ctx.stroke();
 
-      // Red barrier circle
-      ctx.strokeStyle = '#FF0000';
-      ctx.lineWidth = 4;
-      ctx.globalAlpha = 0.6 + Math.sin(this.pulseTime) * 0.2;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius + 5, 0, Math.PI * 2);
-      ctx.stroke();
+        // Cross lines
+        ctx.lineWidth = 3;
+        ctx.beginPath();
 
-      // Cross lines
-      ctx.lineWidth = 3;
-      ctx.beginPath();
+        // Diagonal cross
+        const offset = radius * 0.7;
+        ctx.moveTo(centerX - offset, centerY - offset);
+        ctx.lineTo(centerX + offset, centerY + offset);
+        ctx.moveTo(centerX + offset, centerY - offset);
+        ctx.lineTo(centerX - offset, centerY + offset);
 
-      // Diagonal cross
-      const offset = radius * 0.7;
-      ctx.moveTo(centerX - offset, centerY - offset);
-      ctx.lineTo(centerX + offset, centerY + offset);
-      ctx.moveTo(centerX + offset, centerY - offset);
-      ctx.lineTo(centerX - offset, centerY + offset);
+        ctx.stroke();
 
-      ctx.stroke();
-
-      // "LOCKED" text
-      ctx.globalAlpha = 0.8;
-      ctx.fillStyle = '#FF0000';
-      ctx.font = 'bold 20px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('LOCKED', centerX, centerY + radius + 25);
-
-      ctx.restore();
+        // "LOCKED" text
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = '#FF0000';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('LOCKED', centerX, centerY + radius + 25);
+      } finally {
+        ctx.restore();
+      }
     } else {
       // Unlocked glow effect
       ctx.save();
-      ctx.strokeStyle = '#00FF00';
-      ctx.lineWidth = 3;
-      ctx.globalAlpha = 0.5 + Math.sin(this.pulseTime * 2) * 0.3;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius + 5, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
+      try {
+        ctx.strokeStyle = '#00FF00';
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.5 + Math.sin(this.pulseTime * 2) * 0.3;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+      } finally {
+        ctx.restore();
+      }
     }
   }
 }
