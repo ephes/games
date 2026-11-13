@@ -97,11 +97,21 @@ pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
             }
         }
 
-        // Arrived at or crossed the current target. Skip coincident targets,
-        // bounded by one complete out-and-back traversal of the route.
-        transform.translation.x = patrol.points[patrol.index].x;
-        transform.translation.y = patrol.points[patrol.index].y;
+        // Rapier travelled along the incoming leg. Carry the distance beyond
+        // its target around subsequent corners instead of discarding it.
+        let mut remaining = delta.length();
+        let cycle_length: f32 = patrol
+            .points
+            .windows(2)
+            .map(|leg| leg[0].distance(leg[1]) * 2.)
+            .sum();
+        if cycle_length > 0. {
+            remaining %= cycle_length;
+        }
+        let mut position = patrol.points[patrol.index];
         velocity.linvel = Vec2::ZERO;
+        // Whole cycles were removed above; at most one out-and-back remains,
+        // including repeated points and the completely stationary case.
         for _ in 0..2 * patrol.points.len() {
             if patrol.index == 0 {
                 patrol.forward = true;
@@ -113,12 +123,20 @@ pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
             } else {
                 patrol.index -= 1;
             }
-            let delta = patrol.points[patrol.index] - transform.translation.truncate();
+            let delta = patrol.points[patrol.index] - position;
             if let Some(direction) = delta.try_normalize() {
-                velocity.linvel = direction * 75.;
-                break;
+                let distance = delta.length();
+                if remaining < distance {
+                    position += direction * remaining;
+                    velocity.linvel = direction * 75.;
+                    break;
+                }
+                remaining -= distance;
+                position = patrol.points[patrol.index];
             }
         }
+        transform.translation.x = position.x;
+        transform.translation.y = position.y;
     }
 }
 
@@ -127,6 +145,14 @@ pub struct EnemyPlugin;
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, patrol)
+            // Correct physics overshoot before rendering/transform propagation.
+            // Update also initializes new routes before their first physics step.
+            .add_systems(
+                PostUpdate,
+                patrol
+                    .after(bevy_rapier2d::plugin::PhysicsSet::Writeback)
+                    .before(bevy::transform::TransformSystems::Propagate),
+            )
             .register_ldtk_entity::<MobBundle>("Mob");
     }
 }
@@ -179,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn crossing_endpoint_snaps_and_turns_back() {
+    fn crossing_endpoint_preserves_residual_and_turns_back() {
         let mut app = App::new();
         app.add_systems(Update, patrol);
         let entity = app
@@ -197,11 +223,99 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<Transform>(entity).unwrap().translation.x,
-            10.
+            9.
         );
         assert_eq!(
             app.world().get::<Velocity>(entity).unwrap().linvel,
             -Vec2::X * 75.
         );
+    }
+
+    #[test]
+    fn rapier_patrol_preserves_travel_across_frame_partitions() {
+        use bevy_rapier2d::prelude::*;
+        for frames in [1, 2, 19, 38, 76] {
+            let mut app = App::new();
+            app.add_plugins((
+                MinimalPlugins,
+                TransformPlugin,
+                RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
+                EnemyPlugin,
+            ))
+            .insert_resource(TimestepMode::Fixed {
+                dt: 0.38 / frames as f32,
+                substeps: 1,
+            });
+            let entity = app
+                .world_mut()
+                .spawn((
+                    Transform::default(),
+                    RigidBody::KinematicVelocityBased,
+                    Collider::cuboid(0.1, 0.1),
+                    Velocity::zero(),
+                    Patrol {
+                        points: vec![
+                            Vec2::ZERO,
+                            Vec2::ZERO,
+                            Vec2::new(2., 0.),
+                            Vec2::new(2., 3.),
+                            Vec2::new(5., 3.),
+                        ],
+                        index: 1,
+                        forward: true,
+                    },
+                ))
+                .id();
+            let stationary = app
+                .world_mut()
+                .spawn((
+                    Transform::from_xyz(100., 100., 0.),
+                    RigidBody::KinematicVelocityBased,
+                    Collider::cuboid(0.1, 0.1),
+                    Velocity::zero(),
+                    Patrol {
+                        points: vec![Vec2::splat(100.); 4],
+                        index: 0,
+                        forward: false,
+                    },
+                ))
+                .id();
+            for _ in 0..frames {
+                app.update();
+            }
+            assert_eq!(
+                app.world()
+                    .get::<Transform>(stationary)
+                    .unwrap()
+                    .translation,
+                Vec3::new(100., 100., 0.)
+            );
+            assert_eq!(
+                app.world().get::<Velocity>(stationary).unwrap().linvel,
+                Vec2::ZERO
+            );
+            // 75 * .38 = 28.5 units, one 16-unit round trip plus 12.5.
+            // The return leg is vertical at x=2, y=1.5, toward the first corner.
+            let position = app
+                .world()
+                .get::<Transform>(entity)
+                .unwrap()
+                .translation
+                .truncate();
+            assert!(
+                position.abs_diff_eq(Vec2::new(2., 1.5), 0.001),
+                "frames={frames}: {position:?}"
+            );
+            assert!(app
+                .world()
+                .get::<Velocity>(entity)
+                .unwrap()
+                .linvel
+                .abs_diff_eq(-Vec2::Y * 75., 0.001));
+            let route = app.world().get::<Patrol>(entity).unwrap();
+            assert!(!route.forward);
+            assert_eq!(route.index, 2);
+            assert!(app.world().get::<RapierRigidBodyHandle>(entity).is_some());
+        }
     }
 }

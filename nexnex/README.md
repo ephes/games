@@ -17,8 +17,13 @@ authoring warning and a stationary route at the spawn, without partially
 importing points or preventing valid sibling mobs from loading. Empty arrays
 also stay at the spawn.
 
-Patrols turn at endpoints and skip coincident waypoints within a bounded
-out-and-back traversal; an entirely coincident route stops.
+Patrols travel at 75 world units per simulated second and turn at endpoints.
+After Rapier writes back movement, distance beyond a waypoint carries around
+subsequent corners before transform propagation/rendering. Complete out-and-back
+cycles are skipped arithmetically, so even a long step or repeated points needs
+at most one bounded traversal; an entirely coincident route stops. Headless
+Rapier tests compare equal elapsed time split into 1, 2, 19, 38 and 76 steps,
+including multiple short legs, a full cycle and repeated points.
 The camera uses a rounded 16:9 viewport of at least 16 by 9 world units. When
 rounding makes the viewport larger than a level, that axis stays at the level
 origin. Scroll extents never become negative.
