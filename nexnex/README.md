@@ -4,7 +4,11 @@ A Bevy/LDtk platformer using Rapier. From this directory run
 `cargo run --release` (requires a graphical display). Assets are loaded from
 `assets/Typical_2D_platformer_example.ldtk`.
 
-Move with A/D or left/right; W/S or up/down climbs ladders; Space/up jumps;
+Move with A/D or left/right. W/S or up/down enters and climbs ladders. While
+in ladder range, up has the same climb action as W, including from the ground;
+Space jumps off and restores gravity (also when up is pressed simultaneously).
+Away from ladders, Space or up jumps from the ground; neither allows an air jump.
+Holding up after jumping off does not re-enter until another climb key press.
 R restarts loaded levels.
 
 Collision observations run before grounded state, player movement, and climbing
@@ -12,8 +16,20 @@ gravity, in that order, at the existing Update cadence. Physics messages produce
 in Rapier's PostUpdate are consumed on the next Update. Removed ground/ladder
 contacts are pruned even when no stopped message arrives.
 
-Patrols turn at endpoints and skip coincident waypoints within a bounded
-out-and-back traversal; an entirely coincident route stops.
+Missing, wrongly typed or null-containing Mob `patrol` arrays produce one
+authoring warning and a stationary route at the spawn, without partially
+importing points or preventing valid sibling mobs from loading. Empty arrays
+also stay at the spawn.
+
+Patrols travel at 75 world units per simulated second and turn at endpoints.
+After Rapier writes back movement, distance beyond a waypoint carries around
+subsequent corners before transform propagation/rendering. Complete out-and-back
+cycles are skipped arithmetically, so even a long step or repeated points needs
+at most one bounded traversal; an entirely coincident route stops. Headless
+Rapier tests compare equal elapsed time split into 1, 2, 19, 38 and 76 steps,
+including multiple short legs, a full cycle, repeated points and both exact
+turnaround times. A 0.0001 world-unit arrival tolerance absorbs f32 drift at
+waypoints so the outgoing direction agrees at turnaround times.
 The camera uses a rounded 16:9 viewport of at least 16 by 9 world units. When
 rounding makes the viewport larger than a level, that axis stays at the level
 origin. Scroll extents never become negative.
@@ -76,8 +92,15 @@ messages. Ladder IntGrid value 2 creates a 16 by 16 sensor, never solid ground.
 Headless fixtures load synthetic Player/Chest/Mob and IntGrid entries through
 LDtk's public spawning APIs into Rapier. Fixed simulation steps verify chest
 support and actual ladder/foot-sensor overlap without synthetic collision messages.
-The collider oracle pins exact extents; a one-off manual mutation of the player
-width made it fail, but no automated test mutates colliders.
+The collider oracle pins exact extents. Replacing/resizing a live cuboid retires
+the old foot sensor and clears grounding before movement, then creates exactly
+one sensor with half-width equal to half the body's half-width, height 4 and
+offset at the body's bottom. Grounding resumes only from new collision messages;
+unchanged geometry retains its sensor and contacts. Unsupported shapes remove
+the sensor, warn and remain ungrounded until a cuboid returns. A headless Rapier
+fixture replaces the collider on an already grounded player, checks geometry,
+verifies jump refusal until new support overlaps, and exercises unsupported-shape
+replacement and recovery.
 
 Local checks (headless tests use synthetic ECS entities, geometry and in-memory
 LDtk data, no window or GPU):

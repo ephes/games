@@ -132,3 +132,277 @@ fn landing_allows_jump_in_the_observation_update() {
         assert_eq!(app.world().get::<Velocity>(player).unwrap().linvel.y, 500.);
     }
 }
+
+#[test]
+fn ladder_up_keys_share_climb_precedence_and_space_exits() {
+    for grounded in [false, true] {
+        for up in [KeyCode::KeyW, KeyCode::ArrowUp] {
+            for jump in [false, true] {
+                let mut app = app();
+                let ladder = app.world_mut().spawn(Climbable).id();
+                let player = app
+                    .world_mut()
+                    .spawn((
+                        Player,
+                        Velocity::linear(Vec2::new(0., -25.)),
+                        Climber {
+                            climbing: false,
+                            intersecting_climbables: HashSet::from([ladder]),
+                        },
+                        GroundDetection {
+                            on_ground: grounded,
+                        },
+                        GravityScale(1.),
+                    ))
+                    .id();
+                app.world_mut()
+                    .resource_mut::<ButtonInput<KeyCode>>()
+                    .press(up);
+                if jump {
+                    app.world_mut()
+                        .resource_mut::<ButtonInput<KeyCode>>()
+                        .press(KeyCode::Space);
+                }
+                app.update();
+                assert_eq!(
+                    app.world().get::<Climber>(player).unwrap().climbing,
+                    !jump,
+                    "up={up:?}, grounded={grounded}, jump={jump}"
+                );
+                assert_eq!(
+                    app.world().get::<Velocity>(player).unwrap().linvel.y,
+                    if jump { 500. } else { 200. }
+                );
+                assert_eq!(
+                    app.world().get::<GravityScale>(player).unwrap().0,
+                    if jump { 1. } else { 0. }
+                );
+                // Holding up after a deliberate jump must not immediately re-enter.
+                app.world_mut()
+                    .resource_mut::<ButtonInput<KeyCode>>()
+                    .clear();
+                app.update();
+                assert_eq!(app.world().get::<Climber>(player).unwrap().climbing, !jump);
+            }
+        }
+    }
+}
+
+#[test]
+fn up_away_from_ladders_only_jumps_from_ground() {
+    for grounded in [false, true] {
+        for key in [KeyCode::KeyW, KeyCode::ArrowUp, KeyCode::Space] {
+            let mut app = app();
+            let player = app
+                .world_mut()
+                .spawn((
+                    Player,
+                    Velocity::linear(Vec2::new(0., -25.)),
+                    Climber::default(),
+                    GroundDetection {
+                        on_ground: grounded,
+                    },
+                    GravityScale(1.),
+                ))
+                .id();
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(key);
+            app.update();
+            assert!(!app.world().get::<Climber>(player).unwrap().climbing);
+            assert_eq!(app.world().get::<GravityScale>(player).unwrap().0, 1.);
+            assert_eq!(
+                app.world().get::<Velocity>(player).unwrap().linvel.y,
+                if grounded && key != KeyCode::KeyW {
+                    500.
+                } else {
+                    -25.
+                }
+            );
+        }
+    }
+}
+
+#[test]
+fn live_collider_replacement_refreshes_ground_contacts_and_jump_eligibility() {
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        TransformPlugin,
+        RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
+        ground_detection::GroundDetectionPlugin,
+        player::PlayerPlugin,
+    ))
+    .init_resource::<ButtonInput<KeyCode>>()
+    .insert_resource(TimestepMode::Fixed {
+        dt: 1. / 60.,
+        substeps: 1,
+    });
+    let player = app
+        .world_mut()
+        .spawn((
+            Player,
+            Climber::default(),
+            GroundDetection::default(),
+            GravityScale(0.),
+            Velocity::zero(),
+            RigidBody::KinematicVelocityBased,
+            Collider::cuboid(6., 14.),
+            Transform::from_xyz(0., 20., 0.),
+        ))
+        .id();
+    app.world_mut().spawn((
+        RigidBody::Fixed,
+        ActiveCollisionTypes::all(),
+        Collider::cuboid(20., 2.),
+        Transform::from_xyz(0., 4., 0.),
+    ));
+    for _ in 0..6 {
+        app.update();
+    }
+    assert!(
+        app.world()
+            .get::<GroundDetection>(player)
+            .unwrap()
+            .on_ground
+    );
+    let original = assert_sensor(&mut app, player, Vec2::new(3., 2.), -14.);
+    app.world_mut()
+        .entity_mut(player)
+        .insert(Collider::cuboid(6., 14.));
+    app.update();
+    assert_eq!(
+        assert_sensor(&mut app, player, Vec2::new(3., 2.), -14.),
+        original
+    );
+    assert!(
+        app.world()
+            .get::<GroundDetection>(player)
+            .unwrap()
+            .on_ground
+    );
+
+    app.world_mut()
+        .entity_mut(player)
+        .insert(Collider::cuboid(10., 6.));
+    app.update();
+    let resized = assert_sensor(&mut app, player, Vec2::new(5., 2.), -6.);
+    assert_ne!(original, resized);
+    assert!(app.world().get_entity(original).is_err());
+    assert!(
+        !app.world()
+            .get::<GroundDetection>(player)
+            .unwrap()
+            .on_ground
+    );
+    assert!(app
+        .world()
+        .get::<GroundSensor>(resized)
+        .unwrap()
+        .intersecting_ground_entities
+        .is_empty());
+    for _ in 0..6 {
+        app.update();
+    }
+    assert_eq!(
+        assert_sensor(&mut app, player, Vec2::new(5., 2.), -6.),
+        resized
+    );
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::Space);
+    app.update();
+    assert_eq!(app.world().get::<Velocity>(player).unwrap().linvel.y, 0.);
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .reset_all();
+
+    // Only a new real overlap at the resized foot makes jumping available.
+    let raised_ground = app
+        .world_mut()
+        .spawn((
+            RigidBody::Fixed,
+            ActiveCollisionTypes::all(),
+            Collider::cuboid(20., 1.),
+            Transform::from_xyz(0., 12., 0.),
+        ))
+        .id();
+    for _ in 0..6 {
+        app.update();
+    }
+    assert!(
+        app.world()
+            .get::<GroundDetection>(player)
+            .unwrap()
+            .on_ground
+    );
+    assert!(app
+        .world()
+        .get::<GroundSensor>(resized)
+        .unwrap()
+        .intersecting_ground_entities
+        .contains(&raised_ground));
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::Space);
+    app.update();
+    assert_eq!(app.world().get::<Velocity>(player).unwrap().linvel.y, 500.);
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .reset_all();
+
+    app.world_mut().entity_mut(player).insert((
+        Collider::ball(8.),
+        Velocity::zero(),
+        Transform::from_xyz(0., 20., 0.),
+    ));
+    app.update();
+    assert!(
+        !app.world()
+            .get::<GroundDetection>(player)
+            .unwrap()
+            .on_ground
+    );
+    assert_eq!(
+        app.world_mut()
+            .query::<&GroundSensor>()
+            .iter(app.world())
+            .count(),
+        0
+    );
+    for _ in 0..3 {
+        app.update();
+    }
+    assert!(
+        !app.world()
+            .get::<GroundDetection>(player)
+            .unwrap()
+            .on_ground
+    );
+    app.world_mut()
+        .entity_mut(player)
+        .insert(Collider::cuboid(6., 14.));
+    for _ in 0..6 {
+        app.update();
+    }
+    assert_sensor(&mut app, player, Vec2::new(3., 2.), -14.);
+    assert!(
+        app.world()
+            .get::<GroundDetection>(player)
+            .unwrap()
+            .on_ground
+    );
+}
+
+fn assert_sensor(app: &mut App, player: Entity, half_extents: Vec2, y: f32) -> Entity {
+    let (entity, sensor, collider, transform, parent) = app
+        .world_mut()
+        .query::<(Entity, &GroundSensor, &Collider, &Transform, &ChildOf)>()
+        .single(app.world())
+        .unwrap();
+    assert_eq!(sensor.ground_detection_entity, player);
+    assert_eq!(parent.parent(), player);
+    assert_eq!(collider.as_cuboid().unwrap().half_extents(), half_extents);
+    assert_eq!(transform.translation, Vec3::new(0., y, 0.));
+    entity
+}
