@@ -9,13 +9,16 @@ pub struct Inventory(Vec<String>);
 
 impl From<&EntityInstance> for Inventory {
     fn from(entity_instance: &EntityInstance) -> Self {
-        Inventory(
-            entity_instance
-                .iter_enums_field("items")
-                .expect("items field should be correctly typed")
-                .cloned()
-                .collect(),
-        )
+        match entity_instance.iter_enums_field("items") {
+            Ok(items) => Inventory(items.cloned().collect()),
+            Err(error) => {
+                warn!(
+                    "Invalid items field on entity {}: {error}; using empty inventory",
+                    entity_instance.iid
+                );
+                Inventory::default()
+            }
+        }
     }
 }
 

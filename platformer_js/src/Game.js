@@ -250,6 +250,7 @@ export class Game {
 
     // Update player
     const keys = this.inputManager.getKeys();
+    const previousY = this.player.y;
     this.player.update(keys, deltaTime);
 
     // Keep player in bounds
@@ -265,7 +266,8 @@ export class Game {
     // Platform collisions
     const collisionResult = CollisionSystem.checkPlatformCollisions(
       this.player,
-      this.platforms
+      this.platforms,
+      previousY
     );
 
     // If player is not on any platform, they should be jumping/falling
@@ -430,30 +432,32 @@ export class Game {
 
     // Apply camera transform
     this.ctx.save();
-    this.camera.applyTransform(this.ctx);
+    try {
+      this.camera.applyTransform(this.ctx);
 
-    // Draw game objects
-    this.platforms.forEach(platform => platform.draw(this.ctx, 0));
-    this.coins.forEach(coin => coin.draw(this.ctx, 0));
-    this.enemies.forEach(enemy => this.renderer.drawEnemy(enemy));
-    this.renderer.drawBoss(this.boss);
+      // Draw game objects
+      this.platforms.forEach(platform => platform.draw(this.ctx, 0));
+      this.coins.forEach(coin => coin.draw(this.ctx, 0));
+      this.enemies.forEach(enemy => this.renderer.drawEnemy(enemy));
+      this.renderer.drawBoss(this.boss);
 
-    // Draw boss projectiles
-    const bossProjectiles = this.boss.getProjectiles();
-    const fireballSprite = this.spriteLoader.getSprite('boss.fireball');
-    bossProjectiles.forEach(projectile => {
-      if (fireballSprite) {
-        projectile.drawWithSprite(this.ctx, this.camera, fireballSprite);
-      } else {
-        projectile.draw(this.ctx, this.camera);
-      }
-    });
+      // Draw boss projectiles
+      const bossProjectiles = this.boss.getProjectiles();
+      const fireballSprite = this.spriteLoader.getSprite('boss.fireball');
+      bossProjectiles.forEach(projectile => {
+        if (fireballSprite) {
+          projectile.drawWithSprite(this.ctx, this.camera, fireballSprite);
+        } else {
+          projectile.draw(this.ctx, this.camera);
+        }
+      });
 
-    this.portal.draw(this.ctx, 0);
-    this.projectiles.forEach(projectile => projectile.draw(this.ctx, 0));
-    this.renderer.drawPlayer(this.player);
-
-    this.ctx.restore();
+      this.portal.draw(this.ctx, 0);
+      this.projectiles.forEach(projectile => projectile.draw(this.ctx, 0));
+      this.renderer.drawPlayer(this.player);
+    } finally {
+      this.ctx.restore();
+    }
 
     // Draw UI (not affected by camera)
     this.drawUI();

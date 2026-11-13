@@ -68,41 +68,44 @@ export class BossProjectile {
 
     // Draw fireball (will be replaced with sprite)
     ctx.save();
-    ctx.fillStyle = '#FF6600';
-    ctx.beginPath();
-    ctx.arc(
-      screenX + this.width / 2,
-      screenY + this.height / 2,
-      this.width / 2,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
+    try {
+      ctx.fillStyle = '#FF6600';
+      ctx.beginPath();
+      ctx.arc(
+        screenX + this.width / 2,
+        screenY + this.height / 2,
+        this.width / 2,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
 
-    // Inner glow
-    ctx.fillStyle = '#FFAA00';
-    ctx.beginPath();
-    ctx.arc(
-      screenX + this.width / 2,
-      screenY + this.height / 2,
-      this.width / 3,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
+      // Inner glow
+      ctx.fillStyle = '#FFAA00';
+      ctx.beginPath();
+      ctx.arc(
+        screenX + this.width / 2,
+        screenY + this.height / 2,
+        this.width / 3,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
 
-    // Core
-    ctx.fillStyle = '#FFFF00';
-    ctx.beginPath();
-    ctx.arc(
-      screenX + this.width / 2,
-      screenY + this.height / 2,
-      this.width / 6,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-    ctx.restore();
+      // Core
+      ctx.fillStyle = '#FFFF00';
+      ctx.beginPath();
+      ctx.arc(
+        screenX + this.width / 2,
+        screenY + this.height / 2,
+        this.width / 6,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+    } finally {
+      ctx.restore();
+    }
   }
 
   drawWithSprite(ctx, _camera, sprite) {

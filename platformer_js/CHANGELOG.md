@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Sweep vertical player motion to the first platform or ceiling crossed, retaining
+  the horizontal support threshold and removing platform-order dependence.
+- Restore all owned canvas scopes on drawing failures, including nested portal,
+  sprite and fireball drawing, so a fresh game can reuse the canvas safely.
+
+- Release failed sprite batches for retry and let only the current batch mark
+  loading complete. Keep the latest requested sprite and retain cached images
+  when a replacement fails.
+
 - Validate Boss/Portal presence in every replacement/appended LDtk level before
   publication, and preserve the current index and objects on transition failure.
 - Reject duplicate LDtk Player/Boss/Portal entities and recognized fields;

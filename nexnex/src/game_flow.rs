@@ -27,8 +27,8 @@ pub fn setup(
 }
 
 pub fn update_level_selection(
-    level_query: Query<(&LevelIid, &Transform), Without<Player>>,
-    player_query: Query<&Transform, With<Player>>,
+    level_query: Query<(&LevelIid, &GlobalTransform), Without<Player>>,
+    player_query: Query<&GlobalTransform, With<Player>>,
     mut level_selection: ResMut<LevelSelection>,
     ldtk_projects: Query<&LdtkProjectHandle>,
     ldtk_project_assets: Res<Assets<LdtkProject>>,
@@ -39,39 +39,38 @@ pub fn update_level_selection(
     let Some(project) = ldtk_project_assets.get(handle) else {
         return;
     };
-    if project
-        .find_raw_level_by_level_selection(&level_selection)
-        .is_none()
-    {
+    let Some(selected) = project.find_raw_level_by_level_selection(&level_selection) else {
         if let Some(level) = project.iter_raw_levels().next() {
             *level_selection = LevelSelection::iid(level.iid.clone());
         }
         return;
+    };
+    let Ok(player) = player_query.single() else {
+        return;
+    };
+    let contains = |level: &ldtk::Level| {
+        level_query
+            .iter()
+            .find(|(iid, _)| iid.get() == &level.iid)
+            .is_some_and(|(_, transform)| {
+                let local = transform
+                    .affine()
+                    .inverse()
+                    .transform_point3(player.translation())
+                    .truncate();
+                // Half-open bounds give an exact seam to the level beginning there.
+                local.is_finite()
+                    && local.cmpge(Vec2::ZERO).all()
+                    && local
+                        .cmplt(Vec2::new(level.px_wid as f32, level.px_hei as f32))
+                        .all()
+            })
+    };
+    if contains(selected) {
+        return;
     }
-    for (level_iid, level_transform) in &level_query {
-        let Some(level) = project.get_raw_level_by_iid(level_iid.get()) else {
-            continue;
-        };
-        let level_bounds = Rect {
-            min: Vec2::new(level_transform.translation.x, level_transform.translation.y),
-            max: Vec2::new(
-                level_transform.translation.x + level.px_wid as f32,
-                level_transform.translation.y + level.px_hei as f32,
-            ),
-        };
-
-        for player_transform in &player_query {
-            if player_transform.translation.x < level_bounds.max.x
-                && player_transform.translation.x > level_bounds.min.x
-                && player_transform.translation.y < level_bounds.max.y
-                && player_transform.translation.y > level_bounds.min.y
-                && project
-                    .find_raw_level_by_level_selection(&level_selection)
-                    .is_some_and(|selected| selected.iid != level.iid)
-            {
-                *level_selection = LevelSelection::iid(level.iid.clone());
-            }
-        }
+    if let Some(level) = project.iter_raw_levels().find(|level| contains(level)) {
+        *level_selection = LevelSelection::iid(level.iid.clone());
     }
 }
 
@@ -90,15 +89,17 @@ fn player_spawn(level: &ldtk::Level) -> Option<(&LayerInstance, &EntityInstance)
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn restart_level(
     mut commands: Commands,
-    level_query: Query<(Entity, &LevelIid, &Transform), Without<Player>>,
+    level_query: Query<(Entity, &LevelIid, &GlobalTransform), Without<Player>>,
     input: Res<ButtonInput<KeyCode>>,
     mut selection: ResMut<LevelSelection>,
-    projects: Query<&LdtkProjectHandle>,
+    projects: Query<(&LdtkProjectHandle, Option<&GlobalTransform>)>,
+    globals: Query<&GlobalTransform>,
     assets: Res<Assets<LdtkProject>>,
     settings: Res<LdtkSettings>,
     mut players: Query<
         (
             Entity,
+            Option<&ChildOf>,
             &mut Transform,
             &mut Velocity,
             &mut Climber,
@@ -112,7 +113,7 @@ pub fn restart_level(
     if !input.just_pressed(KeyCode::KeyR) {
         return;
     }
-    let Ok(handle) = projects.single() else {
+    let Ok((handle, world_transform)) = projects.single() else {
         return;
     };
     let Some(project) = assets.get(handle) else {
@@ -156,27 +157,51 @@ pub fn restart_level(
         &definitions,
         level.px_hei,
     );
-    let offset = level_query
+    let level_transform = level_query
         .iter()
         .find(|(_, iid, _)| iid.get() == &level.iid)
-        .map(|(_, _, transform)| transform.translation.truncate())
-        .unwrap_or_else(|| match settings.level_spawn_behavior {
-            LevelSpawnBehavior::UseWorldTranslation { .. } => {
-                Vec2::new(level.world_x as f32, -(level.world_y + level.px_hei) as f32)
-            }
-            _ => Vec2::ZERO,
+        .map(|(_, _, transform)| *transform)
+        .unwrap_or_else(|| {
+            let offset = match settings.level_spawn_behavior {
+                LevelSpawnBehavior::UseWorldTranslation { .. } => Vec3::new(
+                    level.world_x as f32,
+                    -(level.world_y + level.px_hei) as f32,
+                    0.,
+                ),
+                _ => Vec3::ZERO,
+            };
+            world_transform
+                .copied()
+                .unwrap_or_default()
+                .mul_transform(Transform::from_translation(offset))
         });
-    let position = spawn_transform.translation.truncate()
-        + offset
-        + Vec2::new(
-            layer.px_total_offset_x as f32,
-            -layer.px_total_offset_y as f32,
-        );
-    let Ok((player, mut transform, mut velocity, mut climber, mut ground, mut gravity)) =
+    let position = level_transform.transform_point(
+        spawn_transform.translation
+            + Vec3::new(
+                layer.px_total_offset_x as f32,
+                -layer.px_total_offset_y as f32,
+                0.,
+            ),
+    );
+    let Ok((player, parent, mut transform, mut velocity, mut climber, mut ground, mut gravity)) =
         players.single_mut()
     else {
         return;
     };
+    let position = if let Some(parent) = parent {
+        let Ok(parent_transform) = globals.get(parent.parent()) else {
+            return;
+        };
+        parent_transform
+            .affine()
+            .inverse()
+            .transform_point3(position)
+    } else {
+        position
+    };
+    if !position.is_finite() {
+        return;
+    }
     transform.translation.x = position.x;
     transform.translation.y = position.y;
     transform.scale = spawn_transform.scale;
@@ -200,14 +225,15 @@ pub struct GameFlowPlugin;
 impl Plugin for GameFlowPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup)
-            .add_systems(Update, update_level_selection)
+            .add_systems(
+                PostUpdate,
+                update_level_selection.after(bevy::transform::TransformSystems::Propagate),
+            )
             .add_systems(
                 Update,
                 // After every contact observation and control step, so no
                 // contact read later in this frame survives the reset.
-                restart_level
-                    .after(update_level_selection)
-                    .after(crate::ControlSet::Gravity),
+                restart_level.after(crate::ControlSet::Gravity),
             );
     }
 }

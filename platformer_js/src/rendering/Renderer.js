@@ -43,36 +43,37 @@ export class Renderer {
     const frameY = 0;
 
     this.ctx.save();
-
-    // Flip sprite if facing left
-    if (player.direction === -1) {
-      this.ctx.scale(-1, 1);
-      this.ctx.drawImage(
-        sprite,
-        frameX,
-        frameY,
-        config.frameWidth,
-        config.frameHeight,
-        -(player.x + player.width),
-        player.y,
-        player.width,
-        player.height
-      );
-    } else {
-      this.ctx.drawImage(
-        sprite,
-        frameX,
-        frameY,
-        config.frameWidth,
-        config.frameHeight,
-        player.x,
-        player.y,
-        player.width,
-        player.height
-      );
+    try {
+      // Flip sprite if facing left
+      if (player.direction === -1) {
+        this.ctx.scale(-1, 1);
+        this.ctx.drawImage(
+          sprite,
+          frameX,
+          frameY,
+          config.frameWidth,
+          config.frameHeight,
+          -(player.x + player.width),
+          player.y,
+          player.width,
+          player.height
+        );
+      } else {
+        this.ctx.drawImage(
+          sprite,
+          frameX,
+          frameY,
+          config.frameWidth,
+          config.frameHeight,
+          player.x,
+          player.y,
+          player.width,
+          player.height
+        );
+      }
+    } finally {
+      this.ctx.restore();
     }
-
-    this.ctx.restore();
   }
 
   /**
@@ -96,35 +97,36 @@ export class Renderer {
     const frameX = enemy.frameX * config.frameWidth;
 
     this.ctx.save();
-
-    if (enemy.direction === -1) {
-      this.ctx.scale(-1, 1);
-      this.ctx.drawImage(
-        sprite,
-        frameX,
-        0,
-        config.frameWidth,
-        config.frameHeight,
-        -(enemy.x + enemy.width),
-        enemy.y,
-        enemy.width,
-        enemy.height
-      );
-    } else {
-      this.ctx.drawImage(
-        sprite,
-        frameX,
-        0,
-        config.frameWidth,
-        config.frameHeight,
-        enemy.x,
-        enemy.y,
-        enemy.width,
-        enemy.height
-      );
+    try {
+      if (enemy.direction === -1) {
+        this.ctx.scale(-1, 1);
+        this.ctx.drawImage(
+          sprite,
+          frameX,
+          0,
+          config.frameWidth,
+          config.frameHeight,
+          -(enemy.x + enemy.width),
+          enemy.y,
+          enemy.width,
+          enemy.height
+        );
+      } else {
+        this.ctx.drawImage(
+          sprite,
+          frameX,
+          0,
+          config.frameWidth,
+          config.frameHeight,
+          enemy.x,
+          enemy.y,
+          enemy.width,
+          enemy.height
+        );
+      }
+    } finally {
+      this.ctx.restore();
     }
-
-    this.ctx.restore();
   }
 
   /**
@@ -147,58 +149,59 @@ export class Renderer {
     const sy = 0; // Single row sprite sheet
 
     this.ctx.save();
+    try {
+      // Enable image smoothing for better animation
+      this.ctx.imageSmoothingEnabled = true;
+      this.ctx.imageSmoothingQuality = 'high';
 
-    // Enable image smoothing for better animation
-    this.ctx.imageSmoothingEnabled = true;
-    this.ctx.imageSmoothingQuality = 'high';
+      // Draw the boss sprite first
+      if (boss.direction === -1) {
+        this.ctx.scale(-1, 1);
+        this.ctx.drawImage(
+          sprite,
+          sx,
+          sy,
+          config.frameWidth,
+          config.frameHeight,
+          -(boss.x + boss.width),
+          boss.y,
+          boss.width,
+          boss.height
+        );
+      } else {
+        this.ctx.drawImage(
+          sprite,
+          sx,
+          sy,
+          config.frameWidth,
+          config.frameHeight,
+          boss.x,
+          boss.y,
+          boss.width,
+          boss.height
+        );
+      }
 
-    // Draw the boss sprite first
-    if (boss.direction === -1) {
-      this.ctx.scale(-1, 1);
-      this.ctx.drawImage(
-        sprite,
-        sx,
-        sy,
-        config.frameWidth,
-        config.frameHeight,
-        -(boss.x + boss.width),
-        boss.y,
-        boss.width,
-        boss.height
-      );
-    } else {
-      this.ctx.drawImage(
-        sprite,
-        sx,
-        sy,
-        config.frameWidth,
-        config.frameHeight,
-        boss.x,
-        boss.y,
-        boss.width,
-        boss.height
-      );
+      // Apply hit effect overlay after drawing the sprite
+      if (boss.isHit) {
+        // Create a more stable flash effect with slower pulsing
+        const timeSinceHit = Date.now() - boss.hitTimer;
+        const flashPhase = timeSinceHit / boss.hitDuration;
+        const flashIntensity = Math.max(0, 1 - flashPhase) * 0.6; // Fade out over hit duration
+
+        this.ctx.globalCompositeOperation = 'source-atop';
+        this.ctx.fillStyle = `rgba(255, 100, 100, ${flashIntensity})`;
+        this.ctx.fillRect(
+          boss.direction === -1 ? -(boss.x + boss.width) : boss.x,
+          boss.y,
+          boss.width,
+          boss.height
+        );
+        this.ctx.globalCompositeOperation = 'source-over';
+      }
+    } finally {
+      this.ctx.restore();
     }
-
-    // Apply hit effect overlay after drawing the sprite
-    if (boss.isHit) {
-      // Create a more stable flash effect with slower pulsing
-      const timeSinceHit = Date.now() - boss.hitTimer;
-      const flashPhase = timeSinceHit / boss.hitDuration;
-      const flashIntensity = Math.max(0, 1 - flashPhase) * 0.6; // Fade out over hit duration
-
-      this.ctx.globalCompositeOperation = 'source-atop';
-      this.ctx.fillStyle = `rgba(255, 100, 100, ${flashIntensity})`;
-      this.ctx.fillRect(
-        boss.direction === -1 ? -(boss.x + boss.width) : boss.x,
-        boss.y,
-        boss.width,
-        boss.height
-      );
-      this.ctx.globalCompositeOperation = 'source-over';
-    }
-
-    this.ctx.restore();
 
     // Draw health bar only if boss is alive
     if (boss.alive) {

@@ -73,7 +73,11 @@ keep fixed simulation steps separate from fake wall time; input tests dispose
 every DOM listener after each case. Collision tests call the production system
 with synthetic rectangles: touching edges do not overlap,
 landing needs at least 50% horizontal support while falling, and an upward
-ceiling hit stops vertical speed without clearing jumping state. Renderer tests
+ceiling hit stops vertical speed without clearing jumping state. Game passes the
+player's previous Y into collision resolution, so fast movement hits the first
+crossed support/ceiling even through thin geometry, independent of platform order.
+Landing still requires 50% horizontal support; ceilings require positive overlap.
+Direct collision callers can omit previous Y to resolve existing overlaps. Renderer tests
 record sprite source/destination geometry, facing transforms and canvas state
 restoration without pixel snapshots. Coin tests verify one award, hidden
 collected geometry and real Game scoring/power-up behavior across repeated
@@ -82,6 +86,11 @@ real LDtk world/level conversion, entity field lookup and IntGrid collision mesh
 merging against synthetic records, mocking only streamed `fetch` responses. Sprite loader
 tests use explicitly triggered Image load/error events to check cache identity,
 out-of-order completion and failed startup without network requests or timers.
+SpriteLoader batches can be retried after failure. Each batch starts incomplete;
+only the newest complete batch sets `loaded`. Each sprite key belongs to its
+latest request: retired completions cannot replace the cache, and failed
+replacements retain the last valid image. Game initialization remains terminal
+on failure as described below; retry the loader directly or create a fresh Game.
 Direct Enemy tests control `Date.now()`: running frames 0–9 advance only after
 more than 1/15 second; a hit resets to frame 0 and cycles frames 0–4 after
 more than 50 ms per frame during the 300 ms hit window. These are wall-clock
@@ -96,7 +105,9 @@ coordinate conversion, transforms and reset, without changing camera policy.
 Game rendering integration tests record boss-shot fallback arcs and sprite frame
 coordinates under the parent camera transform: each path translates world space
 once, leaves shot coordinates unchanged and balances context save/restore.
-Inactive boss shots draw nothing.
+Inactive boss shots draw nothing. Every saved canvas scope restores in `finally`,
+including nested sprite, portal and fireball scopes. Rendering failures retain
+loop disposal/error propagation and allow a fresh Game to reuse the same canvas.
 
 ```bash
 # Run tests in watch mode
