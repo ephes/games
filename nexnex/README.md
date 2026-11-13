@@ -27,7 +27,9 @@ subsequent corners before transform propagation/rendering. Complete out-and-back
 cycles are skipped arithmetically, so even a long step or repeated points needs
 at most one bounded traversal; an entirely coincident route stops. Headless
 Rapier tests compare equal elapsed time split into 1, 2, 19, 38 and 76 steps,
-including multiple short legs, a full cycle and repeated points.
+including multiple short legs, a full cycle, repeated points and both exact
+turnaround times. A 0.0001 world-unit arrival tolerance absorbs f32 drift at
+waypoints so the outgoing direction agrees at turnaround times.
 The camera uses a rounded 16:9 viewport of at least 16 by 9 world units. When
 rounding makes the viewport larger than a level, that axis stays at the level
 origin. Scroll extents never become negative.

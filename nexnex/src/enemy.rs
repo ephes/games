@@ -82,6 +82,9 @@ impl LdtkEntity for Patrol {
     }
 }
 
+// Avoid partition-dependent direction at an endpoint due to f32 physics drift.
+const WAYPOINT_EPSILON: f32 = 0.0001;
+
 pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
     for (mut transform, mut velocity, mut patrol) in &mut query {
         if patrol.points.len() <= 1 {
@@ -91,7 +94,7 @@ pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
         patrol.index %= patrol.points.len();
         let delta = patrol.points[patrol.index] - transform.translation.truncate();
         if let Some(direction) = delta.try_normalize() {
-            if delta.dot(velocity.linvel) >= 0. {
+            if delta.length() > WAYPOINT_EPSILON && delta.dot(velocity.linvel) >= 0. {
                 velocity.linvel = direction * 75.;
                 continue;
             }
@@ -99,7 +102,11 @@ pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
 
         // Rapier travelled along the incoming leg. Carry the distance beyond
         // its target around subsequent corners instead of discarding it.
-        let mut remaining = delta.length();
+        let mut remaining = if delta.dot(velocity.linvel) < 0. {
+            delta.length()
+        } else {
+            0.
+        };
         let cycle_length: f32 = patrol
             .points
             .windows(2)
@@ -126,12 +133,12 @@ pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
             let delta = patrol.points[patrol.index] - position;
             if let Some(direction) = delta.try_normalize() {
                 let distance = delta.length();
-                if remaining < distance {
+                if remaining + WAYPOINT_EPSILON < distance {
                     position += direction * remaining;
                     velocity.linvel = direction * 75.;
                     break;
                 }
-                remaining -= distance;
+                remaining = (remaining - distance).max(0.);
                 position = patrol.points[patrol.index];
             }
         }
@@ -234,88 +241,101 @@ mod tests {
     #[test]
     fn rapier_patrol_preserves_travel_across_frame_partitions() {
         use bevy_rapier2d::prelude::*;
-        for frames in [1, 2, 19, 38, 76] {
-            let mut app = App::new();
-            app.add_plugins((
-                MinimalPlugins,
-                TransformPlugin,
-                RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
-                EnemyPlugin,
-            ))
-            .insert_resource(TimestepMode::Fixed {
-                dt: 0.38 / frames as f32,
-                substeps: 1,
-            });
-            let entity = app
-                .world_mut()
-                .spawn((
-                    Transform::default(),
-                    RigidBody::KinematicVelocityBased,
-                    Collider::cuboid(0.1, 0.1),
-                    Velocity::zero(),
-                    Patrol {
-                        points: vec![
-                            Vec2::ZERO,
-                            Vec2::ZERO,
-                            Vec2::new(2., 0.),
-                            Vec2::new(2., 3.),
-                            Vec2::new(5., 3.),
-                        ],
-                        index: 1,
-                        forward: true,
-                    },
+        for (distance, expected, direction, forward, index) in [
+            (28.5, Vec2::new(2., 1.5), -Vec2::Y, false, 2),
+            (8., Vec2::new(5., 3.), -Vec2::X, false, 3),
+            (16., Vec2::ZERO, Vec2::X, true, 2),
+        ] {
+            for frames in [1, 2, 19, 38, 76] {
+                let mut app = App::new();
+                app.add_plugins((
+                    MinimalPlugins,
+                    TransformPlugin,
+                    RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
+                    EnemyPlugin,
                 ))
-                .id();
-            let stationary = app
-                .world_mut()
-                .spawn((
-                    Transform::from_xyz(100., 100., 0.),
-                    RigidBody::KinematicVelocityBased,
-                    Collider::cuboid(0.1, 0.1),
-                    Velocity::zero(),
-                    Patrol {
-                        points: vec![Vec2::splat(100.); 4],
-                        index: 0,
-                        forward: false,
-                    },
-                ))
-                .id();
-            for _ in 0..frames {
-                app.update();
-            }
-            assert_eq!(
-                app.world()
-                    .get::<Transform>(stationary)
+                .insert_resource(TimestepMode::Fixed {
+                    dt: distance / 75. / frames as f32,
+                    substeps: 1,
+                });
+                let entity = app
+                    .world_mut()
+                    .spawn((
+                        Transform::default(),
+                        RigidBody::KinematicVelocityBased,
+                        Collider::cuboid(0.1, 0.1),
+                        Velocity::zero(),
+                        Patrol {
+                            points: vec![
+                                Vec2::ZERO,
+                                Vec2::ZERO,
+                                Vec2::new(2., 0.),
+                                Vec2::new(2., 3.),
+                                Vec2::new(5., 3.),
+                            ],
+                            index: 1,
+                            forward: true,
+                        },
+                    ))
+                    .id();
+                let stationary = app
+                    .world_mut()
+                    .spawn((
+                        Transform::from_xyz(100., 100., 0.),
+                        RigidBody::KinematicVelocityBased,
+                        Collider::cuboid(0.1, 0.1),
+                        Velocity::zero(),
+                        Patrol {
+                            points: vec![Vec2::splat(100.); 4],
+                            index: 0,
+                            forward: false,
+                        },
+                    ))
+                    .id();
+                for _ in 0..frames {
+                    app.update();
+                }
+                assert_eq!(
+                    app.world()
+                        .get::<Transform>(stationary)
+                        .unwrap()
+                        .translation,
+                    Vec3::new(100., 100., 0.)
+                );
+                assert_eq!(
+                    app.world().get::<Velocity>(stationary).unwrap().linvel,
+                    Vec2::ZERO
+                );
+                // Independent arc-length oracle: outbound legs have lengths 2, 3, 3.
+                // 28.5 units returns vertically after a full 16-unit cycle;
+                // 8 and 16 units land on the two turnaround points.
+                let position = app
+                    .world()
+                    .get::<Transform>(entity)
                     .unwrap()
-                    .translation,
-                Vec3::new(100., 100., 0.)
-            );
-            assert_eq!(
-                app.world().get::<Velocity>(stationary).unwrap().linvel,
-                Vec2::ZERO
-            );
-            // 75 * .38 = 28.5 units, one 16-unit round trip plus 12.5.
-            // The return leg is vertical at x=2, y=1.5, toward the first corner.
-            let position = app
-                .world()
-                .get::<Transform>(entity)
-                .unwrap()
-                .translation
-                .truncate();
-            assert!(
-                position.abs_diff_eq(Vec2::new(2., 1.5), 0.001),
-                "frames={frames}: {position:?}"
-            );
-            assert!(app
-                .world()
-                .get::<Velocity>(entity)
-                .unwrap()
-                .linvel
-                .abs_diff_eq(-Vec2::Y * 75., 0.001));
-            let route = app.world().get::<Patrol>(entity).unwrap();
-            assert!(!route.forward);
-            assert_eq!(route.index, 2);
-            assert!(app.world().get::<RapierRigidBodyHandle>(entity).is_some());
+                    .translation
+                    .truncate();
+                assert!(
+                    position.abs_diff_eq(expected, 0.001),
+                    "distance={distance}, frames={frames}: {position:?}"
+                );
+                assert!(
+                    app.world()
+                        .get::<Velocity>(entity)
+                        .unwrap()
+                        .linvel
+                        .abs_diff_eq(direction * 75., 0.001),
+                    "distance={distance}, frames={frames}, position={position:?}, velocity={:?}",
+                    app.world().get::<Velocity>(entity).unwrap().linvel
+                );
+                let route = app.world().get::<Patrol>(entity).unwrap();
+                assert_eq!(
+                    route.forward, forward,
+                    "distance={distance}, frames={frames}"
+                );
+                assert_eq!(route.index, index);
+                assert!(app.world().get::<RapierRigidBodyHandle>(entity).is_some());
+            }
         }
     }
 }

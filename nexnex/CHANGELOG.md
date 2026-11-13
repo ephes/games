@@ -11,3 +11,5 @@
 - Refresh the player's owned foot sensor when cuboid geometry changes, clear
   stale ground contacts and remove the sensor for unsupported shapes; unchanged
   geometry keeps its sensor and returning to a cuboid restores detection.
+- Stabilize patrol direction at exact turnaround times despite small floating
+  point differences between frame partitions.
