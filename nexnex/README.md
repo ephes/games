@@ -59,6 +59,23 @@ project order; an empty project stays unavailable. Camera fitting resumes when
 the selected level is spawned. Headless journey tests run LDtk 0.14's public
 spawn, cleanup, and Worldly-adoption systems with synthetic in-memory projects.
 
+Player inventory conversion accepts a non-null `items` enum array. A missing,
+wrongly typed or null-containing field logs an authoring warning and produces an
+empty inventory, without panicking or partially importing items. Level reload
+retains an existing Worldly player's inventory and position; a newly constructed
+player uses the same safe conversion.
+
+Authored entity physics roles remain: Player has a dynamic 12 by 28 collider,
+zero friction with the minimum combine rule and locked rotation; Chest has a
+dynamic 16 by 16 collider, friction 0.5 and density 15; Mob has a kinematic
+velocity-based 10 by 10 collider with locked rotation. The player's single child
+foot sensor has half-extents (3, 2), sits at local (0, -14), and requests collision
+messages. Ladder IntGrid value 2 creates a 16 by 16 sensor, never solid ground.
+Headless fixtures load synthetic Player/Chest/Mob and IntGrid entries through
+LDtk's public spawning APIs into Rapier. Fixed simulation steps verify chest
+support and actual ladder/foot-sensor overlap without synthetic collision messages.
+The collider oracle also rejects a deliberate player-width mutation.
+
 Local checks (headless tests use synthetic ECS entities, geometry and in-memory
 LDtk data, no window or GPU):
 
