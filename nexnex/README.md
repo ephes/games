@@ -18,6 +18,21 @@ The camera uses a rounded 16:9 viewport of at least 16 by 9 world units. When
 rounding makes the viewport larger than a level, that axis stays at the level
 origin. Scroll extents never become negative.
 
+Level selection keeps the current level while the player remains inside it.
+Otherwise, overlapping candidates use authored project order, independent of ECS
+spawn order. Bounds are half-open: minimum edges belong to a level, maximum
+edges belong to the neighboring level beginning there. Outside every loaded
+level, the current selection is retained.
+
+Selection and camera fitting use propagated world coordinates after physics and
+transform propagation. Level bounds include parent translation and scale; the
+camera fits the world-space bounds and converts its position into its own
+parent's coordinates. Its global pose is published in the same frame. Restart
+transforms the authored spawn plus layer offsets through the level and back into
+the surviving Worldly player's parent space. Headless integration tests cover
+translated/scaled worlds, independent layer and camera offsets, level crossings
+and restart without duplicating the player.
+
 Wall colliders use each tile's source `LayerMetadata`, including its grid size
 and pixel offsets. Layers are merged independently. ECS tile additions, grid or
 parent changes, removals, and layer changes replace that layer's generated

@@ -8,60 +8,87 @@ const ASPECT_RATIO: f32 = 16. / 9.;
 
 #[allow(clippy::type_complexity)]
 pub fn camera_fit_inside_current_level(
-    mut camera_query: Query<(&mut Projection, &mut Transform), Without<Player>>,
-    player_query: Query<&Transform, With<Player>>,
-    level_query: Query<(&Transform, &LevelIid), (Without<Projection>, Without<Player>)>,
+    mut camera_query: Query<
+        (
+            &mut Projection,
+            &mut Transform,
+            &mut GlobalTransform,
+            Option<&ChildOf>,
+        ),
+        Without<Player>,
+    >,
+    player_query: Query<&GlobalTransform, (With<Player>, Without<Projection>)>,
+    level_query: Query<(&GlobalTransform, &LevelIid), (Without<Projection>, Without<Player>)>,
+    globals: Query<&GlobalTransform, Without<Projection>>,
     ldtk_projects: Query<&LdtkProjectHandle>,
     level_selection: Res<LevelSelection>,
     ldtk_project_assets: Res<Assets<LdtkProject>>,
 ) {
-    if let Ok(Transform {
-        translation: player_translation,
-        ..
-    }) = player_query.single()
-    {
-        let player_translation = *player_translation;
-
-        let Ok((mut projection, mut camera_transform)) = camera_query.single_mut() else {
+    let Ok(player) = player_query.single() else {
+        return;
+    };
+    let Ok(handle) = ldtk_projects.single() else {
+        return;
+    };
+    let Some(project) = ldtk_project_assets.get(handle) else {
+        return;
+    };
+    let Some(level) = project.find_raw_level_by_level_selection(&level_selection) else {
+        return;
+    };
+    let Some((level_transform, _)) = level_query.iter().find(|(_, iid)| iid.get() == &level.iid)
+    else {
+        return;
+    };
+    let Ok((mut projection, mut camera_transform, mut camera_global, parent)) =
+        camera_query.single_mut()
+    else {
+        return;
+    };
+    let Projection::Orthographic(ref mut orthographic) = *projection else {
+        return;
+    };
+    let mut min = Vec2::splat(f32::INFINITY);
+    let mut max = Vec2::splat(f32::NEG_INFINITY);
+    for corner in [
+        Vec3::ZERO,
+        Vec3::new(level.px_wid as f32, 0., 0.),
+        Vec3::new(0., level.px_hei as f32, 0.),
+        Vec3::new(level.px_wid as f32, level.px_hei as f32, 0.),
+    ] {
+        let point = level_transform.transform_point(corner).truncate();
+        min = min.min(point);
+        max = max.max(point);
+    }
+    if !min.is_finite() || !max.is_finite() || (max - min).min_element() <= 0. {
+        return;
+    }
+    let (size, offset) = viewport_geometry(max - min, player.translation().truncate() - min);
+    let position = (min + offset).extend(0.);
+    let position = if let Some(parent) = parent {
+        let Ok(transform) = globals.get(parent.parent()) else {
             return;
         };
-
-        if let Projection::Orthographic(ref mut orthographic_projection) = *projection {
-            for (level_transform, level_iid) in &level_query {
-                let Ok(handle) = ldtk_projects.single() else {
-                    return;
-                };
-                let Some(ldtk_project) = ldtk_project_assets.get(handle) else {
-                    return;
-                };
-                let Some(selected) =
-                    ldtk_project.find_raw_level_by_level_selection(&level_selection)
-                else {
-                    return;
-                };
-                let Some(level) = ldtk_project.get_raw_level_by_iid(level_iid.get()) else {
-                    continue;
-                };
-
-                if selected.iid == level.iid {
-                    let (size, offset) = viewport_geometry(
-                        Vec2::new(level.px_wid as f32, level.px_hei as f32),
-                        player_translation.truncate() - level_transform.translation.truncate(),
-                    );
-                    orthographic_projection.viewport_origin = Vec2::ZERO;
-                    orthographic_projection.scaling_mode = ScalingMode::Fixed {
-                        width: size.x,
-                        height: size.y,
-                    };
-                    camera_transform.translation.x = offset.x;
-                    camera_transform.translation.y = offset.y;
-
-                    camera_transform.translation.x += level_transform.translation.x;
-                    camera_transform.translation.y += level_transform.translation.y;
-                }
-            }
-        }
+        transform.affine().inverse().transform_point3(position)
+    } else {
+        position
+    };
+    if !position.is_finite() {
+        return;
     }
+    orthographic.viewport_origin = Vec2::ZERO;
+    orthographic.scaling_mode = ScalingMode::Fixed {
+        width: size.x,
+        height: size.y,
+    };
+    camera_transform.translation.x = position.x;
+    camera_transform.translation.y = position.y;
+    // This system follows propagated world transforms. Publish the camera's
+    // global pose too, so extraction sees this frame's target without a frame lag.
+    *camera_global = parent
+        .and_then(|parent| globals.get(parent.parent()).ok())
+        .map(|parent| parent.mul_transform(*camera_transform))
+        .unwrap_or_else(|| GlobalTransform::from(*camera_transform));
 }
 
 fn viewport_geometry(level: Vec2, player: Vec2) -> (Vec2, Vec2) {

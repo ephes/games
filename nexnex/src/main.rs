@@ -49,7 +49,12 @@ fn main() {
         .add_plugins(player::PlayerPlugin)
         .add_plugins(enemy::EnemyPlugin)
         .add_systems(Update, inventory::dbg_print_inventory)
-        .add_systems(Update, camera::camera_fit_inside_current_level)
+        .add_systems(
+            PostUpdate,
+            camera::camera_fit_inside_current_level
+                .after(game_flow::update_level_selection)
+                .after(bevy::transform::TransformSystems::Propagate),
+        )
         .add_plugins(misc_objects::MiscObjectsPlugin)
         .run();
 }
