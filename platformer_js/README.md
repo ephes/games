@@ -263,6 +263,15 @@ omitted speed defaults to 2. Boss shots use the active level's camera bounds,
 with a 200 px horizontal and 100 px vertical off-world margin. Recreating a level
 replaces its boss and projectile collection.
 
+Boss shots also sweep relative to the player's pre-step position, resolving
+contact before off-world culling. Each shot is consumed once, even during
+protection. Stomps require the first relative contact to cross the enemy top
+downward; falling side entry causes damage. The boss head center is evaluated
+at that contact (central 40%, inside its top 20%). Fast top crossings therefore
+still bounce above the target without awarding a second defeat. Direct
+collision callers without snapshots infer vertical motion from velocity and
+retain the boss penetration limit; Game supplies both actual pre-step positions.
+
 Bosses expose `kind: 'boss'` for collision rules, so production minification
 preserves the central 40% head zone and top 20% stomp restriction.
 

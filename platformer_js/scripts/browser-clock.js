@@ -88,6 +88,48 @@ try {
       }
       results.push({ hz, positions, renders });
     }
+    const { Enemy } = await import('/src/entities/Enemy.js');
+    const game = new Game('clock');
+    game.createLevel();
+    game.platforms = [];
+    game.coins = [];
+    game.enemies = [];
+    game.boss.x = 2000;
+    game.boss.canShoot = false;
+    game.player.x = 100;
+    game.player.y = 100;
+    game.player.gravity = 0;
+    const shot = new BossProjectile(0, 110, 1, 2000, game.camera.bounds);
+    game.boss.projectiles = [shot];
+    game.update(16);
+    if (game.lives !== 2 || shot.active || game.boss.projectiles.length) {
+      throw Error('boss shot tunneled or survived culling');
+    }
+    const retired = game.player;
+    game.resetLevel();
+    if (
+      !retired.disposed ||
+      retired.hitTimeout !== null ||
+      retired.invulnerabilityTimeout !== null
+    ) {
+      throw Error('retired timers retained');
+    }
+    game.platforms = [];
+    game.coins = [];
+    game.boss.x = 2000;
+    game.boss.canShoot = false;
+    game.player.x = 100;
+    game.player.y = 0;
+    game.player.gravity = 0;
+    game.player.velocityY = 180;
+    const enemy = new Enemy({ x: 105, y: 100, speed: 0 });
+    game.enemies = [enemy];
+    game.update(16);
+    game.update(16);
+    if (game.score !== 50 || enemy.alive || game.lives !== 2) {
+      throw Error('top crossing did not award exactly one stomp');
+    }
+    game.dispose();
     return results;
   });
   assert.deepEqual(errors, []);
@@ -95,7 +137,9 @@ try {
     assert.deepEqual(positions, [350, -9085, 2120, 1180]);
     assert.equal(renders, hz + 1);
   }
-  process.stdout.write('Chromium clock smoke passed at 30, 60 and 144 Hz.\n');
+  process.stdout.write(
+    'Chromium clock smoke passed at 30, 60 and 144 Hz; relative contact and timer retirement passed.\n'
+  );
 } finally {
   await browser?.close();
   await server.close();

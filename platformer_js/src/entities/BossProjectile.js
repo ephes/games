@@ -30,10 +30,12 @@ export class BossProjectile {
     this.frameCount = 4;
   }
 
-  update(_deltaTime) {
+  update(_deltaTime, deferCulling = false) {
     if (!this.active) {
       return;
     }
+
+    this.previousPosition = { x: this.x, y: this.y };
 
     // Update position
     this.x += this.velocityX;
@@ -46,6 +48,13 @@ export class BossProjectile {
       this.currentFrame = (this.currentFrame + 1) % this.frameCount;
     }
 
+    if (!deferCulling) {
+      this.cull();
+    }
+  }
+
+  /** Retire shots only after the owner has resolved swept contacts. */
+  cull() {
     // Finite off-world margins, independent of viewport/camera position.
     if (
       this.x < this.bounds.minX - 200 ||

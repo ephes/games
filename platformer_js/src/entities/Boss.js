@@ -57,8 +57,9 @@ export class Boss extends Enemy {
    * @param {Array} platforms - List of platforms
    * @param {number} deltaTime - Time since last update
    * @param {Object} player - Player object for AI targeting
+   * @param {boolean} [deferProjectileCulling=false] - Let Game resolve contacts first
    */
-  update(platforms, deltaTime, player) {
+  update(platforms, deltaTime, player, deferProjectileCulling = false) {
     if (!this.alive) {
       return;
     }
@@ -138,7 +139,7 @@ export class Boss extends Enemy {
     // Update projectiles (only if boss is alive)
     if (this.alive) {
       this.projectiles = this.projectiles.filter(projectile => {
-        projectile.update(deltaTime);
+        projectile.update(deltaTime, deferProjectileCulling);
         return projectile.active;
       });
     }
