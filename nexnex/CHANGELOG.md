@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Retire owned ground sensors when Collider or GroundDetection disappears,
+  including removal/reinsertion within one frame; clear surviving grounded state
+  and ignore queued contacts for retired sensors.
+- Admit wall grid work (at most 1,000,000 cells) and checked pixel coordinates
+  before replacing live geometry; use widened center/extent arithmetic and
+  retain the last valid collisions on refusal.
+- Use per-row hashed plate membership for linear average merge work, retaining
+  ordered rectangle assembly and exact tile coverage.
+
 - Keep mobs stationary when authored patrol data is missing, wrongly typed or
   contains null points; valid sibling entities continue loading.
 - Preserve patrol travel beyond waypoints, including multiple corners and full

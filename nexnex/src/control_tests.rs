@@ -33,13 +33,11 @@ fn removed_contacts_clear_ground_climbing_and_gravity() {
                 GravityScale(1.),
             ))
             .id();
-        let sensor = app
-            .world_mut()
-            .spawn(GroundSensor {
-                ground_detection_entity: player,
-                intersecting_ground_entities: HashSet::new(),
-            })
-            .id();
+        app.world_mut()
+            .entity_mut(player)
+            .insert(Collider::cuboid(6., 14.));
+        app.update();
+        let sensor = assert_sensor(&mut app, player, Vec2::new(3., 2.), -14.);
         let ground = app.world_mut().spawn(Collider::cuboid(8., 8.)).id();
         let ladder = app.world_mut().spawn(Climbable).id();
         app.world_mut().write_message(CollisionEvent::Started(
@@ -112,13 +110,11 @@ fn landing_allows_jump_in_the_observation_update() {
                 GravityScale(1.),
             ))
             .id();
-        let sensor = app
-            .world_mut()
-            .spawn(GroundSensor {
-                ground_detection_entity: player,
-                intersecting_ground_entities: HashSet::new(),
-            })
-            .id();
+        app.world_mut()
+            .entity_mut(player)
+            .insert(Collider::cuboid(6., 14.));
+        app.update();
+        let sensor = assert_sensor(&mut app, player, Vec2::new(3., 2.), -14.);
         let ground = app.world_mut().spawn(Collider::cuboid(8., 8.)).id();
         app.world_mut().write_message(CollisionEvent::Started(
             sensor,
@@ -220,6 +216,116 @@ fn up_away_from_ladders_only_jumps_from_ground() {
                 }
             );
         }
+    }
+}
+
+#[test]
+fn removed_ground_components_retire_sensors_and_queued_contacts() {
+    for (remove_collider, immediate_reinsert) in [(true, false), (false, false), (false, true)] {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            TransformPlugin,
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
+            ground_detection::GroundDetectionPlugin,
+            player::PlayerPlugin,
+        ))
+        .init_resource::<ButtonInput<KeyCode>>()
+        .insert_resource(TimestepMode::Fixed {
+            dt: 1. / 60.,
+            substeps: 1,
+        });
+        let player = app
+            .world_mut()
+            .spawn((
+                Player,
+                Climber::default(),
+                GroundDetection::default(),
+                GravityScale(0.),
+                Velocity::zero(),
+                RigidBody::KinematicVelocityBased,
+                Collider::cuboid(6., 14.),
+                Transform::from_xyz(0., 20., 0.),
+            ))
+            .id();
+        let floor = app
+            .world_mut()
+            .spawn((
+                RigidBody::Fixed,
+                ActiveCollisionTypes::all(),
+                Collider::cuboid(20., 2.),
+                Transform::from_xyz(0., 4., 0.),
+            ))
+            .id();
+        for _ in 0..6 {
+            app.update();
+        }
+        assert!(
+            app.world()
+                .get::<GroundDetection>(player)
+                .unwrap()
+                .on_ground
+        );
+        let old = assert_sensor(&mut app, player, Vec2::new(3., 2.), -14.);
+        if remove_collider {
+            app.world_mut().entity_mut(player).remove::<Collider>();
+        } else {
+            app.world_mut()
+                .entity_mut(player)
+                .remove::<GroundDetection>();
+            if immediate_reinsert {
+                app.world_mut()
+                    .entity_mut(player)
+                    .insert(GroundDetection::default());
+            }
+        }
+        app.world_mut().write_message(CollisionEvent::Started(
+            old,
+            floor,
+            CollisionEventFlags::empty(),
+        ));
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Space);
+        app.update();
+        assert!(app.world().get_entity(old).is_err());
+        if !immediate_reinsert {
+            assert_eq!(
+                app.world_mut()
+                    .query::<&GroundSensor>()
+                    .iter(app.world())
+                    .count(),
+                0
+            );
+            if !remove_collider {
+                app.world_mut()
+                    .entity_mut(player)
+                    .insert(GroundDetection::default());
+            }
+            app.world_mut().write_message(CollisionEvent::Started(
+                old,
+                floor,
+                CollisionEventFlags::empty(),
+            ));
+            app.update();
+        }
+        if !remove_collider {
+            let new = assert_sensor(&mut app, player, Vec2::new(3., 2.), -14.);
+            assert_ne!(old, new);
+            assert!(app
+                .world()
+                .get::<GroundSensor>(new)
+                .unwrap()
+                .intersecting_ground_entities
+                .is_empty());
+        }
+        assert!(
+            !app.world()
+                .get::<GroundDetection>(player)
+                .unwrap()
+                .on_ground
+        );
+        assert_eq!(app.world().get::<Velocity>(player).unwrap().linvel.y, 0.);
     }
 }
 
