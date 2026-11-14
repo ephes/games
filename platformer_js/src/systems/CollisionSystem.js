@@ -77,48 +77,58 @@ export class CollisionSystem {
    * Check enemy collision with player
    * @param {Object} player - Player object
    * @param {Object} enemy - Enemy object
+   * @param {Object} [previousPlayer] - Captured player position before movement
+   * @param {Object} [previousEnemy] - Captured enemy position before movement
    * @returns {string|null} Collision type: 'stomp', 'damage', or null
    */
-  static checkEnemyCollision(player, enemy) {
+  static checkEnemyCollision(
+    player,
+    enemy,
+    previousPlayer,
+    previousEnemy = enemy
+  ) {
     if (!enemy.alive || player.isInvulnerable) {
       return null;
     }
-
-    if (this.checkCollision(player, enemy)) {
-      const playerBottom = player.y + player.height;
-      const enemyTop = enemy.y;
-      const playerFalling = player.velocityY > 0;
-
-      // Check if player is stomping on enemy
-      if (
-        playerFalling &&
-        playerBottom >= enemyTop &&
-        playerBottom - enemyTop <= player.velocityY + 10
-      ) {
-        // For boss enemies, only allow stomp on head area (top 20%)
-        if (enemy.kind === 'boss') {
-          const playerCenterX = player.x + player.width / 2;
-          const enemyCenterX = enemy.x + enemy.width / 2;
-          const headZoneWidth = enemy.width * 0.4; // Only central 40% counts as head
-
-          // Check if player is hitting the head area
-          if (Math.abs(playerCenterX - enemyCenterX) > headZoneWidth / 2) {
-            return 'damage'; // Hit the side, not the head
-          }
-
-          // Check if hitting top part of boss
-          if (playerBottom - enemyTop > enemy.height * 0.2) {
-            return 'damage'; // Too low, not on head
-          }
-        }
-
-        return 'stomp';
-      }
-
+    const captured = previousPlayer !== undefined;
+    previousPlayer ??= {
+      x: player.x,
+      y: player.y - Math.max(0, player.velocityY)
+    };
+    const time = this.sweptContactTime(
+      player,
+      enemy,
+      previousPlayer,
+      previousEnemy
+    );
+    if (time === null) {
+      return null;
+    }
+    const gap = previousEnemy.y - (previousPlayer.y + player.height);
+    const downward = player.y - previousPlayer.y - (enemy.y - previousEnemy.y);
+    // Only a top crossing at the first relative contact is a stomp. Starting
+    // inside or entering through a side while falling remains damage.
+    if (gap < 0 || downward <= 0 || Math.abs(time - gap / downward) > 1e-7) {
       return 'damage';
     }
-
-    return null;
+    if (enemy.kind === 'boss') {
+      if (
+        !captured &&
+        player.y + player.height - enemy.y > enemy.height * 0.2
+      ) {
+        return 'damage';
+      }
+      const playerX = previousPlayer.x + (player.x - previousPlayer.x) * time;
+      const enemyX = previousEnemy.x + (enemy.x - previousEnemy.x) * time;
+      if (
+        Math.abs(playerX + player.width / 2 - enemyX - enemy.width / 2) >
+        enemy.width * 0.2
+      ) {
+        return 'damage';
+      }
+      // First top contact has zero penetration, inside the top 20% head zone.
+    }
+    return 'stomp';
   }
 
   /**
@@ -158,6 +168,74 @@ export class CollisionSystem {
     return entry < exit && exit > 0 && entry <= 1 ? Math.max(0, entry) : null;
   }
 
+  /** Build one balanced swept-bounds tree for all player shots in a step. */
+  static buildProjectileIndex(enemies, boss, previousTargets = new Map()) {
+    const entries = [...enemies, ...(boss ? [boss] : [])]
+      .map((target, order) => {
+        const previous = previousTargets.get(target) ?? target;
+        return {
+          target,
+          order,
+          type: order < enemies.length ? 'enemy' : 'boss',
+          minX: Math.min(previous.x, target.x),
+          maxX: Math.max(previous.x, target.x) + target.width,
+          minY: Math.min(previous.y, target.y),
+          maxY: Math.max(previous.y, target.y) + target.height
+        };
+      })
+      .filter(entry => entry.target.alive)
+      .sort((a, b) => a.minX - b.minX || a.order - b.order);
+    const build = (start, end) => {
+      if (start >= end) {
+        return null;
+      }
+      if (end - start === 1) {
+        return { ...entries[start], leaf: true };
+      }
+      const mid = (start + end) >>> 1;
+      const left = build(start, mid),
+        right = build(mid, end);
+      return {
+        left,
+        right,
+        minX: Math.min(left.minX, right.minX),
+        maxX: Math.max(left.maxX, right.maxX),
+        minY: Math.min(left.minY, right.minY),
+        maxY: Math.max(left.maxY, right.maxY)
+      };
+    };
+    return build(0, entries.length);
+  }
+
+  /** Query conservative swept bounds; exact contact remains authoritative. */
+  static queryProjectileIndex(index, shot, previous) {
+    const minX = Math.min(shot.x, previous.x);
+    const maxX = Math.max(shot.x, previous.x) + shot.width;
+    const minY = Math.min(shot.y, previous.y);
+    const maxY = Math.max(shot.y, previous.y) + shot.height;
+    const candidates = [];
+    const visit = node => {
+      if (
+        !node ||
+        node.minX > maxX ||
+        node.maxX < minX ||
+        node.minY > maxY ||
+        node.maxY < minY
+      ) {
+        return;
+      }
+      if (node.leaf) {
+        candidates.push(node);
+      } else {
+        visit(node.left);
+        visit(node.right);
+      }
+    };
+    visit(index);
+    // Preserve level order for identical rectangles, and enemy-before-boss ties.
+    return candidates.sort((a, b) => a.order - b.order);
+  }
+
   /**
    * Find the first live target crossed, including relative target movement.
    * Equal-time hits use x/y/size order, then enemy before boss; identical enemy
@@ -167,6 +245,7 @@ export class CollisionSystem {
    * @param {Object} [boss] - Boss enemy
    * @param {Object} [previousProjectile] - Projectile position before this step
    * @param {Map} [previousTargets] - Target positions before this step
+   * @param {Array} [candidates] - Optional broad-phase query in level order
    * @returns {Object|null} Hit target or null
    */
   static checkProjectileCollisions(
@@ -174,14 +253,15 @@ export class CollisionSystem {
     enemies,
     boss = null,
     previousProjectile = projectile,
-    previousTargets = new Map()
+    previousTargets = new Map(),
+    candidates = null
   ) {
     let hit = null;
     let earliest = Infinity;
-    const targets = enemies.map(target => ({ type: 'enemy', target }));
-    if (boss) {
-      targets.push({ type: 'boss', target: boss });
-    }
+    const targets = candidates ?? [
+      ...enemies.map(target => ({ type: 'enemy', target })),
+      ...(boss ? [{ type: 'boss', target: boss }] : [])
+    ];
     for (const candidate of targets) {
       const { target } = candidate;
       if (!target.alive) {
@@ -209,7 +289,7 @@ export class CollisionSystem {
       }
       if (time < earliest || before) {
         earliest = time;
-        hit = candidate;
+        hit = { type: candidate.type, target };
       }
     }
     return hit;

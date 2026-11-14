@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Sweep boss shots relative to player motion before culling, consuming each shot
+  once and retaining protection/death behavior.
+- Restart the boss-shot sweep at the respawn point after a hit, so later shots
+  in the same frame are not consumed along the respawn teleport.
+- Classify stomps at the first relative top crossing, including moving targets
+  and fast motion; reject falling side entry and preserve the boss head zone.
+
+- Cancel retired player damage timers on successful replacement, win/death and
+  disposal, while retaining timers when replacement fails.
+- Share a swept-bounds broad phase across player shots, pruning distant targets
+  before exact contact tests without changing hit order.
+
 - Publish sprite batches atomically, retaining the previous complete cache after
   failure or supersession while preserving direct per-key request ownership.
 - Bound image loading to 10 seconds by default, support optional cancellation,

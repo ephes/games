@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Restore the pre-climb gravity scale when Climber is removed or climbing ends;
+  preserve unrelated gravity overrides and retire ownership on despawn/readdition.
+- Refuse overflowing or malformed restart geometry before resetting any player
+  state or scheduling level respawn, with one warning per restart attempt.
+
 - Retire owned ground sensors when Collider or GroundDetection disappears,
   including removal/reinsertion within one frame; clear surviving grounded state
   and ignore queued contacts for retired sensors.

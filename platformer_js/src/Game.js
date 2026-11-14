@@ -124,6 +124,7 @@ export class Game {
 
     const boss = new Boss(levelData.boss, bounds);
 
+    this.player?.dispose();
     this.player = player;
     this.platforms = platforms;
     this.coins = coins;
@@ -143,6 +144,7 @@ export class Game {
       // All levels completed!
       this.currentLevel = nextLevel;
       this.gameWon = true;
+      this.player.dispose();
       // Clear objects when game is won
       this.platforms = [];
       this.coins = [];
@@ -253,7 +255,8 @@ export class Game {
 
     // Update player
     const keys = this.inputManager.getKeys();
-    const previousY = this.player.y;
+    let previousPlayer = { x: this.player.x, y: this.player.y };
+    const previousY = previousPlayer.y;
     this.player.update(keys, deltaTime);
 
     // Keep player in bounds
@@ -295,29 +298,47 @@ export class Game {
 
     // Update enemies
     this.enemies.forEach(enemy => enemy.update(this.platforms, deltaTime));
-    this.boss.update(this.platforms, deltaTime, this.player);
+    this.boss.update(this.platforms, deltaTime, this.player, true);
 
     // Get boss projectiles and check collisions
     const bossProjectiles = this.boss.getProjectiles();
     for (const projectile of bossProjectiles) {
       if (
         projectile.active &&
-        CollisionSystem.checkCollision(this.player, projectile)
+        CollisionSystem.sweptContactTime(
+          projectile,
+          this.player,
+          projectile.previousPosition ?? projectile,
+          previousPlayer
+        ) !== null
       ) {
         projectile.active = false;
+        const livesBefore = this.lives;
         this.lives = this.player.takeDamage(this.lives);
         if (this.lives <= 0) {
           this.gameOver = true;
+          this.player.dispose();
           return;
+        }
+        if (this.lives < livesBefore) {
+          // A respawn is a teleport, not a path later shots may sweep.
+          previousPlayer = { x: this.player.x, y: this.player.y };
         }
       }
     }
+
+    for (const projectile of bossProjectiles) {
+      projectile.cull();
+    }
+    this.boss.projectiles = bossProjectiles.filter(
+      projectile => projectile.active
+    );
 
     // Update projectiles
     this.updateProjectiles(deltaTime, previousTargets);
 
     // Check collisions
-    this.checkCollisions();
+    this.checkCollisions(previousPlayer, previousTargets);
   }
 
   /**
@@ -326,6 +347,14 @@ export class Game {
    * @param {Map} [previousTargets] - Target positions before this step
    */
   updateProjectiles(deltaTime, previousTargets = new Map()) {
+    if (this.projectiles.length === 0) {
+      return;
+    }
+    const index = CollisionSystem.buildProjectileIndex(
+      this.enemies,
+      this.boss,
+      previousTargets
+    );
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const projectile = this.projectiles[i];
       const previousProjectile = { x: projectile.x, y: projectile.y };
@@ -337,7 +366,12 @@ export class Game {
         this.enemies,
         this.boss,
         previousProjectile,
-        previousTargets
+        previousTargets,
+        CollisionSystem.queryProjectileIndex(
+          index,
+          projectile,
+          previousProjectile
+        )
       );
 
       if (hit) {
@@ -364,7 +398,7 @@ export class Game {
   /**
    * Check all collisions
    */
-  checkCollisions() {
+  checkCollisions(previousPlayer, previousTargets = new Map()) {
     if (this.gameOver || this.gameWon) {
       return;
     }
@@ -389,16 +423,24 @@ export class Game {
 
     // Enemy collisions
     for (const enemy of this.enemies) {
-      const collision = CollisionSystem.checkEnemyCollision(this.player, enemy);
+      const collision = CollisionSystem.checkEnemyCollision(
+        this.player,
+        enemy,
+        previousPlayer,
+        previousTargets.get(enemy)
+      );
       if (collision === 'stomp') {
         if (enemy.hit()) {
+          this.player.y = enemy.y - this.player.height;
           this.player.bounce();
+          previousPlayer = { x: this.player.x, y: this.player.y };
           this.score += 50;
         }
       } else if (collision === 'damage') {
         this.lives = this.player.takeDamage(this.lives);
         if (this.lives <= 0) {
           this.gameOver = true;
+          this.player.dispose();
           return;
         }
       }
@@ -407,10 +449,13 @@ export class Game {
     // Boss collision
     const bossCollision = CollisionSystem.checkEnemyCollision(
       this.player,
-      this.boss
+      this.boss,
+      previousPlayer,
+      previousTargets.get(this.boss)
     );
     if (bossCollision === 'stomp') {
       const points = this.boss.takeDamage();
+      this.player.y = this.boss.y - this.player.height;
       this.player.bounce();
       this.score += points;
 
@@ -422,6 +467,7 @@ export class Game {
       this.lives = this.player.takeDamage(this.lives);
       if (this.lives <= 0) {
         this.gameOver = true;
+        this.player.dispose();
         return;
       }
     }
@@ -538,6 +584,7 @@ export class Game {
     this.spriteController.abort();
     cancelAnimationFrame(this.animationFrameId);
     this.inputManager.dispose();
+    this.player?.dispose();
   }
 
   /**
