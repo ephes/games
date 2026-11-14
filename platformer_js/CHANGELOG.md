@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Cancel retired player damage timers on successful replacement, win/death and
+  disposal, while retaining timers when replacement fails.
+- Share a swept-bounds broad phase across player shots, pruning distant targets
+  before exact contact tests without changing hit order.
+
 - Publish sprite batches atomically, retaining the previous complete cache after
   failure or supersession while preserving direct per-key request ownership.
 - Bound image loading to 10 seconds by default, support optional cancellation,

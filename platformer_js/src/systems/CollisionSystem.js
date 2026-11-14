@@ -158,6 +158,68 @@ export class CollisionSystem {
     return entry < exit && exit > 0 && entry <= 1 ? Math.max(0, entry) : null;
   }
 
+  /** Build one balanced swept-bounds tree for all player shots in a step. */
+  static buildProjectileIndex(enemies, boss, previousTargets = new Map()) {
+    const entries = [...enemies, ...(boss ? [boss] : [])]
+      .map((target, order) => {
+        const previous = previousTargets.get(target) ?? target;
+        return {
+          target,
+          order,
+          type: order < enemies.length ? 'enemy' : 'boss',
+          minX: Math.min(previous.x, target.x),
+          maxX: Math.max(previous.x, target.x) + target.width,
+          minY: Math.min(previous.y, target.y),
+          maxY: Math.max(previous.y, target.y) + target.height
+        };
+      })
+      .filter(entry => entry.target.alive)
+      .sort((a, b) => a.minX - b.minX || a.order - b.order);
+    const build = (start, end) => {
+      if (start >= end) return null;
+      if (end - start === 1) return { ...entries[start], leaf: true };
+      const mid = (start + end) >>> 1;
+      const left = build(start, mid),
+        right = build(mid, end);
+      return {
+        left,
+        right,
+        minX: Math.min(left.minX, right.minX),
+        maxX: Math.max(left.maxX, right.maxX),
+        minY: Math.min(left.minY, right.minY),
+        maxY: Math.max(left.maxY, right.maxY)
+      };
+    };
+    return build(0, entries.length);
+  }
+
+  /** Query conservative swept bounds; exact contact remains authoritative. */
+  static queryProjectileIndex(index, shot, previous) {
+    const minX = Math.min(shot.x, previous.x);
+    const maxX = Math.max(shot.x, previous.x) + shot.width;
+    const minY = Math.min(shot.y, previous.y);
+    const maxY = Math.max(shot.y, previous.y) + shot.height;
+    const candidates = [];
+    const visit = node => {
+      if (
+        !node ||
+        node.minX > maxX ||
+        node.maxX < minX ||
+        node.minY > maxY ||
+        node.maxY < minY
+      )
+        return;
+      if (node.leaf) candidates.push(node);
+      else {
+        visit(node.left);
+        visit(node.right);
+      }
+    };
+    visit(index);
+    // Preserve level order for identical rectangles, and enemy-before-boss ties.
+    return candidates.sort((a, b) => a.order - b.order);
+  }
+
   /**
    * Find the first live target crossed, including relative target movement.
    * Equal-time hits use x/y/size order, then enemy before boss; identical enemy
@@ -174,14 +236,15 @@ export class CollisionSystem {
     enemies,
     boss = null,
     previousProjectile = projectile,
-    previousTargets = new Map()
+    previousTargets = new Map(),
+    candidates = null
   ) {
     let hit = null;
     let earliest = Infinity;
-    const targets = enemies.map(target => ({ type: 'enemy', target }));
-    if (boss) {
-      targets.push({ type: 'boss', target: boss });
-    }
+    const targets = candidates ?? [
+      ...enemies.map(target => ({ type: 'enemy', target })),
+      ...(boss ? [{ type: 'boss', target: boss }] : [])
+    ];
     for (const candidate of targets) {
       const { target } = candidate;
       if (!target.alive) {
@@ -209,7 +272,7 @@ export class CollisionSystem {
       }
       if (time < earliest || before) {
         earliest = time;
-        hit = candidate;
+        hit = { type: candidate.type, target };
       }
     }
     return hit;
