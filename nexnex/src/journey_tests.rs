@@ -1014,3 +1014,131 @@ fn malformed_authored_patrols_are_stationary_and_do_not_block_siblings() {
         }
     }
 }
+
+#[test]
+fn restart_refuses_overflowing_unloaded_geometry_without_partial_reset() {
+    for case in 0..6 {
+        let mut json = synthetic_project();
+        match case {
+            0 => json.levels[0].world_y = i32::MAX,
+            1 => {
+                json.levels[0].world_y = i32::MIN;
+                json.levels[0].px_hei = 0;
+            }
+            2 => json.levels[0].px_hei = -1,
+            3 => json.defs.entities[0].width = 0,
+            4 => {
+                json.levels[0].layer_instances.as_mut().unwrap()[0].entity_instances[0]
+                    .px
+                    .y = i32::MIN
+            }
+            5 => json.levels[0].px_wid = 0,
+            _ => unreachable!(),
+        }
+        let (mut app, project) = testing::project_data_app(json);
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .insert_resource(LdtkSettings {
+                level_spawn_behavior: LevelSpawnBehavior::UseWorldTranslation {
+                    load_level_neighbors: false,
+                },
+                ..default()
+            })
+            .insert_resource(LevelSelection::Uid(2))
+            .add_systems(Update, game_flow::restart_level);
+        app.world_mut().spawn(LdtkProjectHandle::from(project));
+        let other = app
+            .world_mut()
+            .spawn((
+                LevelIid::new("neighbor-without-spawn"),
+                GlobalTransform::default(),
+            ))
+            .id();
+        let pose = Transform::from_xyz(12., 34., 56.);
+        let velocity = Velocity::linear(Vec2::new(5., 6.));
+        let player = app
+            .world_mut()
+            .spawn((
+                Player,
+                pose,
+                velocity,
+                Climber {
+                    climbing: true,
+                    ..default()
+                },
+                GroundDetection { on_ground: true },
+                GravityScale(0.),
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyR);
+        app.update();
+        assert_eq!(*app.world().get::<Transform>(player).unwrap(), pose);
+        assert_eq!(*app.world().get::<Velocity>(player).unwrap(), velocity);
+        assert!(app.world().get::<Climber>(player).unwrap().climbing);
+        assert!(
+            app.world()
+                .get::<GroundDetection>(player)
+                .unwrap()
+                .on_ground
+        );
+        assert_eq!(app.world().get::<GravityScale>(player).unwrap().0, 0.);
+        assert_eq!(
+            *app.world().resource::<LevelSelection>(),
+            LevelSelection::Uid(2)
+        );
+        assert!(app.world().get::<Respawn>(other).is_none());
+    }
+}
+
+#[test]
+fn unloaded_restart_accepts_checked_extremes_and_parent_transforms() {
+    for world_y in [i32::MIN + 128, 200, i32::MAX - 128] {
+        let mut json = synthetic_project();
+        json.levels[0].world_y = world_y;
+        json.levels[0].world_x = 100;
+        let (mut app, project) = testing::project_data_app(json);
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .insert_resource(LdtkSettings {
+                level_spawn_behavior: LevelSpawnBehavior::UseWorldTranslation {
+                    load_level_neighbors: false,
+                },
+                ..default()
+            })
+            .insert_resource(LevelSelection::Uid(2))
+            .add_systems(Update, game_flow::restart_level);
+        let world_pose = Transform::from_xyz(10., 20., 0.).with_scale(Vec3::splat(2.));
+        app.world_mut().spawn((
+            LdtkProjectHandle::from(project),
+            GlobalTransform::from(world_pose),
+        ));
+        let parent = app
+            .world_mut()
+            .spawn(GlobalTransform::from(Transform::from_xyz(5., 6., 0.)))
+            .id();
+        let player = app
+            .world_mut()
+            .spawn((
+                Player,
+                ChildOf(parent),
+                Transform::default(),
+                Velocity::zero(),
+                Climber::default(),
+                GroundDetection::default(),
+                GravityScale(1.),
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyR);
+        app.update();
+        let position = app.world().get::<Transform>(player).unwrap().translation;
+        let expected_y = 20. + 2. * (-(world_y + 128) as f32 + 96.) - 6.;
+        assert_eq!(position.truncate(), Vec2::new(253., expected_y));
+        assert!(position.is_finite());
+        assert_eq!(
+            *app.world().resource::<LevelSelection>(),
+            LevelSelection::iid("synthetic-level")
+        );
+    }
+}
