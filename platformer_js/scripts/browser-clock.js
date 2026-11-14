@@ -22,7 +22,6 @@ try {
   await page.goto(`${server.resolvedUrls.local[0]}__clock.html`);
   const results = await page.evaluate(async () => {
     const { Game } = await import('/src/Game.js');
-    const { Renderer } = await import('/src/rendering/Renderer.js');
     const { BossProjectile } = await import('/src/entities/BossProjectile.js');
     let frames, id;
     window.requestAnimationFrame = callback => {
@@ -32,7 +31,8 @@ try {
     window.cancelAnimationFrame = key => frames.delete(key);
     performance.now = () => 0;
     Date.now = () => 0;
-    return [30, 60, 144].map(hz => {
+    const results = [];
+    for (const hz of [30, 60, 144]) {
       frames = new Map();
       id = 0;
       const game = new Game('clock');
@@ -47,8 +47,12 @@ try {
           portal: { x: 9500, y: 200 }
         }
       ];
-      game.createLevel();
-      game.renderer = new Renderer(game.canvas, game.spriteLoader);
+      game.spriteLoader.loadAll = async () => {};
+      game.start();
+      if (game.disposed || game.running || frames.size) {
+        throw Error('early start changed game ownership');
+      }
+      await game.init();
       game.inputManager.keys.ArrowRight = true;
       game.boss.canShoot = false;
       game.boss.projectiles.push(
@@ -82,8 +86,9 @@ try {
       if (frames.size) {
         throw Error('disposed chain restarted');
       }
-      return { hz, positions, renders };
-    });
+      results.push({ hz, positions, renders });
+    }
+    return results;
   });
   assert.deepEqual(errors, []);
   for (const { hz, positions, renders } of results) {

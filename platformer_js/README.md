@@ -216,7 +216,10 @@ Live level resets/replacements preserve power-up and cooldown behavior.
 Switching windows or hiding the tab clears held movement and shooting keys.
 Press again after returning. Call `game.dispose()` before replacing a game to
 cancel its animation and remove input listeners; standalone input managers have
-`dispose()` too. Starting twice keeps one animation chain. Disposal is terminal:
+`dispose()` too. Call `await game.init()` before `game.start()`. Starts before or during
+initialization are ignored without disposing the game or requesting an animation
+frame; call `start()` again once initialization succeeds. Starting twice keeps
+one animation chain. Disposal is terminal:
 create a fresh Game to restart. Concurrent and later `init()` calls share one initialization and register controls
 once. Failed initialization disposes input; every later `init()` call rejects
 with the same startup error. Create a fresh Game to retry. Disposal during sprite

@@ -508,10 +508,10 @@ export class Game {
   }
 
   /**
-   * Start the game
+   * Start the initialized game; early calls are ignored. Await init() first.
    */
   start() {
-    if (this.running || this.disposed) {
+    if (!this.initialized || this.running || this.disposed) {
       return;
     }
     this.running = true;

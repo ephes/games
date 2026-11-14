@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Ignore starts before/during initialization without retiring the game or
+  accessing an unconstructed world. Start explicitly after successful init;
+  retain one animation chain and terminal initialization failures/disposal.
+
 - Sweep player shots against moving targets and select the earliest contact
   across enemies and the boss, retaining one hit/reward and resolving contact
   before off-screen culling. Break distinct equal-time hits by geometry.
@@ -72,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Publish only the latest replacement/append LDtk import from its own candidate
   world; obsolete completions and failures cannot change the active level.
 - Run bounded fixed 60 Hz simulation steps independently of display refresh rate,
-  discarding suspension time while retaining wall-clock cooldowns.
+  discarding suspension time while retaining elapsed-time cooldowns.
 
 - Reject malformed LDtk IntGrid dimensions, unsafe pixel extents, grids over
   1,000,000 cells and cell arrays that do not match the declared dimensions
