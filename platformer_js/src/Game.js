@@ -282,6 +282,14 @@ export class Game {
     // Update camera
     this.camera.follow(this.player);
 
+    // Snapshot target positions before movement for relative projectile sweeps.
+    const previousTargets = new Map(
+      [...this.enemies, this.boss].map(target => [
+        target,
+        { x: target.x, y: target.y }
+      ])
+    );
+
     // Update enemies
     this.enemies.forEach(enemy => enemy.update(this.platforms, deltaTime));
     this.boss.update(this.platforms, deltaTime, this.player);
@@ -303,7 +311,7 @@ export class Game {
     }
 
     // Update projectiles
-    this.updateProjectiles(deltaTime);
+    this.updateProjectiles(deltaTime, previousTargets);
 
     // Check collisions
     this.checkCollisions();
@@ -312,23 +320,21 @@ export class Game {
   /**
    * Update projectiles
    * @param {number} deltaTime - Time since last update
+   * @param {Map} [previousTargets] - Target positions before this step
    */
-  updateProjectiles(deltaTime) {
+  updateProjectiles(deltaTime, previousTargets = new Map()) {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const projectile = this.projectiles[i];
+      const previousProjectile = { x: projectile.x, y: projectile.y };
       projectile.update(deltaTime);
 
-      // Remove if out of bounds
-      if (projectile.isOutOfBounds(this.camera.x, this.canvas.width)) {
-        this.projectiles.splice(i, 1);
-        continue;
-      }
-
-      // Check collisions
+      // Resolve contacts before culling shots that cross the viewport margin.
       const hit = CollisionSystem.checkProjectileCollisions(
         projectile,
         this.enemies,
-        this.boss
+        this.boss,
+        previousProjectile,
+        previousTargets
       );
 
       if (hit) {
@@ -345,6 +351,8 @@ export class Game {
             this.portal.unlock();
           }
         }
+        this.projectiles.splice(i, 1);
+      } else if (projectile.isOutOfBounds(this.camera.x, this.canvas.width)) {
         this.projectiles.splice(i, 1);
       }
     }

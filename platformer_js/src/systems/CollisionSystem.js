@@ -122,26 +122,97 @@ export class CollisionSystem {
   }
 
   /**
-   * Check projectile collisions
-   * @param {Object} projectile - Projectile to check
+   * Earliest overlap time for linearly moving rectangles in one step.
+   * Stationary touching edges and tangential grazing do not count as overlap.
+   * @param {Object} projectile - Current projectile rectangle
+   * @param {Object} target - Current target rectangle
+   * @param {Object} previousProjectile - Previous projectile position
+   * @param {Object} previousTarget - Previous target position
+   * @returns {number|null} Contact fraction in [0, 1], or null
+   */
+  static sweptContactTime(
+    projectile,
+    target,
+    previousProjectile,
+    previousTarget
+  ) {
+    let entry = -Infinity;
+    let exit = Infinity;
+    for (const [axis, size] of [
+      ['x', 'width'],
+      ['y', 'height']
+    ]) {
+      const start = previousProjectile[axis] - previousTarget[axis];
+      const motion = projectile[axis] - target[axis] - start;
+      if (motion === 0) {
+        if (start >= target[size] || start + projectile[size] <= 0) {
+          return null;
+        }
+        continue;
+      }
+      const first = (-projectile[size] - start) / motion;
+      const last = (target[size] - start) / motion;
+      entry = Math.max(entry, Math.min(first, last));
+      exit = Math.min(exit, Math.max(first, last));
+    }
+    return entry < exit && exit > 0 && entry <= 1 ? Math.max(0, entry) : null;
+  }
+
+  /**
+   * Find the first live target crossed, including relative target movement.
+   * Equal-time hits use x/y/size order, then enemy before boss; identical enemy
+   * rectangles retain level order. Omitting previous positions checks overlaps.
+   * @param {Object} projectile - Current projectile rectangle
    * @param {Array} enemies - List of enemies
-   * @param {Object} boss - Boss enemy (optional)
+   * @param {Object} [boss] - Boss enemy
+   * @param {Object} [previousProjectile] - Projectile position before this step
+   * @param {Map} [previousTargets] - Target positions before this step
    * @returns {Object|null} Hit target or null
    */
-  static checkProjectileCollisions(projectile, enemies, boss = null) {
-    // Check enemy collisions
-    for (const enemy of enemies) {
-      if (enemy.alive && this.checkCollision(projectile, enemy)) {
-        return { type: 'enemy', target: enemy };
+  static checkProjectileCollisions(
+    projectile,
+    enemies,
+    boss = null,
+    previousProjectile = projectile,
+    previousTargets = new Map()
+  ) {
+    let hit = null;
+    let earliest = Infinity;
+    const targets = enemies.map(target => ({ type: 'enemy', target }));
+    if (boss) {
+      targets.push({ type: 'boss', target: boss });
+    }
+    for (const candidate of targets) {
+      const { target } = candidate;
+      if (!target.alive) {
+        continue;
+      }
+      const time = this.sweptContactTime(
+        projectile,
+        target,
+        previousProjectile,
+        previousTargets.get(target) ?? target
+      );
+      if (time === null) {
+        continue;
+      }
+      // Geometric tie breaking keeps distinct simultaneous contacts independent
+      // of enemy array order. Exact duplicate rectangles retain level order.
+      let before = false;
+      if (hit && time === earliest) {
+        for (const key of ['x', 'y', 'width', 'height']) {
+          if (target[key] !== hit.target[key]) {
+            before = target[key] < hit.target[key];
+            break;
+          }
+        }
+      }
+      if (time < earliest || before) {
+        earliest = time;
+        hit = candidate;
       }
     }
-
-    // Check boss collision
-    if (boss && boss.alive && this.checkCollision(projectile, boss)) {
-      return { type: 'boss', target: boss };
-    }
-
-    return null;
+    return hit;
   }
 
   /**

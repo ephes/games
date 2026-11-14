@@ -98,7 +98,12 @@ thresholds, independent of the simulation delta.
 Player Projectile tests cover a fixed 10 px step in either direction and
 inclusive viewport margins: x at `cameraX - 100` or
 `cameraX + screenWidth + 100` remains in bounds; only points beyond retire.
-These player-shot limits differ from boss shots' world bounds. Drawing subtracts
+These player-shot limits differ from boss shots' world bounds.
+Player shots sweep their whole step against enemies and the boss, accounting for
+both projectile and target movement. The earliest live contact takes one hit;
+contacts are resolved before off-screen culling. Equal-time contacts use target
+x/y/width/height order, then enemy before boss; identical enemy rectangles keep
+level order. Stationary edge touches and tangential grazing do not hit. Drawing subtracts
 cameraX once without moving world coordinates. Camera tests use translated
 bounds and a recording canvas to check follow/clamp, touching-edge visibility,
 coordinate conversion, transforms and reset, without changing camera policy.

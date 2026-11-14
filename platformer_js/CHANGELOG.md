@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Sweep player shots against moving targets and select the earliest contact
+  across enemies and the boss, retaining one hit/reward and resolving contact
+  before off-screen culling. Break distinct equal-time hits by geometry.
+
 - Use monotonic time for player and boss shot cooldowns, preserving immediate
   first shots and player cooldowns through level reloads despite clock changes.
 
