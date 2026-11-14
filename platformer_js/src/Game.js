@@ -43,6 +43,7 @@ export class Game {
     // Systems
     this.inputManager = new InputManager();
     this.spriteLoader = new SpriteLoader();
+    this.spriteController = new AbortController();
     this.camera = new Camera(this.canvas.width, this.canvas.height);
     this.renderer = null; // Created after sprites load
     this.ldtkLoader = new LDtkLoader();
@@ -78,7 +79,9 @@ export class Game {
     }
     this.initPromise = (async () => {
       try {
-        await this.spriteLoader.loadAll();
+        await this.spriteLoader.loadAll({
+          signal: this.spriteController.signal
+        });
         if (this.disposed) {
           return;
         }
@@ -532,6 +535,7 @@ export class Game {
     this.loopGeneration++;
     this.importGeneration++;
     this.ldtkLoader.cancelLoad();
+    this.spriteController.abort();
     cancelAnimationFrame(this.animationFrameId);
     this.inputManager.dispose();
   }

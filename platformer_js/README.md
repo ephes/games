@@ -85,12 +85,21 @@ collision frames. All fixtures are synthetic and need no network assets. Loader 
 real LDtk world/level conversion, entity field lookup and IntGrid collision mesh
 merging against synthetic records, mocking only streamed `fetch` responses. Sprite loader
 tests use explicitly triggered Image load/error events to check cache identity,
-out-of-order completion and failed startup without network requests or timers.
+out-of-order completion, fake deadlines and failed startup without network requests.
 SpriteLoader batches can be retried after failure. Each batch starts incomplete;
-only the newest complete batch sets `loaded`. Each sprite key belongs to its
-latest request: retired completions cannot replace the cache, and failed
+only the newest complete batch publishes its images together and sets `loaded`.
+Failed or superseded batches retain the complete previous cache, including when
+retired images finish late. Direct `loadSprite` requests retain per-key ownership;
+a direct request superseding one batch key prevents that entire batch publishing.
+Each sprite key belongs to its latest request: retired completions cannot replace the cache, and failed
 replacements retain the last valid image. Game initialization remains terminal
 on failure as described below; retry the loader directly or create a fresh Game.
+`loadSprite(name, path, { signal, timeoutMs })` and `loadAll({ signal, timeoutMs })`
+accept an optional AbortSignal and a positive finite per-image deadline (default
+10 seconds, maximum 2,147,483,647 ms). Error, timeout, abort and success release
+callbacks, timers and signal listeners. Failed batches abort their remaining
+images; a new batch aborts its predecessor. Game disposal aborts initialization
+images; startup failure remains terminal for that Game.
 Direct Enemy tests control `Date.now()`: running frames 0–9 advance only after
 more than 1/15 second; a hit resets to frame 0 and cycles frames 0–4 after
 more than 50 ms per frame during the 300 ms hit window. These are wall-clock
