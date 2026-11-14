@@ -26,10 +26,16 @@ pub fn retire_ground_sensors(
     sensors: Query<(Entity, &GroundSensor)>,
     mut detectors: Query<&mut GroundDetection>,
 ) {
-    let removed: HashSet<_> = removed_colliders
-        .read()
-        .chain(removed_detectors.read())
-        .collect();
+    let mut removed: HashSet<_> = removed_colliders.read().collect();
+    for owner in &removed {
+        // Rapier only detects missing Collider components at backend sync. If
+        // removal and reinsertion happen before it, explicitly retire the old
+        // handle so the replacement and its fresh sensor share a new lifetime.
+        if let Ok(mut entity) = commands.get_entity(*owner) {
+            entity.remove::<RapierColliderHandle>();
+        }
+    }
+    removed.extend(removed_detectors.read());
     for owner in &removed {
         if let Ok(mut detector) = detectors.get_mut(*owner) {
             detector.on_ground = false;

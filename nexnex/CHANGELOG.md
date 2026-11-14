@@ -6,7 +6,11 @@
   preserve unrelated gravity overrides and retire ownership on despawn/readdition.
 - Refuse overflowing or malformed restart geometry before resetting any player
   state or scheduling level respawn, with one warning per restart attempt.
-
+- Fix collider/foot-sensor reinsertion: retire removed Collider handles even
+  within one frame, and backport Parry's partial-root BVH cleanup to prevent
+  `key not present` after removing and restoring the pair. A deterministic
+  three-collider regression verifies repeated cycles, backend ownership,
+  stale-contact rejection and renewed grounding.
 - Retire owned ground sensors when Collider or GroundDetection disappears,
   including removal/reinsertion within one frame; clear surviving grounded state
   and ignore queued contacts for retired sensors.
