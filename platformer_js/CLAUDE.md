@@ -167,7 +167,10 @@ and does not queue an automatic start. `dispose()` is terminal and releases inpu
 failure disposes the partial game while retaining the original error. Deferred
 initialization and imports cannot publish after disposal. Replacement and append
 LDtk requests publish only the latest requested candidate; conversion never reads
-another in-flight request's world. Suspension gaps over 250 ms reset simulation
+another in-flight request's world. Replacement/append share a 20,000-platform
+world budget; append checks the complete retained table. Successful terminal
+reset/replacement restores initial lives and clears terminal flags only after
+construction succeeds, preserving score and shooting/cooldown state. Suspension gaps over 250 ms reset simulation
 timing, with at most five catch-up steps otherwise. Player and boss shot cooldowns use `performance.now()` independently of wall-clock
 changes. Player cooldowns survive level reloads; the first shot is immediately
 available. Timed visual effects retain wall-clock semantics.

@@ -9,7 +9,8 @@ export const WORLD_LIMITS = Object.freeze({
   cells: 2_000_000,
   entities: 20_000,
   activeEntities: 1024,
-  activePlatforms: 4096
+  activePlatforms: 4096,
+  platforms: 20_000
 });
 
 /**
@@ -436,7 +437,14 @@ export class LDtkLoader {
 
     const data = world.data ?? world;
     this.preflightWorld(data);
-    return data.levels.map(ldtkLevel => this.convertLevel(ldtkLevel));
+    const levels = data.levels.map(ldtkLevel => this.convertLevel(ldtkLevel));
+    if (
+      levels.reduce((count, level) => count + level.platforms.length, 0) >
+      WORLD_LIMITS.platforms
+    ) {
+      throw new Error('LDtk world platform budget exceeded');
+    }
+    return levels;
   }
 
   /**

@@ -643,7 +643,7 @@ export class Game {
         this.levels = ldtkLevels;
         this.totalLevels = ldtkLevels.length;
         this.currentLevel = index;
-        this.projectiles = [];
+        this.restorePlayableLevel();
         this.camera.reset();
 
         console.log(`Loaded ${ldtkLevels.length} levels from LDtk`);
@@ -658,17 +658,17 @@ export class Game {
   /**
    * Add LDtk levels to existing levels
    * @param {string} url - URL to LDtk file
-   * @returns {Promise<void>}
+   * @returns {Promise<boolean>} True on append; false leaves play unchanged
    */
   async addLDtkLevels(url) {
     if (this.disposed) {
-      return;
+      return false;
     }
     const generation = ++this.importGeneration;
     try {
       const world = await this.ldtkLoader.loadWorld(url, { publish: false });
       if (this.disposed || generation !== this.importGeneration) {
-        return;
+        return false;
       }
       const ldtkLevels = this.ldtkLoader.getAllLevels(world);
       this.validateLDtkLevels(ldtkLevels);
@@ -687,26 +687,49 @@ export class Game {
         ) {
           throw new Error('LDtk world entity budget exceeded');
         }
+        if (
+          combined.reduce((count, level) => count + level.platforms.length, 0) >
+          WORLD_LIMITS.platforms
+        ) {
+          throw new Error('LDtk world platform budget exceeded');
+        }
         this.ldtkLoader.world = world;
         this.levels = combined;
         this.totalLevels = this.levels.length;
 
         console.log(`Added ${ldtkLevels.length} levels from LDtk`);
+        return true;
       }
     } catch (error) {
       console.error('Failed to add LDtk levels:', error);
     }
+    return false;
   }
 
   /**
    * Reset current level
    */
   resetLevel() {
-    // Recreate level
-    this.createLevel();
-    this.projectiles = [];
-
-    // Reset camera
+    if (this.disposed) {
+      return false;
+    }
+    const index = this.gameWon ? 0 : this.currentLevel;
+    this.createLevel(this.levels[index]);
+    this.currentLevel = index;
+    this.restorePlayableLevel();
     this.camera.reset();
+    return true;
+  }
+
+  /** Publish recovery only after a new level's objects have been constructed. */
+  restorePlayableLevel() {
+    if (this.gameOver || this.gameWon) {
+      this.lives = GAME_CONFIG.INITIAL_LIVES;
+    }
+    this.gameOver = false;
+    this.gameWon = false;
+    this.projectiles = [];
+    this.inputManager.reset();
+    this.accumulator = 0;
   }
 }

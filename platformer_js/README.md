@@ -224,6 +224,13 @@ Shooting requires successful initialization and a playable game. Both direct
 `game.shoot()` calls and input actions ignore win, death, disposal and pending or
 failed initialization without allocating projectiles or consuming cooldown.
 Live level resets/replacements preserve power-up and cooldown behavior.
+A successful reset or replacement after win/death restores initial lives and a
+playable player, preserving score, shooting ability and cooldown. Reset after
+winning restarts level zero; after death it retries the current level. Failed
+construction retains terminal state and objects; a disposed Game cannot reset.
+Successful resets/replacements clear both sides' projectiles, held input and
+retired player timers. `resetLevel()` returns true on reset, false after disposal;
+construction errors still propagate.
 
 Click or Tab to the canvas to give that game keyboard focus. Only the focused
 canvas responds; moving focus away releases held keys. Handled, unmodified keys
@@ -315,7 +322,10 @@ IntGrid cells and 20,000 total entities across all layers. A level may contain a
 most 1,024 source entities and 4,096 horizontal collision runs/platforms, bounding
 active collision/render scans. These limits include unknown entities/layers in
 source totals. Append also caps the combined table at 64 levels and 20,000
-recognized entities. Over-budget imports report the exceeded budget and retain
+recognized entities. Both replacement and append also cap total converted
+platform geometry at 20,000 platforms, including the existing table on append.
+`addLDtkLevels(url)` returns true on publication and false on refusal, empty input,
+supersession or disposal. Over-budget imports report the exceeded budget and retain
 the current playable world.
 
 Replacement and append imports validate every candidate level, including future

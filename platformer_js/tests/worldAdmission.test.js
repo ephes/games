@@ -234,6 +234,18 @@ describe('Whole-world geometry budgets', () => {
     data.levels[1].layerInstances[0] = layer(Array(1_000_000 - 62).fill(1));
     expect(loader.getAllLevels(data)).toHaveLength(WORLD_LIMITS.levels);
   });
+  it('rejects aggregate converted platform geometry across levels', () => {
+    const loader = new LDtkLoader();
+    const data = { levels: Array.from({ length: 5 }, level) };
+    for (const item of data.levels) {
+      item.layerInstances[0] = layer(
+        Array.from({ length: 8191 }, (_, i) => (i % 2 ? 0 : 1))
+      );
+    }
+    expect(() => loader.getAllLevels(data)).toThrow(
+      'LDtk world platform budget'
+    );
+  });
   it('rejects a checkerboard over the active platform limit before merging', () => {
     const loader = new LDtkLoader();
     const source = level();

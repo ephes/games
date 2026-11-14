@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Bound retained converted world geometry to 20,000 platforms across repeated
+  appends, retaining the old table/objects on refusal and returning a boolean.
+- Restore playable state and initial lives after terminal reset/replacement;
+  clear stale shots/input/timers, preserve score and power-ups, and retain the
+  previous terminal state on failure. Refuse reset after disposal.
+
 - Ignore editable, composing and already prevented keyboard events, releasing held
   gameplay keys on focus changes. Scope Game input to its keyboard/pointer-focused
   canvas and prevent native defaults only for handled, unmodified gameplay keys.
