@@ -2,7 +2,7 @@ use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::colliders::SensorBundle;
 
@@ -59,13 +59,33 @@ pub fn detect_climb_range(
 }
 
 pub fn ignore_gravity_if_climbing(
-    mut query: Query<(&Climber, &mut GravityScale), Changed<Climber>>,
+    mut removed: RemovedComponents<Climber>,
+    changed: Query<Entity, Changed<Climber>>,
+    mut bodies: Query<(&mut GravityScale, Option<&Climber>)>,
+    mut owned_gravity: Local<HashMap<Entity, f32>>,
 ) {
-    for (climber, mut gravity_scale) in &mut query {
+    // Retire ownership first, including removal and readdition in one update.
+    // A different nonzero gravity value belongs to another feature.
+    for entity in removed.read() {
+        if let Some(previous) = owned_gravity.remove(&entity) {
+            if let Ok((mut gravity, _)) = bodies.get_mut(entity) {
+                if gravity.0 == 0. {
+                    gravity.0 = previous;
+                }
+            }
+        }
+    }
+    for entity in &changed {
+        let Ok((mut gravity, Some(climber))) = bodies.get_mut(entity) else {
+            continue;
+        };
         if climber.climbing {
-            gravity_scale.0 = 0.0;
-        } else {
-            gravity_scale.0 = 1.0;
+            owned_gravity.entry(entity).or_insert(gravity.0);
+            gravity.0 = 0.;
+        } else if let Some(previous) = owned_gravity.remove(&entity) {
+            if gravity.0 == 0. {
+                gravity.0 = previous;
+            }
         }
     }
 }

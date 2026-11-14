@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Restore the pre-climb gravity scale when Climber is removed or climbing ends;
+  preserve unrelated gravity overrides and retire ownership on despawn/readdition.
+- Refuse overflowing or malformed restart geometry before resetting any player
+  state or scheduling level respawn, with one warning per restart attempt.
+
 - Keep mobs stationary when authored patrol data is missing, wrongly typed or
   contains null points; valid sibling entities continue loading.
 - Preserve patrol travel beyond waypoints, including multiple corners and full

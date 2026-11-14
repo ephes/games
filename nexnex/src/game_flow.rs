@@ -149,7 +149,31 @@ pub fn restart_level(
     };
     let definitions =
         bevy_ecs_ldtk::utils::create_entity_definition_map(&project.json_data().defs.entities);
-    if !definitions.contains_key(&spawn.def_uid) {
+    let Some(definition) = definitions.get(&spawn.def_uid) else {
+        return;
+    };
+    let definition_size = definition
+        .tile_rect
+        .as_ref()
+        .map(|tile| (tile.w, tile.h))
+        .unwrap_or((definition.width, definition.height));
+    // Validate integer operations performed by LDtk's public conversion helper,
+    // as well as our unloaded-level fallback, before mutating any live state.
+    let bottom = level
+        .world_y
+        .checked_add(level.px_hei)
+        .and_then(i32::checked_neg);
+    if level.px_wid <= 0
+        || level.px_hei <= 0
+        || bottom.is_none()
+        || level.px_hei.checked_sub(spawn.px.y).is_none()
+        || spawn.width <= 0
+        || spawn.height <= 0
+        || definition_size.0 <= 0
+        || definition_size.1 <= 0
+        || !spawn.pivot.is_finite()
+    {
+        warn!("Restart refused invalid Player spawn geometry");
         return;
     }
     let spawn_transform = bevy_ecs_ldtk::utils::calculate_transform_from_entity_instance(
@@ -163,11 +187,9 @@ pub fn restart_level(
         .map(|(_, _, transform)| *transform)
         .unwrap_or_else(|| {
             let offset = match settings.level_spawn_behavior {
-                LevelSpawnBehavior::UseWorldTranslation { .. } => Vec3::new(
-                    level.world_x as f32,
-                    -(level.world_y + level.px_hei) as f32,
-                    0.,
-                ),
+                LevelSpawnBehavior::UseWorldTranslation { .. } => {
+                    Vec3::new(level.world_x as f32, bottom.unwrap() as f32, 0.)
+                }
                 _ => Vec3::ZERO,
             };
             world_transform
@@ -179,7 +201,7 @@ pub fn restart_level(
         spawn_transform.translation
             + Vec3::new(
                 layer.px_total_offset_x as f32,
-                -layer.px_total_offset_y as f32,
+                -(layer.px_total_offset_y as f32),
                 0.,
             ),
     );
@@ -199,7 +221,8 @@ pub fn restart_level(
     } else {
         position
     };
-    if !position.is_finite() {
+    if !position.is_finite() || !spawn_transform.is_finite() {
+        warn!("Restart refused invalid Player spawn transform");
         return;
     }
     transform.translation.x = position.x;

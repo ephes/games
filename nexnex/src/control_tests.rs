@@ -406,3 +406,79 @@ fn assert_sensor(app: &mut App, player: Entity, half_extents: Vec2, y: f32) -> E
     assert_eq!(transform.translation, Vec3::new(0., y, 0.));
     entity
 }
+
+#[test]
+fn removing_climber_restores_owned_gravity_before_rapier_step() {
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        TransformPlugin,
+        RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
+        climbing::ClimbingPlugin,
+    ))
+    .insert_resource(TimestepMode::Fixed {
+        dt: 1. / 60.,
+        substeps: 1,
+    });
+    let body = app
+        .world_mut()
+        .spawn((
+            Climber {
+                climbing: true,
+                ..default()
+            },
+            GravityScale(2.5),
+            RigidBody::Dynamic,
+            Collider::cuboid(6., 14.),
+            Velocity::zero(),
+            Transform::default(),
+        ))
+        .id();
+    app.update();
+    assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.);
+    app.world_mut().entity_mut(body).remove::<Climber>();
+    app.update();
+    assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 2.5);
+    assert!(app.world().get::<Velocity>(body).unwrap().linvel.y < 0.);
+
+    // Re-add and leave normally; preserve the pre-climb nondefault setting.
+    app.world_mut().entity_mut(body).insert(Climber {
+        climbing: true,
+        ..default()
+    });
+    app.update();
+    app.world_mut().get_mut::<Climber>(body).unwrap().climbing = false;
+    app.update();
+    assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 2.5);
+    // An unrelated gravity override while climbing belongs to its own author.
+    app.world_mut().get_mut::<Climber>(body).unwrap().climbing = true;
+    app.update();
+    app.world_mut().get_mut::<GravityScale>(body).unwrap().0 = 0.75;
+    app.world_mut().entity_mut(body).remove::<Climber>();
+    app.update();
+    assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.75);
+    app.world_mut().entity_mut(body).insert(Climber {
+        climbing: true,
+        ..default()
+    });
+    app.update();
+    // Removal plus readdition before the next system run starts fresh ownership.
+    app.world_mut().entity_mut(body).remove::<Climber>();
+    app.world_mut().entity_mut(body).insert(Climber {
+        climbing: true,
+        ..default()
+    });
+    app.update();
+    assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.);
+    app.world_mut().entity_mut(body).remove::<Climber>();
+    app.update();
+    assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.75);
+    app.world_mut().entity_mut(body).insert(Climber {
+        climbing: true,
+        ..default()
+    });
+    app.update();
+    app.world_mut().despawn(body);
+    app.update();
+    assert!(app.world().get_entity(body).is_err());
+}

@@ -14,7 +14,11 @@ R restarts loaded levels.
 Collision observations run before grounded state, player movement, and climbing
 gravity, in that order, at the existing Update cadence. Physics messages produced
 in Rapier's PostUpdate are consumed on the next Update. Removed ground/ladder
-contacts are pruned even when no stopped message arrives.
+contacts are pruned even when no stopped message arrives. Climbing owns the
+zero-gravity override only while active: leaving a ladder or removing `Climber`
+restores the pre-climb gravity scale before Rapier runs. A different nonzero
+gravity override is retained; removal/readdition starts fresh ownership, and
+despawn never recreates an entity.
 
 Missing, wrongly typed or null-containing Mob `patrol` arrays produce one
 authoring warning and a stationary route at the spawn, without partially
@@ -68,7 +72,13 @@ spawn, restart uses the first level with a unique Player spawn in project order
 LDtk's Worldly identity prevents a second player during level respawn. Restart
 supports exactly one authored Player per project, as in the shipped game;
 missing project data or missing/ambiguous spawn evidence leaves restart
-unavailable until valid data returns.
+unavailable until valid data returns. Restart preflights positive level/entity/
+definition dimensions, checked signed 32-bit coordinate conversion and the full
+finite spawn transform (including scale and parent conversion). Invalid geometry
+emits one authoring warning per restart attempt and leaves the player's pose,
+physics, contacts, selection and level respawn markers unchanged. Coordinates
+that would overflow LDtk conversion or the unloaded-level world offset are
+refused equally in debug and release builds.
 
 Missing or inconsistent project handles/assets temporarily leave level selection,
 camera, and live collision geometry unchanged. When a loaded replacement project
