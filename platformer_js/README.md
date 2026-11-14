@@ -232,7 +232,10 @@ one animation chain. Disposal is terminal:
 create a fresh Game to restart. Concurrent and later `init()` calls share one initialization and register controls
 once. Failed initialization disposes input; every later `init()` call rejects
 with the same startup error. Create a fresh Game to retry. Disposal during sprite
-loading prevents later activation. Update/render failures also dispose the game
+loading prevents later activation: while image requests are still pending it
+aborts them and `init()` rejects with an `AbortError` (callers that dispose on
+purpose can ignore that error); after the sprites have loaded, `init()` resolves
+without activating the game. Update/render failures also dispose the game
 and rethrow the original error: synchronous startup errors reach the caller of
 `start()`, and scheduled-frame errors reach the browser error surface.
 
