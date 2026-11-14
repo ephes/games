@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Publish sprite batches atomically, retaining the previous complete cache after
+  failure or supersession while preserving direct per-key request ownership.
+- Bound image loading to 10 seconds by default, support optional cancellation,
+  and release callbacks/timers on every outcome. Abort sibling images on batch
+  failure/supersession and pending startup images on Game disposal.
+
 - Ignore starts before/during initialization without retiring the game or
   accessing an unconstructed world. Start explicitly after successful init;
   retain one animation chain and terminal initialization failures/disposal.

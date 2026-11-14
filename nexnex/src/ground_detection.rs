@@ -16,6 +16,36 @@ pub struct GroundDetection {
     pub on_ground: bool,
 }
 
+/// Retire sensor identities before consuming queued physics messages, including
+/// removal followed by reinsertion in the same frame.
+pub fn retire_ground_sensors(
+    mut commands: Commands,
+    mut removed_colliders: RemovedComponents<Collider>,
+    mut removed_detectors: RemovedComponents<GroundDetection>,
+    owners: Query<Entity, (With<Collider>, With<GroundDetection>)>,
+    sensors: Query<(Entity, &GroundSensor)>,
+    mut detectors: Query<&mut GroundDetection>,
+) {
+    let removed: HashSet<_> = removed_colliders
+        .read()
+        .chain(removed_detectors.read())
+        .collect();
+    for owner in &removed {
+        if let Ok(mut detector) = detectors.get_mut(*owner) {
+            detector.on_ground = false;
+        }
+    }
+    for (entity, sensor) in &sensors {
+        let owner = sensor.ground_detection_entity;
+        if removed.contains(&owner) || !owners.contains(owner) {
+            commands.entity(entity).despawn();
+            if let Ok(mut detector) = detectors.get_mut(owner) {
+                detector.on_ground = false;
+            }
+        }
+    }
+}
+
 #[allow(clippy::type_complexity)]
 pub fn spawn_ground_sensor(
     mut commands: Commands,
@@ -138,9 +168,60 @@ impl Plugin for GroundDetectionPlugin {
         )
         .add_systems(
             Update,
-            spawn_ground_sensor.before(crate::ControlSet::Observe),
+            (retire_ground_sensors, spawn_ground_sensor)
+                .chain()
+                .before(crate::ControlSet::Observe),
         )
         .add_systems(Update, ground_detection.in_set(crate::ControlSet::Observe))
         .add_systems(Update, update_on_ground.in_set(crate::ControlSet::Grounded));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy_rapier2d::rapier::geometry::CollisionEventFlags;
+
+    #[test]
+    fn collider_removed_and_reinserted_before_update_retires_contact_identity() {
+        let mut app = App::new();
+        app.add_message::<CollisionEvent>()
+            .add_plugins(GroundDetectionPlugin);
+        let owner = app
+            .world_mut()
+            .spawn((Collider::cuboid(6., 14.), GroundDetection::default()))
+            .id();
+        let floor = app.world_mut().spawn(Collider::cuboid(20., 2.)).id();
+        app.update();
+        let old = app
+            .world_mut()
+            .query_filtered::<Entity, With<GroundSensor>>()
+            .single(app.world())
+            .unwrap();
+        app.world_mut().write_message(CollisionEvent::Started(
+            old,
+            floor,
+            CollisionEventFlags::empty(),
+        ));
+        app.update();
+        assert!(app.world().get::<GroundDetection>(owner).unwrap().on_ground);
+        app.world_mut()
+            .entity_mut(owner)
+            .remove::<Collider>()
+            .insert(Collider::cuboid(6., 14.));
+        app.world_mut().write_message(CollisionEvent::Started(
+            old,
+            floor,
+            CollisionEventFlags::empty(),
+        ));
+        app.update();
+        assert!(app.world().get_entity(old).is_err());
+        assert!(!app.world().get::<GroundDetection>(owner).unwrap().on_ground);
+        let sensor = app
+            .world_mut()
+            .query::<&GroundSensor>()
+            .single(app.world())
+            .unwrap();
+        assert!(sensor.intersecting_ground_entities.is_empty());
     }
 }

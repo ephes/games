@@ -126,6 +126,27 @@ describe('Owned game lifecycle and simulation clock', () => {
     expect(game.inputManager.enabled).toBe(false);
     expect(game.player).toBeNull();
   });
+  it('aborts real pending images when disposed during initialization', async () => {
+    const images = [];
+    vi.stubGlobal(
+      'Image',
+      class {
+        constructor() {
+          images.push(this);
+        }
+      }
+    );
+    const result = game.init().catch(error => error);
+    game.dispose();
+    expect(await result).toMatchObject({ name: 'AbortError' });
+    expect(game.initialized).toBe(false);
+    expect(game.spriteLoader.requests.size).toBe(0);
+    images.forEach(image => {
+      expect(image.onload).toBeNull();
+      expect(image.onerror).toBeNull();
+    });
+  });
+
   it('does not resurrect a game disposed during sprite loading', async () => {
     const loading = deferred();
     vi.spyOn(game.spriteLoader, 'loadAll').mockReturnValue(loading.promise);

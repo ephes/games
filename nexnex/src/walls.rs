@@ -24,10 +24,36 @@ struct LayerWalls {
     cells: HashSet<GridCoords>,
 }
 
-#[derive(Clone, Eq, PartialEq, Debug, Default, Hash)]
+#[cfg(test)]
+thread_local! {
+    static PLATE_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static CELL_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[derive(Clone, Eq, Debug, Default)]
+#[cfg_attr(not(test), derive(PartialEq, Hash))]
 struct Plate {
     left: i32,
     right: i32,
+}
+
+// Instrument the actual identity operations in tests, including Vec scans and
+// hash-table lookups, without adding counters to production builds.
+#[cfg(test)]
+impl PartialEq for Plate {
+    fn eq(&self, other: &Self) -> bool {
+        PLATE_WORK.with(|count| count.set(count.get() + 1));
+        self.left == other.left && self.right == other.right
+    }
+}
+
+#[cfg(test)]
+impl std::hash::Hash for Plate {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        PLATE_WORK.with(|count| count.set(count.get() + 1));
+        std::hash::Hash::hash(&self.left, state);
+        std::hash::Hash::hash(&self.right, state);
+    }
 }
 
 struct Rect {
@@ -47,6 +73,8 @@ fn rectangles(level_walls: &HashSet<GridCoords>, width: i32, height: i32) -> Vec
 
         // + 1 to the width so the algorithm "terminates" plates that touch the right edge
         for x in 0..width + 1 {
+            #[cfg(test)]
+            CELL_PROBES.with(|count| count.set(count.get() + 1));
             match (plate_start, level_walls.contains(&GridCoords { x, y })) {
                 (Some(s), false) => {
                     row_plates.push(Plate {
@@ -72,8 +100,9 @@ fn rectangles(level_walls: &HashSet<GridCoords>, width: i32, height: i32) -> Vec
     plate_stack.push(Vec::new());
 
     for (y, current_row) in plate_stack.into_iter().enumerate() {
+        let current_plates: HashSet<_> = current_row.iter().collect();
         for prev_plate in &prev_row {
-            if !current_row.contains(prev_plate) {
+            if !current_plates.contains(prev_plate) {
                 // remove the finished rect so that the same plate in the future starts a new rect
                 if let Some(rect) = rect_builder.remove(prev_plate) {
                     wall_rects.push(rect);
@@ -95,6 +124,37 @@ fn rectangles(level_walls: &HashSet<GridCoords>, width: i32, height: i32) -> Vec
     }
 
     wall_rects
+}
+
+// Scanning a layer, including empty cells, must remain practical for live reload.
+const MAX_WALL_CELLS: i32 = 1_000_000;
+
+/// Admit the entire layer before any scan, offset negation or collider retirement.
+/// Pixel edges must fit i32; center/extent calculations below use widened math.
+fn admitted_grid(metadata: &LayerMetadata) -> bool {
+    let width = metadata.c_wid;
+    let height = metadata.c_hei;
+    let grid = metadata.grid_size;
+    if width <= 0 || height <= 0 || grid <= 0 {
+        return false;
+    }
+    let Some(cells) = width.checked_mul(height) else {
+        return false;
+    };
+    if cells > MAX_WALL_CELLS {
+        return false;
+    }
+    let Some(y) = metadata.px_total_offset_y.checked_neg() else {
+        return false;
+    };
+    width
+        .checked_mul(grid)
+        .and_then(|extent| metadata.px_total_offset_x.checked_add(extent))
+        .is_some()
+        && height
+            .checked_mul(grid)
+            .and_then(|extent| y.checked_add(extent))
+            .is_some()
 }
 
 /// Replace generated colliders from each affected layer's complete live grid.
@@ -138,14 +198,12 @@ fn spawn_wall_collision(
             continue;
         }
         if !levels.contains(parent.parent())
-            || metadata.c_wid <= 0
-            || metadata.c_hei <= 0
-            || metadata.grid_size <= 0
+            || !admitted_grid(&metadata)
             || cells.iter().any(|cell| {
                 cell.x < 0 || cell.x >= metadata.c_wid || cell.y < 0 || cell.y >= metadata.c_hei
             })
         {
-            warn!("Unsupported wall layer {entity:?}: invalid grid or level parent; retaining previous collisions");
+            warn!("Unsupported wall layer {entity:?}: invalid/over-budget grid, coordinates or level parent; retaining previous collisions");
             continue;
         }
         let snapshot = LayerWalls {
@@ -164,19 +222,23 @@ fn spawn_wall_collision(
                 commands.entity(collider).despawn();
             }
         }
-        let grid = snapshot.grid_size as f32;
+        let grid = i64::from(snapshot.grid_size);
         for rect in rectangles(&snapshot.cells, snapshot.width, snapshot.height) {
             commands.spawn((
                 WallCollision(entity),
                 Collider::cuboid(
-                    (rect.right - rect.left + 1) as f32 * grid / 2.,
-                    (rect.top - rect.bottom + 1) as f32 * grid / 2.,
+                    (i64::from(rect.right - rect.left + 1) * grid) as f32 / 2.,
+                    (i64::from(rect.top - rect.bottom + 1) * grid) as f32 / 2.,
                 ),
                 RigidBody::Fixed,
                 Friction::coefficient(1.0),
                 Transform::from_xyz(
-                    (rect.left + rect.right + 1) as f32 * grid / 2. + snapshot.offset.x as f32,
-                    (rect.bottom + rect.top + 1) as f32 * grid / 2. + snapshot.offset.y as f32,
+                    ((i64::from(rect.left) + i64::from(rect.right) + 1) * grid
+                        + 2 * i64::from(snapshot.offset.x)) as f32
+                        / 2.,
+                    ((i64::from(rect.bottom) + i64::from(rect.top) + 1) * grid
+                        + 2 * i64::from(snapshot.offset.y)) as f32
+                        / 2.,
                     0.,
                 ),
                 GlobalTransform::default(),
@@ -214,6 +276,50 @@ impl Plugin for WallPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rectangles_match_every_small_grid_without_overlap() {
+        for mask in 0..(1 << 9) {
+            let cells: HashSet<_> = (0..9)
+                .filter(|bit| mask & (1 << bit) != 0)
+                .map(|bit| GridCoords::new(bit % 3, bit / 3))
+                .collect();
+            let mut covered = HashSet::new();
+            for rect in rectangles(&cells, 3, 3) {
+                for y in rect.bottom..=rect.top {
+                    for x in rect.left..=rect.right {
+                        assert!(
+                            covered.insert(GridCoords::new(x, y)),
+                            "overlapping rectangles"
+                        );
+                    }
+                }
+            }
+            assert_eq!(covered, cells);
+        }
+        let vertical = HashSet::from([GridCoords::new(1, 0), GridCoords::new(1, 1)]);
+        let rects = rectangles(&vertical, 3, 2);
+        assert_eq!(rects.len(), 1);
+        assert_eq!(
+            (rects[0].left, rects[0].right, rects[0].bottom, rects[0].top),
+            (1, 1, 0, 1)
+        );
+    }
+
+    #[test]
+    fn alternating_rows_use_linear_plate_identity_work() {
+        for width in [128, 4096] {
+            let cells: HashSet<_> = (0..width).map(|x| GridCoords::new(x, x % 2)).collect();
+            PLATE_WORK.with(|count| count.set(0));
+            let rects = rectangles(&cells, width, 2);
+            assert_eq!(rects.len(), width as usize);
+            let work = PLATE_WORK.with(std::cell::Cell::get);
+            assert!(
+                work <= 32 * width as usize,
+                "{work} plate identity operations for {width} plates"
+            );
+        }
+    }
 
     fn setup(swapped: bool) -> (App, Entity, Entity) {
         let mut small = LayerInstance {
@@ -334,6 +440,116 @@ mod tests {
 #[cfg(test)]
 mod lifecycle_tests {
     use super::*;
+
+    #[test]
+    fn grid_admission_accepts_budget_and_checked_coordinate_boundaries() {
+        let metadata = |layer: LayerInstance| LayerMetadata::from(&layer);
+        assert!(admitted_grid(&metadata(LayerInstance {
+            c_wid: 1000,
+            c_hei: 1000,
+            grid_size: 1,
+            ..default()
+        })));
+        assert!(admitted_grid(&metadata(LayerInstance {
+            c_wid: 1,
+            c_hei: 1,
+            grid_size: i32::MAX,
+            px_total_offset_x: i32::MIN,
+            ..default()
+        })));
+        assert!(!admitted_grid(&metadata(LayerInstance {
+            c_wid: 1001,
+            c_hei: 1000,
+            grid_size: 1,
+            ..default()
+        })));
+    }
+
+    #[test]
+    fn excessive_work_and_coordinate_overflow_retain_last_good_colliders() {
+        let mut app = App::new();
+        app.add_systems(Update, spawn_wall_collision);
+        let level = app.world_mut().spawn(LevelIid::new("synthetic")).id();
+        let valid = LayerInstance {
+            c_wid: 2,
+            c_hei: 2,
+            grid_size: 8,
+            ..default()
+        };
+        let layer = app
+            .world_mut()
+            .spawn((LayerMetadata::from(&valid), ChildOf(level)))
+            .id();
+        app.world_mut()
+            .spawn((Wall, GridCoords::new(0, 0), ChildOf(layer)));
+        app.update();
+        let original = app
+            .world_mut()
+            .query_filtered::<Entity, With<WallCollision>>()
+            .single(app.world())
+            .unwrap();
+        let probes = CELL_PROBES.with(std::cell::Cell::get);
+        for invalid in [
+            LayerInstance {
+                c_wid: i32::MAX,
+                ..valid.clone()
+            },
+            LayerInstance {
+                c_hei: i32::MAX,
+                ..valid.clone()
+            },
+            LayerInstance {
+                c_wid: 1_000_001,
+                c_hei: 1,
+                ..valid.clone()
+            },
+            LayerInstance {
+                px_total_offset_y: i32::MIN,
+                ..valid.clone()
+            },
+            LayerInstance {
+                px_total_offset_x: i32::MAX - 1,
+                ..valid.clone()
+            },
+            LayerInstance {
+                grid_size: i32::MAX,
+                ..valid.clone()
+            },
+        ] {
+            app.world_mut()
+                .entity_mut(layer)
+                .insert(LayerMetadata::from(&invalid));
+            app.update();
+            assert_eq!(CELL_PROBES.with(std::cell::Cell::get), probes);
+            assert_eq!(
+                app.world_mut()
+                    .query_filtered::<Entity, With<WallCollision>>()
+                    .single(app.world())
+                    .unwrap(),
+                original
+            );
+            let transform = app.world().get::<Transform>(original).unwrap();
+            assert_eq!(transform.translation, Vec3::new(4., 4., 0.));
+            assert_eq!(
+                app.world()
+                    .get::<Collider>(original)
+                    .unwrap()
+                    .as_cuboid()
+                    .unwrap()
+                    .half_extents(),
+                Vec2::splat(4.)
+            );
+        }
+        // Rejected snapshots do not poison later valid rebuilding.
+        app.world_mut()
+            .entity_mut(layer)
+            .insert(LayerMetadata::from(&LayerInstance {
+                grid_size: 16,
+                ..valid
+            }));
+        app.update();
+        assert!(app.world().get_entity(original).is_err());
+    }
 
     #[test]
     fn invalid_metadata_retains_geometry_and_layer_removal_retires_it() {

@@ -60,6 +60,17 @@ corrected. Cells without source layer metadata are refused with a warning. Live
 layer metadata allows collision state to survive temporary project-asset
 unavailability.
 
+A wall layer admits at most 1,000,000 cells (`width * height`, including empty
+cells), positive grid dimensions/size, valid cell coordinates, and pixel extents
+and shifted edges representable as signed 32-bit integers. Negating the authored
+Y offset must also fit. Admission runs before scanning cells or retiring live
+colliders; refusal warns and retains the last good geometry until corrected.
+Centers and half-extents use widened integer arithmetic before float conversion.
+Per-row hashed plate membership keeps merge work linear in the number of plates
+on average while ordered row vectors preserve deterministic rectangle assembly.
+Tests count cell probes and plate identity/hash operations instead of elapsed
+time and check exact non-overlapping coverage for every 3 by 3 grid.
+
 R resets the surviving Worldly player to the selected level's authored Player
 spawn and respawns the loaded levels. Velocity, ground contacts, climb contacts,
 and climbing gravity are cleared. If the selected level has no unique Player
@@ -101,6 +112,18 @@ the sensor, warn and remain ungrounded until a cuboid returns. A headless Rapier
 fixture replaces the collider on an already grounded player, checks geometry,
 verifies jump refusal until new support overlaps, and exercises unsupported-shape
 replacement and recovery.
+Removing either Collider or GroundDetection retires every owned sensor before
+collision observation and movement and clears any surviving detector's grounded
+state. Re-adding creates a fresh sensor identity, including removal/reinsertion
+within one frame; queued contacts for retired sensors cannot enable a jump.
+The component lifecycle tests cover actual grounded Rapier players and queued
+retired contacts; an ECS test also covers same-frame Collider reinsertion.
+
+Known dependency limitation: in a minimal scene containing only the player's
+collider, its foot sensor and one floor, removing both player colliders, stepping,
+then restoring them can panic in Rapier 0.31/Parry 0.25's BVH insertion (`key not
+present`). This dependency-level reinsertion issue is separate from sensor
+ownership; this change does not upgrade or patch the physics engine.
 
 Local checks (headless tests use synthetic ECS entities, geometry and in-memory
 LDtk data, no window or GPU):
