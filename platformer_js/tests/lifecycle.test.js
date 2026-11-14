@@ -176,7 +176,10 @@ describe('Owned game lifecycle and simulation clock', () => {
     expect(game.inputManager.listeners.get('shoot:down')).toHaveLength(1);
     const shoot = vi.spyOn(game, 'shoot').mockImplementation(() => {});
     game.canShoot = true;
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+    game.canvas.focus();
+    game.canvas.dispatchEvent(
+      new KeyboardEvent('keydown', { key: ' ', bubbles: true })
+    );
     expect(shoot).toHaveBeenCalledTimes(1);
   });
   it('retains failed initialization for every caller without retrying', async () => {

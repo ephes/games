@@ -12,7 +12,7 @@ const level = width => ({
   coins: [],
   enemies: [],
   boss: { x: 100, y: 200, speed: 1, patrolStart: 100, patrolEnd: 200 },
-  portal: { x: width - 80, y: 200 }
+  portal: { x: width - 128, y: 200 }
 });
 
 describe('Current level camera bounds', () => {

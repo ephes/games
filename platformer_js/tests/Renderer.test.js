@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Renderer } from '../src/rendering/Renderer.js';
+import { Boss } from '../src/entities/Boss.js';
 
 // Record geometry and the canvas state at each draw, without browser pixels.
 function recordingContext() {
@@ -116,6 +117,17 @@ describe('Renderer sprite geometry', () => {
     expect(ctx.depth).toBe(0);
     expect(ctx.save).toHaveBeenCalledTimes(2);
     expect(ctx.restore).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops drawing a defeated real boss at once', () => {
+    const boss = new Boss({ x: 100, y: 80, speed: 0, platformIndex: 0 });
+    while (boss.alive) {
+      boss.takeDamage();
+    }
+    boss.update([{ x: 0, y: 176, width: 400, height: 20 }], 16);
+    renderer.drawBoss(boss);
+    expect(ctx.drawImage).not.toHaveBeenCalled();
+    expect(ctx.fillRect).not.toHaveBeenCalled();
   });
 
   it('does no drawing or canvas changes for missing sprites', () => {

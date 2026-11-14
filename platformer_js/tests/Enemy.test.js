@@ -1,53 +1,38 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Enemy } from '../src/entities/Enemy.js';
 
-describe('Real enemy animation clock', () => {
-  let enemy, now;
-  const platforms = [{ x: 0, width: 1000 }];
-  beforeEach(() => {
-    now = 1000;
-    vi.spyOn(Date, 'now').mockImplementation(() => now);
-    enemy = new Enemy({ x: 100, y: 0, speed: 0, platformIndex: 0 });
-    enemy.frameTimer = now;
-  });
-  afterEach(() => vi.restoreAllMocks());
-
-  it('advances only above 1/15 second and wraps all ten running frames', () => {
-    now += 66;
-    enemy.update(platforms, 9999);
+const platforms = [{ x: 0, width: 1000 }];
+const create = () => new Enemy({ x: 100, y: 0, speed: 0, platformIndex: 0 });
+describe('Real enemy simulation animation', () => {
+  it('accumulates 15 fps running frames and wraps all ten frames', () => {
+    const enemy = create();
+    enemy.update(platforms, 66);
     expect(enemy.frameX).toBe(0);
-    now += 1;
-    enemy.update(platforms, 0);
+    enemy.update(platforms, 1);
     expect(enemy.frameX).toBe(1);
-    const frames = [enemy.frameX];
-    for (let step = 0; step < 19; step++) {
-      now += 67;
-      enemy.update(platforms, 0);
+    const frames = [];
+    for (let n = 0; n < 19; n++) {
+      enemy.update(platforms, 1000 / 15);
       frames.push(enemy.frameX);
     }
     expect(frames).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0
+      2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0
     ]);
     expect(enemy.getAnimationState()).toBe('run');
   });
-
-  it('resets running frame nine and cycles five hit frames above 50 ms', () => {
-    for (let step = 0; step < 9; step++) {
-      now += 67;
-      enemy.update(platforms, 0);
-    }
+  it('resets frame and elapsed remainder on hit, then cycles five frames at 20 fps', () => {
+    const enemy = create();
+    enemy.update(platforms, 650);
     expect(enemy.frameX).toBe(9);
     enemy.hit();
-    expect(enemy.frameX).toBe(0);
+    expect([enemy.frameX, enemy.frameTimer]).toEqual([0, 0]);
     expect(enemy.getAnimationState()).toBe('hit');
     const frames = [];
-    for (let step = 0; step < 5; step++) {
+    for (let n = 0; n < 5; n++) {
       const previous = enemy.frameX;
-      now += 50;
-      enemy.update(platforms, 9999);
+      enemy.update(platforms, 49);
       expect(enemy.frameX).toBe(previous);
-      now += 1;
-      enemy.update(platforms, 0);
+      enemy.update(platforms, 1);
       frames.push(enemy.frameX);
     }
     expect(frames).toEqual([1, 2, 3, 4, 0]);

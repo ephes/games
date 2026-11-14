@@ -41,7 +41,12 @@ export class Game {
     this.totalLevels = this.levels.length;
 
     // Systems
-    this.inputManager = new InputManager();
+    if (!this.canvas.hasAttribute('tabindex')) {
+      this.canvas.tabIndex = 0;
+    }
+    this.onPointerDown = () => this.canvas.focus({ preventScroll: true });
+    this.canvas.addEventListener('pointerdown', this.onPointerDown);
+    this.inputManager = new InputManager(this.canvas);
     this.spriteLoader = new SpriteLoader();
     this.spriteController = new AbortController();
     this.camera = new Camera(this.canvas.width, this.canvas.height);
@@ -112,17 +117,28 @@ export class Game {
     const enemies = levelData.enemies.map(data => new Enemy(data));
     const portal = new Portal(levelData.portal.x, levelData.portal.y);
     portal.setSprite(this.spriteLoader.getSprite('portal'));
+    const boss = new Boss(levelData.boss);
     const bounds = {
       minX: 0,
-      maxX: levelData.platforms.reduce(
-        (right, platform) => Math.max(right, platform.x + platform.width),
-        this.canvas.width
-      ),
+      maxX: Math.max(this.canvas.width, levelData.width ?? 0),
       minY: 0,
-      maxY: this.canvas.height
+      maxY: Math.max(this.canvas.height, levelData.height ?? 0)
     };
-
-    const boss = new Boss(levelData.boss, bounds);
+    // Reduce each collection without spreading large collision meshes into a call.
+    for (const objects of [platforms, coins, enemies, [player, boss, portal]]) {
+      for (const object of objects) {
+        const right = object.x + object.width;
+        const bottom = object.y + object.height;
+        if (![object.x, object.y, right, bottom].every(Number.isFinite)) {
+          throw new Error('Invalid level object extent');
+        }
+        bounds.minX = Math.min(bounds.minX, object.x);
+        bounds.minY = Math.min(bounds.minY, object.y);
+        bounds.maxX = Math.max(bounds.maxX, right);
+        bounds.maxY = Math.max(bounds.maxY, bottom);
+      }
+    }
+    boss.bounds = bounds;
 
     this.player?.dispose();
     this.player = player;
@@ -263,7 +279,7 @@ export class Game {
     const bounds = {
       minX: this.camera.bounds.minX,
       maxX: this.camera.bounds.maxX,
-      maxY: this.canvas.height
+      maxY: this.camera.bounds.maxY
     };
     const clamped = CollisionSystem.keepInBounds(this.player, bounds);
     this.player.x = clamped.x;
@@ -286,7 +302,7 @@ export class Game {
     }
 
     // Update camera
-    this.camera.follow(this.player);
+    this.camera.follow(this.player, true);
 
     // Snapshot target positions before movement for relative projectile sweeps.
     const previousTargets = new Map(
@@ -584,6 +600,7 @@ export class Game {
     this.spriteController.abort();
     cancelAnimationFrame(this.animationFrameId);
     this.inputManager.dispose();
+    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
     this.player?.dispose();
   }
 
@@ -637,7 +654,7 @@ export class Game {
         this.levels = ldtkLevels;
         this.totalLevels = ldtkLevels.length;
         this.currentLevel = index;
-        this.projectiles = [];
+        this.restorePlayableLevel();
         this.camera.reset();
 
         console.log(`Loaded ${ldtkLevels.length} levels from LDtk`);
@@ -652,17 +669,17 @@ export class Game {
   /**
    * Add LDtk levels to existing levels
    * @param {string} url - URL to LDtk file
-   * @returns {Promise<void>}
+   * @returns {Promise<boolean>} True on append; false leaves play unchanged
    */
   async addLDtkLevels(url) {
     if (this.disposed) {
-      return;
+      return false;
     }
     const generation = ++this.importGeneration;
     try {
       const world = await this.ldtkLoader.loadWorld(url, { publish: false });
       if (this.disposed || generation !== this.importGeneration) {
-        return;
+        return false;
       }
       const ldtkLevels = this.ldtkLoader.getAllLevels(world);
       this.validateLDtkLevels(ldtkLevels);
@@ -681,26 +698,49 @@ export class Game {
         ) {
           throw new Error('LDtk world entity budget exceeded');
         }
+        if (
+          combined.reduce((count, level) => count + level.platforms.length, 0) >
+          WORLD_LIMITS.platforms
+        ) {
+          throw new Error('LDtk world platform budget exceeded');
+        }
         this.ldtkLoader.world = world;
         this.levels = combined;
         this.totalLevels = this.levels.length;
 
         console.log(`Added ${ldtkLevels.length} levels from LDtk`);
+        return true;
       }
     } catch (error) {
       console.error('Failed to add LDtk levels:', error);
     }
+    return false;
   }
 
   /**
    * Reset current level
    */
   resetLevel() {
-    // Recreate level
-    this.createLevel();
-    this.projectiles = [];
-
-    // Reset camera
+    if (this.disposed) {
+      return false;
+    }
+    const index = this.gameWon ? 0 : this.currentLevel;
+    this.createLevel(this.levels[index]);
+    this.currentLevel = index;
+    this.restorePlayableLevel();
     this.camera.reset();
+    return true;
+  }
+
+  /** Publish recovery only after a new level's objects have been constructed. */
+  restorePlayableLevel() {
+    if (this.gameOver || this.gameWon) {
+      this.lives = GAME_CONFIG.INITIAL_LIVES;
+    }
+    this.gameOver = false;
+    this.gameWon = false;
+    this.projectiles = [];
+    this.inputManager.reset();
+    this.accumulator = 0;
   }
 }

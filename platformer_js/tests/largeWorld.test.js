@@ -114,7 +114,15 @@ describe('Large imported world bounds', () => {
   ])(
     'preserves viewport minimum and translated far-right edges (%j)',
     (platforms, expected) => {
-      game.createLevel({ ...game.levels[0], platforms });
+      game.createLevel({
+        ...game.levels[0],
+        platforms,
+        playerStart: { x: 0, y: 0 },
+        coins: [],
+        enemies: [],
+        boss: { x: 0, y: 0 },
+        portal: { x: 0, y: 0 }
+      });
       expect(game.camera.bounds.maxX).toBe(expected);
     }
   );

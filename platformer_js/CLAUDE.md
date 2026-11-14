@@ -147,7 +147,10 @@ replace the projectile owner. Programmatic boss speed zero stays stationary.
 
 ### Systems
 
-- **InputManager**: Centralized keyboard input handling with event system
+- **InputManager**: Keyboard actions scoped to the Game canvas focus; editing,
+  composition, prevented events and browser shortcuts do not become gameplay;
+  a held key is still released on its keyup (modifier, prevented or composing).
+  Test focus/default actions in Chromium, and dispose every manager/game.
 - **CollisionSystem**: Static methods for all collision detection logic
 - **Camera**: Smooth camera following with boundary constraints
 - **SpriteLoader**: Async sprite loading with caching
@@ -165,10 +168,18 @@ and does not queue an automatic start. `dispose()` is terminal and releases inpu
 failure disposes the partial game while retaining the original error. Deferred
 initialization and imports cannot publish after disposal. Replacement and append
 LDtk requests publish only the latest requested candidate; conversion never reads
-another in-flight request's world. Suspension gaps over 250 ms reset simulation
+another in-flight request's world. Replacement/append share a 20,000-platform
+world budget; append checks the complete retained table. Successful terminal
+reset/replacement restores initial lives and clears terminal flags only after
+construction succeeds, preserving score and shooting/cooldown state. Suspension gaps over 250 ms reset simulation
 timing, with at most five catch-up steps otherwise. Player and boss shot cooldowns use `performance.now()` independently of wall-clock
 changes. Player cooldowns survive level reloads; the first shot is immediately
-available. Timed visual effects retain wall-clock semantics.
+available. Enemy animation and 300 ms defeated visuals use accumulated simulation
+elapsed time; hit resets the frame clock. Boss overrides `isInHitAnimation()`
+to false: a defeated boss is not drawn (its hit flash has its own timer). Player timers and boss visual effects
+retain wall-clock semantics. Authored LDtk dimensions are validated and retained;
+Game derives complete object extents and shares bounds with its player, camera
+and boss shots, including vertical camera following in tall levels.
 
 ## Recent Improvements
 

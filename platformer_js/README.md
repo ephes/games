@@ -100,10 +100,11 @@ accept an optional AbortSignal and a positive finite per-image deadline (default
 callbacks, timers and signal listeners. Failed batches abort their remaining
 images; a new batch aborts its predecessor. Game disposal aborts initialization
 images; startup failure remains terminal for that Game.
-Direct Enemy tests control `Date.now()`: running frames 0–9 advance only after
-more than 1/15 second; a hit resets to frame 0 and cycles frames 0–4 after
-more than 50 ms per frame during the 300 ms hit window. These are wall-clock
-thresholds, independent of the simulation delta.
+Direct Enemy tests advance simulation elapsed milliseconds: running frames 0–9
+cycle at 15 fps and hit frames 0–4 at 20 fps, carrying fractional frame time
+across steps. A hit resets the frame clock and retires its visual after 300 ms
+of simulation, independent of system-clock changes. Split elapsed steps produce
+the same frames and retirement; suspended time discarded by Game is not replayed.
 Player Projectile tests cover a fixed 10 px step in either direction and
 inclusive viewport margins: x at `cameraX - 100` or
 `cameraX + screenWidth + 100` remains in bounds; only points beyond retire.
@@ -224,6 +225,22 @@ Shooting requires successful initialization and a playable game. Both direct
 `game.shoot()` calls and input actions ignore win, death, disposal and pending or
 failed initialization without allocating projectiles or consuming cooldown.
 Live level resets/replacements preserve power-up and cooldown behavior.
+A successful reset or replacement after win/death restores initial lives and a
+playable player, preserving score, shooting ability and cooldown. Reset after
+winning restarts level zero; after death it retries the current level. Failed
+construction retains terminal state and objects; a disposed Game cannot reset.
+Successful resets/replacements clear both sides' projectiles, held input and
+retired player timers. `resetLevel()` returns true on reset, false after disposal;
+construction errors still propagate.
+
+Click or Tab to the canvas to give that game keyboard focus. Only the focused
+canvas responds; moving focus away releases held keys. Handled, unmodified keys
+cancel native scrolling while focused. Tab, browser shortcuts, unrelated keys,
+text inputs, selects, contenteditable regions, IME composition and already
+prevented events remain available to their native owners; a gameplay key that is
+already held is still released on its keyup, even with a modifier down. Standalone
+`new InputManager()` retains document delivery with the same editing filters;
+pass a focusable surface to scope it to a game.
 
 Switching windows or hiding the tab clears held movement and shooting keys.
 Press again after returning. Retired players cancel both damage timers after a successful level replacement,
@@ -250,17 +267,22 @@ can run at most five simulation steps; gaps over 250 ms discard accumulated time
 so returning from suspension does not replay missed movement. Player and boss shooting cooldowns use monotonic `performance.now()` time,
 so changing the system clock cannot stall or bypass them. The first shot is
 immediately available; live player level reloads preserve the cooldown.
-Invulnerability and hit animations continue to use wall-clock time. Renewing
+Player invulnerability/hit timers and boss visual effects retain wall-clock time. Renewing
 protection restarts both timers: hit visuals expire after 500 ms and protection
 after the requested duration, unaffected by older expirations. Action delivery
 uses the subscribers present at the start of each edge; changes to subscriptions
 take effect on the next edge.
 
-Camera and player horizontal bounds refresh on level creation, transitions,
-resets, and LDtk replacement. The right edge is the farthest platform's
-`x + width`, with at least one viewport of width; vertical bounds stay fixed to
-the canvas height. Bounds are reduced over platforms without spreading them into
-a function call, including large valid imported collision meshes.
+Camera, player and boss-shot bounds refresh together on level creation,
+transitions, resets and LDtk replacement. Imported `pxWid`/`pxHei` are retained
+as level `width`/`height`: when supplied, both must be positive safe integers.
+Legacy records with neither dimension and built-in levels derive complete extents
+from platforms, the player start, enemies, coins, boss and portal rectangles.
+Bounds include negative origins, every object edge and at least one viewport;
+authored dimensions provide additional empty playable space. Game follows both
+horizontal and vertical player movement inside these bounds. This establishes
+spatial reachability; authors still provide platforms/jump routes to exits.
+Large collision meshes are reduced without spreading into function arguments.
 
 Damage respawns the player at the active level's start, clearing vertical speed
 and jumping state while retaining the usual life loss and invulnerability.
@@ -307,7 +329,10 @@ IntGrid cells and 20,000 total entities across all layers. A level may contain a
 most 1,024 source entities and 4,096 horizontal collision runs/platforms, bounding
 active collision/render scans. These limits include unknown entities/layers in
 source totals. Append also caps the combined table at 64 levels and 20,000
-recognized entities. Over-budget imports report the exceeded budget and retain
+recognized entities. Both replacement and append also cap total converted
+platform geometry at 20,000 platforms, including the existing table on append.
+`addLDtkLevels(url)` returns true on publication and false on refusal, empty input,
+supersession or disposal. Over-budget imports report the exceeded budget and retain
 the current playable world.
 
 Replacement and append imports validate every candidate level, including future

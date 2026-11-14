@@ -41,7 +41,12 @@ export class Enemy {
   update(platforms, deltaTime) {
     if (!this.alive) {
       if (this.isInHitAnimation()) {
-        this.updateAnimation(deltaTime);
+        const elapsed = Math.min(
+          this.elapsed(deltaTime),
+          this.hitAnimationDuration - this.hitAnimationTimer
+        );
+        this.hitAnimationTimer += elapsed;
+        this.updateAnimation(elapsed);
       }
       return;
     }
@@ -72,15 +77,18 @@ export class Enemy {
    * Update animation frame
    * @param {number} deltaTime - Time since last update
    */
-  updateAnimation(_deltaTime) {
-    const now = Date.now();
-    const frameCount = this.isHit ? 5 : 10; // Different frame counts for different animations
-    const animSpeed = this.isHit ? this.animationSpeed : 15;
+  updateAnimation(deltaTime) {
+    const frameCount = this.isHit ? 5 : 10;
+    const interval = 1000 / (this.isHit ? this.animationSpeed : 15);
+    this.frameTimer += this.elapsed(deltaTime);
+    const frames = Math.floor((this.frameTimer + 1e-7) / interval);
+    this.frameTimer = Math.max(0, this.frameTimer - frames * interval);
+    this.frameX = (this.frameX + frames) % frameCount;
+  }
 
-    if (now - this.frameTimer > 1000 / animSpeed) {
-      this.frameTimer = now;
-      this.frameX = (this.frameX + 1) % frameCount;
-    }
+  /** Admit only nonnegative finite simulation elapsed milliseconds. */
+  elapsed(deltaTime) {
+    return Number.isFinite(deltaTime) && deltaTime > 0 ? deltaTime : 0;
   }
 
   /**
@@ -93,7 +101,8 @@ export class Enemy {
     }
     this.alive = false;
     this.isHit = true;
-    this.hitAnimationTimer = Date.now();
+    this.hitAnimationTimer = 0;
+    this.frameTimer = 0;
     this.frameX = 0;
     return true;
   }
@@ -117,8 +126,7 @@ export class Enemy {
    */
   isInHitAnimation() {
     return (
-      this.isHit &&
-      Date.now() - this.hitAnimationTimer < this.hitAnimationDuration
+      this.isHit && this.hitAnimationTimer + 1e-7 < this.hitAnimationDuration
     );
   }
 
