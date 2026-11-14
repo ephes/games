@@ -219,7 +219,7 @@ export class Boss extends Enemy {
       return;
     }
 
-    const now = Date.now();
+    const now = performance.now();
     const distanceToPlayer = Math.abs(player.x - this.x);
     const timeSinceLastShot = now - this.lastShotTime;
 

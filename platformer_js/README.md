@@ -98,7 +98,12 @@ thresholds, independent of the simulation delta.
 Player Projectile tests cover a fixed 10 px step in either direction and
 inclusive viewport margins: x at `cameraX - 100` or
 `cameraX + screenWidth + 100` remains in bounds; only points beyond retire.
-These player-shot limits differ from boss shots' world bounds. Drawing subtracts
+These player-shot limits differ from boss shots' world bounds.
+Player shots sweep their whole step against enemies and the boss, accounting for
+both projectile and target movement. The earliest live contact takes one hit;
+contacts are resolved before off-screen culling. Equal-time contacts use target
+x/y/width/height order, then enemy before boss; identical enemy rectangles keep
+level order. Stationary edge touches and tangential grazing do not hit. Drawing subtracts
 cameraX once without moving world coordinates. Camera tests use translated
 bounds and a recording canvas to check follow/clamp, touching-edge visibility,
 coordinate conversion, transforms and reset, without changing camera policy.
@@ -211,7 +216,10 @@ Live level resets/replacements preserve power-up and cooldown behavior.
 Switching windows or hiding the tab clears held movement and shooting keys.
 Press again after returning. Call `game.dispose()` before replacing a game to
 cancel its animation and remove input listeners; standalone input managers have
-`dispose()` too. Starting twice keeps one animation chain. Disposal is terminal:
+`dispose()` too. Call `await game.init()` before `game.start()`. Starts before or during
+initialization are ignored without disposing the game or requesting an animation
+frame; call `start()` again once initialization succeeds. Starting twice keeps
+one animation chain. Disposal is terminal:
 create a fresh Game to restart. Concurrent and later `init()` calls share one initialization and register controls
 once. Failed initialization disposes input; every later `init()` call rejects
 with the same startup error. Create a fresh Game to retry. Disposal during sprite
@@ -221,8 +229,10 @@ and rethrow the original error: synchronous startup errors reach the caller of
 
 Simulation uses fixed 60 Hz steps and renders once per animation frame. A frame
 can run at most five simulation steps; gaps over 250 ms discard accumulated time
-so returning from suspension does not replay missed movement. Shooting cooldowns,
-invulnerability and hit animations continue to use wall-clock time. Renewing
+so returning from suspension does not replay missed movement. Player and boss shooting cooldowns use monotonic `performance.now()` time,
+so changing the system clock cannot stall or bypass them. The first shot is
+immediately available; live player level reloads preserve the cooldown.
+Invulnerability and hit animations continue to use wall-clock time. Renewing
 protection restarts both timers: hit visuals expire after 500 ms and protection
 after the requested duration, unaffected by older expirations. Action delivery
 uses the subscribers present at the start of each edge; changes to subscriptions

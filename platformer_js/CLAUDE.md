@@ -159,13 +159,16 @@ replace the projectile owner. Programmatic boss speed zero stays stationary.
 3. One owned RAF loop runs bounded fixed 60 Hz simulation steps and renders once per frame
 4. Renderer handles all drawing operations with sprite animations
 
-`start()` is idempotent; `dispose()` is terminal and releases input. Initialization
+`start()` is idempotent and ignores calls until initialization succeeds. Call
+`await game.init()` then `game.start()`; an early call leaves the instance usable
+and does not queue an automatic start. `dispose()` is terminal and releases input. Initialization
 failure disposes the partial game while retaining the original error. Deferred
 initialization and imports cannot publish after disposal. Replacement and append
 LDtk requests publish only the latest requested candidate; conversion never reads
 another in-flight request's world. Suspension gaps over 250 ms reset simulation
-timing, with at most five catch-up steps otherwise. Cooldowns and timed visual
-effects retain wall-clock semantics.
+timing, with at most five catch-up steps otherwise. Player and boss shot cooldowns use `performance.now()` independently of wall-clock
+changes. Player cooldowns survive level reloads; the first shot is immediately
+available. Timed visual effects retain wall-clock semantics.
 
 ## Recent Improvements
 

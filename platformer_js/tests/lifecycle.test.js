@@ -44,7 +44,54 @@ describe('Owned game lifecycle and simulation clock', () => {
     frames.delete(id);
     callback(time);
   }
-  it('starts one chain and makes disposal terminal even for a delivered callback', () => {
+  it('ignores early starts without retiring the game, then runs one initialized loop', async () => {
+    const loading = deferred();
+    vi.spyOn(game.spriteLoader, 'loadAll').mockReturnValue(loading.promise);
+    game.render.mockRestore();
+    for (const method of ['translate', 'stroke', 'moveTo', 'lineTo']) {
+      game.ctx[method] = vi.fn();
+    }
+    expect(() => game.start()).not.toThrow();
+    expect(game.disposed).toBe(false);
+    expect(game.running).toBe(false);
+    expect(frames.size).toBe(0);
+    expect(game.spriteLoader.loadAll).not.toHaveBeenCalled();
+    const init = game.init();
+    game.start();
+    game.start();
+    expect(game.running).toBe(false);
+    expect(game.player).toBeNull();
+    expect(frames.size).toBe(0);
+    loading.resolve();
+    await init;
+    game.start();
+    game.start();
+    expect(game.initialized).toBe(true);
+    expect(game.disposed).toBe(false);
+    expect(frames.size).toBe(1);
+    frame(20);
+    expect(frames.size).toBe(1);
+  });
+
+  it('keeps a deferred init rejection controlled after an early start', async () => {
+    const loading = deferred();
+    vi.spyOn(game.spriteLoader, 'loadAll').mockReturnValue(loading.promise);
+    game.render.mockRestore();
+    const error = new Error('synthetic failed early start');
+    const result = game.init().catch(failure => failure);
+    expect(() => game.start()).not.toThrow();
+    expect(game.disposed).toBe(false);
+    loading.reject(error);
+    expect(await result).toBe(error);
+    expect(await game.init().catch(failure => failure)).toBe(error);
+    expect(game.disposed).toBe(true);
+    game.start();
+    expect(frames.size).toBe(0);
+  });
+
+  it('starts one chain and makes disposal terminal even for a delivered callback', async () => {
+    vi.spyOn(game.spriteLoader, 'loadAll').mockResolvedValue();
+    await game.init();
     vi.spyOn(game, 'update').mockImplementation(() => {});
     game.start();
     game.start();
@@ -195,7 +242,9 @@ describe('Owned game lifecycle and simulation clock', () => {
   );
   it.each([30, 60, 144])(
     'preserves 60 Hz movement, gravity and shots at %s Hz',
-    hz => {
+    async hz => {
+      vi.spyOn(game.spriteLoader, 'loadAll').mockResolvedValue();
+      await game.init();
       const player = new Player(0, -10000);
       const enemy = new Enemy({ x: 100, y: 0, speed: 2 });
       const shot = new BossProjectile(0, 0, 1, 3);
@@ -220,7 +269,9 @@ describe('Owned game lifecycle and simulation clock', () => {
       expect(game.render).toHaveBeenCalledTimes(hz + 1);
     }
   );
-  it('bounds catch-up and drops suspension time before resuming', () => {
+  it('bounds catch-up and drops suspension time before resuming', async () => {
+    vi.spyOn(game.spriteLoader, 'loadAll').mockResolvedValue();
+    await game.init();
     vi.spyOn(game, 'update').mockImplementation(() => {});
     game.start();
     frame(200);
