@@ -148,7 +148,8 @@ replace the projectile owner. Programmatic boss speed zero stays stationary.
 ### Systems
 
 - **InputManager**: Keyboard actions scoped to the Game canvas focus; editing,
-  composition, prevented events and browser shortcuts do not become gameplay.
+  composition, prevented events and browser shortcuts do not become gameplay;
+  a held key is still released on its keyup (modifier, prevented or composing).
   Test focus/default actions in Chromium, and dispose every manager/game.
 - **CollisionSystem**: Static methods for all collision detection logic
 - **Camera**: Smooth camera following with boundary constraints
@@ -174,7 +175,8 @@ construction succeeds, preserving score and shooting/cooldown state. Suspension 
 timing, with at most five catch-up steps otherwise. Player and boss shot cooldowns use `performance.now()` independently of wall-clock
 changes. Player cooldowns survive level reloads; the first shot is immediately
 available. Enemy animation and 300 ms defeated visuals use accumulated simulation
-elapsed time; hit resets the frame clock. Player timers and boss visual effects
+elapsed time; hit resets the frame clock. Boss overrides `isInHitAnimation()`
+to false: a defeated boss is not drawn (its hit flash has its own timer). Player timers and boss visual effects
 retain wall-clock semantics. Authored LDtk dimensions are validated and retained;
 Game derives complete object extents and shares bounds with its player, camera
 and boss shots, including vertical camera following in tall levels.

@@ -75,4 +75,43 @@ describe('Keyboard admission', () => {
     expect(input.getKeys()).toEqual({});
     expect(press(document.body).defaultPrevented).toBe(false);
   });
+  it.each([
+    ['ctrlKey', { ctrlKey: true }],
+    ['metaKey', { metaKey: true }],
+    ['altKey', { altKey: true }],
+    ['isComposing', { isComposing: true }],
+    ['prevented', {}]
+  ])('releases a held key on keyup even with %s', (_name, options) => {
+    document.body.innerHTML = '<canvas tabindex="0"></canvas>';
+    const canvas = document.querySelector('canvas');
+    input = new InputManager(canvas);
+    const up = vi.fn();
+    input.on('moveRight:up', up);
+    canvas.focus();
+    press(canvas, { key: 'ArrowRight' });
+    expect(input.isActionActive('moveRight')).toBe(true);
+    const release = new KeyboardEvent('keyup', {
+      key: 'ArrowRight',
+      bubbles: true,
+      cancelable: true,
+      ...options
+    });
+    if (_name === 'prevented') {
+      release.preventDefault();
+    }
+    canvas.dispatchEvent(release);
+    expect(input.isActionActive('moveRight')).toBe(false);
+    expect(up).toHaveBeenCalledTimes(1);
+    // A modified keyup of a key that is not held stays ignored.
+    const stray = vi.fn();
+    input.on('moveLeft:up', stray);
+    canvas.dispatchEvent(
+      new KeyboardEvent('keyup', {
+        key: 'ArrowLeft',
+        bubbles: true,
+        ctrlKey: true
+      })
+    );
+    expect(stray).not.toHaveBeenCalled();
+  });
 });

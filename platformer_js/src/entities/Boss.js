@@ -167,6 +167,16 @@ export class Boss extends Enemy {
   }
 
   /**
+   * The boss has no death animation: its hit flash runs on its own
+   * Date-based timer (hitTimer/hitDuration), so a defeated boss is never
+   * "in hit animation" and the renderer stops drawing it at once.
+   * @returns {boolean} Always false
+   */
+  isInHitAnimation() {
+    return false;
+  }
+
+  /**
    * Handle boss taking damage
    * @returns {number} Points awarded for hit
    */

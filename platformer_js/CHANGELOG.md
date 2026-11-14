@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for player, camera and boss-shot bounds, including tall levels and entities
   beyond the last platform. Follow vertical movement within the playable world.
 - Advance enemy frames and defeated hit visuals from simulation elapsed time,
-  retaining fractional frames and one defeat despite wall-clock jumps.
+  retaining fractional frames and one defeat despite wall-clock jumps. A defeated
+  boss still disappears at once (it has no death animation).
 
 - Bound retained converted world geometry to 20,000 platforms across repeated
   appends, retaining the old table/objects on refusal and returning a boolean.
@@ -30,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ignore editable, composing and already prevented keyboard events, releasing held
   gameplay keys on focus changes. Scope Game input to its keyboard/pointer-focused
   canvas and prevent native defaults only for handled, unmodified gameplay keys.
+  A held gameplay key is still released on keyup while a modifier is down or the
+  event was prevented, so it cannot get stuck.
 
 - Sweep boss shots relative to player motion before culling, consuming each shot
   once and retaining protection/death behavior.

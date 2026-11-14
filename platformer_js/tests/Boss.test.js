@@ -17,6 +17,18 @@ describe('Boss', () => {
     });
   });
 
+  describe('Defeat', () => {
+    it('is never in hit animation once defeated, so it stops being drawn', () => {
+      while (boss.alive) {
+        boss.takeDamage();
+      }
+      boss.update(platforms, 16);
+      expect(boss.alive).toBe(false);
+      expect(boss.isHit).toBe(true);
+      expect(boss.isInHitAnimation()).toBe(false);
+    });
+  });
+
   describe('Animation', () => {
     it('should use custom animation sequence', () => {
       expect(boss.animationSequence).toEqual([0, 1, 2, 3, 4, 3, 2, 1]);

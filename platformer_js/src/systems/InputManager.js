@@ -104,14 +104,23 @@ export class InputManager {
    * @param {KeyboardEvent} event - Keyboard event
    */
   handleKeyUp(event) {
-    if (!this.accepts(event)) {
+    const key = event.key;
+    const accepted = this.accepts(event);
+    // A held gameplay key is always released on its own surface, even when a
+    // modifier is down, the event was prevented or IME composition started;
+    // otherwise releasing it during Ctrl/Meta would leave it stuck.
+    const releasesHeld =
+      this.enabled &&
+      this.keys[key] === true &&
+      this.keyBindings.has(key) &&
+      (this.surface === document || event.target === this.surface);
+    if (!accepted && !releasesHeld) {
       return;
     }
 
-    if (this.surface !== document) {
+    if (accepted && this.surface !== document) {
       event.preventDefault();
     }
-    const key = event.key;
     this.keys[key] = false;
 
     const action = this.keyBindings.get(key);

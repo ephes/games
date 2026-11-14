@@ -237,7 +237,8 @@ Click or Tab to the canvas to give that game keyboard focus. Only the focused
 canvas responds; moving focus away releases held keys. Handled, unmodified keys
 cancel native scrolling while focused. Tab, browser shortcuts, unrelated keys,
 text inputs, selects, contenteditable regions, IME composition and already
-prevented events remain available to their native owners. Standalone
+prevented events remain available to their native owners; a gameplay key that is
+already held is still released on its keyup, even with a modifier down. Standalone
 `new InputManager()` retains document delivery with the same editing filters;
 pass a focusable surface to scope it to a game.
 
