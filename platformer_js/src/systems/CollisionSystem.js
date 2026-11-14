@@ -77,48 +77,58 @@ export class CollisionSystem {
    * Check enemy collision with player
    * @param {Object} player - Player object
    * @param {Object} enemy - Enemy object
+   * @param {Object} [previousPlayer] - Captured player position before movement
+   * @param {Object} [previousEnemy] - Captured enemy position before movement
    * @returns {string|null} Collision type: 'stomp', 'damage', or null
    */
-  static checkEnemyCollision(player, enemy) {
+  static checkEnemyCollision(
+    player,
+    enemy,
+    previousPlayer,
+    previousEnemy = enemy
+  ) {
     if (!enemy.alive || player.isInvulnerable) {
       return null;
     }
-
-    if (this.checkCollision(player, enemy)) {
-      const playerBottom = player.y + player.height;
-      const enemyTop = enemy.y;
-      const playerFalling = player.velocityY > 0;
-
-      // Check if player is stomping on enemy
-      if (
-        playerFalling &&
-        playerBottom >= enemyTop &&
-        playerBottom - enemyTop <= player.velocityY + 10
-      ) {
-        // For boss enemies, only allow stomp on head area (top 20%)
-        if (enemy.kind === 'boss') {
-          const playerCenterX = player.x + player.width / 2;
-          const enemyCenterX = enemy.x + enemy.width / 2;
-          const headZoneWidth = enemy.width * 0.4; // Only central 40% counts as head
-
-          // Check if player is hitting the head area
-          if (Math.abs(playerCenterX - enemyCenterX) > headZoneWidth / 2) {
-            return 'damage'; // Hit the side, not the head
-          }
-
-          // Check if hitting top part of boss
-          if (playerBottom - enemyTop > enemy.height * 0.2) {
-            return 'damage'; // Too low, not on head
-          }
-        }
-
-        return 'stomp';
-      }
-
+    const captured = previousPlayer !== undefined;
+    previousPlayer ??= {
+      x: player.x,
+      y: player.y - Math.max(0, player.velocityY)
+    };
+    const time = this.sweptContactTime(
+      player,
+      enemy,
+      previousPlayer,
+      previousEnemy
+    );
+    if (time === null) {
+      return null;
+    }
+    const gap = previousEnemy.y - (previousPlayer.y + player.height);
+    const downward = player.y - previousPlayer.y - (enemy.y - previousEnemy.y);
+    // Only a top crossing at the first relative contact is a stomp. Starting
+    // inside or entering through a side while falling remains damage.
+    if (gap < 0 || downward <= 0 || Math.abs(time - gap / downward) > 1e-7) {
       return 'damage';
     }
-
-    return null;
+    if (enemy.kind === 'boss') {
+      if (
+        !captured &&
+        player.y + player.height - enemy.y > enemy.height * 0.2
+      ) {
+        return 'damage';
+      }
+      const playerX = previousPlayer.x + (player.x - previousPlayer.x) * time;
+      const enemyX = previousEnemy.x + (enemy.x - previousEnemy.x) * time;
+      if (
+        Math.abs(playerX + player.width / 2 - enemyX - enemy.width / 2) >
+        enemy.width * 0.2
+      ) {
+        return 'damage';
+      }
+      // First top contact has zero penetration, inside the top 20% head zone.
+    }
+    return 'stomp';
   }
 
   /**
@@ -176,8 +186,12 @@ export class CollisionSystem {
       .filter(entry => entry.target.alive)
       .sort((a, b) => a.minX - b.minX || a.order - b.order);
     const build = (start, end) => {
-      if (start >= end) return null;
-      if (end - start === 1) return { ...entries[start], leaf: true };
+      if (start >= end) {
+        return null;
+      }
+      if (end - start === 1) {
+        return { ...entries[start], leaf: true };
+      }
       const mid = (start + end) >>> 1;
       const left = build(start, mid),
         right = build(mid, end);
@@ -207,10 +221,12 @@ export class CollisionSystem {
         node.maxX < minX ||
         node.minY > maxY ||
         node.maxY < minY
-      )
+      ) {
         return;
-      if (node.leaf) candidates.push(node);
-      else {
+      }
+      if (node.leaf) {
+        candidates.push(node);
+      } else {
         visit(node.left);
         visit(node.right);
       }
@@ -229,6 +245,7 @@ export class CollisionSystem {
    * @param {Object} [boss] - Boss enemy
    * @param {Object} [previousProjectile] - Projectile position before this step
    * @param {Map} [previousTargets] - Target positions before this step
+   * @param {Array} [candidates] - Optional broad-phase query in level order
    * @returns {Object|null} Hit target or null
    */
   static checkProjectileCollisions(

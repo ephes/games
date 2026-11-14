@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Sweep boss shots relative to player motion before culling, consuming each shot
+  once and retaining protection/death behavior.
+- Classify stomps at the first relative top crossing, including moving targets
+  and fast motion; reject falling side entry and preserve the boss head zone.
+
 - Cancel retired player damage timers on successful replacement, win/death and
   disposal, while retaining timers when replacement fails.
 - Share a swept-bounds broad phase across player shots, pruning distant targets

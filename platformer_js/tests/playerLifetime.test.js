@@ -19,13 +19,19 @@ it.each(['reset', 'next', 'win', 'dispose'])(
     const retired = game.player;
     retired.makeInvulnerable();
     expect(vi.getTimerCount()).toBe(2);
-    if (action === 'reset') game.resetLevel();
-    if (action === 'next') game.loadNextLevel();
+    if (action === 'reset') {
+      game.resetLevel();
+    }
+    if (action === 'next') {
+      game.loadNextLevel();
+    }
     if (action === 'win') {
       game.currentLevel = game.levels.length - 1;
       game.loadNextLevel();
     }
-    if (action === 'dispose') game.dispose();
+    if (action === 'dispose') {
+      game.dispose();
+    }
     expect(vi.getTimerCount()).toBe(0);
     retired.dispose();
     retired.makeInvulnerable();
@@ -33,7 +39,9 @@ it.each(['reset', 'next', 'win', 'dispose'])(
     vi.advanceTimersByTime(3000);
     expect(retired.isInvulnerable).toBe(true);
     expect(retired.isHit).toBe(true);
-    if (game.player !== retired) expect(game.player.isInvulnerable).toBe(false);
+    if (game.player !== retired) {
+      expect(game.player.isInvulnerable).toBe(false);
+    }
   }
 );
 
