@@ -164,8 +164,9 @@ failure disposes the partial game while retaining the original error. Deferred
 initialization and imports cannot publish after disposal. Replacement and append
 LDtk requests publish only the latest requested candidate; conversion never reads
 another in-flight request's world. Suspension gaps over 250 ms reset simulation
-timing, with at most five catch-up steps otherwise. Cooldowns and timed visual
-effects retain wall-clock semantics.
+timing, with at most five catch-up steps otherwise. Player and boss shot cooldowns use `performance.now()` independently of wall-clock
+changes. Player cooldowns survive level reloads; the first shot is immediately
+available. Timed visual effects retain wall-clock semantics.
 
 ## Recent Improvements
 

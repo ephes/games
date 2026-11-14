@@ -221,8 +221,10 @@ and rethrow the original error: synchronous startup errors reach the caller of
 
 Simulation uses fixed 60 Hz steps and renders once per animation frame. A frame
 can run at most five simulation steps; gaps over 250 ms discard accumulated time
-so returning from suspension does not replay missed movement. Shooting cooldowns,
-invulnerability and hit animations continue to use wall-clock time. Renewing
+so returning from suspension does not replay missed movement. Player and boss shooting cooldowns use monotonic `performance.now()` time,
+so changing the system clock cannot stall or bypass them. The first shot is
+immediately available; live player level reloads preserve the cooldown.
+Invulnerability and hit animations continue to use wall-clock time. Renewing
 protection restarts both timers: hit visuals expire after 500 ms and protection
 after the requested duration, unaffected by older expirations. Action delivery
 uses the subscribers present at the start of each edge; changes to subscriptions

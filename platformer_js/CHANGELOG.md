@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Use monotonic time for player and boss shot cooldowns, preserving immediate
+  first shots and player cooldowns through level reloads despite clock changes.
+
 - Sweep vertical player motion to the first platform or ceiling crossed, retaining
   the horizontal support threshold and removing platform-order dependence.
 - Restore all owned canvas scopes on drawing failures, including nested portal,

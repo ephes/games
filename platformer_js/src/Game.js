@@ -35,7 +35,7 @@ export class Game {
     this.gameOver = false;
     this.gameWon = false;
     this.canShoot = false;
-    this.lastShotTime = 0;
+    this.lastShotTime = -GAME_CONFIG.SHOT_COOLDOWN;
     this.currentLevel = 0;
     this.levels = LEVELS; // Can be replaced with LDtk levels
     this.totalLevels = this.levels.length;
@@ -181,7 +181,7 @@ export class Game {
       return;
     }
 
-    const now = Date.now();
+    const now = performance.now();
     if (now - this.lastShotTime < GAME_CONFIG.SHOT_COOLDOWN) {
       return;
     }

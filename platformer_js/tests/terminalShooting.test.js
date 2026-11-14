@@ -36,7 +36,7 @@ describe('Only initialized playable games create player shots', () => {
     const init = game.init();
     expect(() => game.shoot()).not.toThrow();
     expect(game.projectiles).toEqual([]);
-    expect(game.lastShotTime).toBe(0);
+    expect(game.lastShotTime).toBe(-GAME_CONFIG.SHOT_COOLDOWN);
     await init;
     game.shoot();
     expect(game.projectiles).toHaveLength(1);
@@ -67,7 +67,7 @@ describe('Only initialized playable games create player shots', () => {
       }
       expect(game.projectiles).toBe(before);
       expect(game.projectiles).toEqual([]);
-      expect(game.lastShotTime).toBe(0);
+      expect(game.lastShotTime).toBe(-GAME_CONFIG.SHOT_COOLDOWN);
     }
   );
 
