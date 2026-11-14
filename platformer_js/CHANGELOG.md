@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Sweep boss shots relative to player motion before culling, consuming each shot
   once and retaining protection/death behavior.
+- Restart the boss-shot sweep at the respawn point after a hit, so later shots
+  in the same frame are not consumed along the respawn teleport.
 - Classify stomps at the first relative top crossing, including moving targets
   and fast motion; reject falling side entry and preserve the boss head zone.
 

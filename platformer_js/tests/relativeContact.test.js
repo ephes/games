@@ -137,3 +137,30 @@ it('classifies an enemy moving upward through the player by relative top crossin
     )
   ).toBe('stomp');
 });
+
+it('does not sweep later boss shots along the respawn teleport', () => {
+  game.player.respawnPoint = { x: 600, y: 100 };
+  const hit = new BossProjectile(0, 110, 1, 2000, game.camera.bounds);
+  const between = new BossProjectile(400, 110, 1, 1, game.camera.bounds);
+  game.boss.projectiles = [hit, between];
+  game.inputManager.keys.ArrowRight = true;
+  game.update(16);
+  expect(game.lives).toBe(2);
+  expect(hit.active).toBe(false);
+  expect(between.active).toBe(true);
+  expect(game.boss.projectiles).toEqual([between]);
+});
+
+it('still consumes later shots along the real path while protected', () => {
+  game.player.respawnPoint = { x: 600, y: 100 };
+  game.player.makeInvulnerable();
+  game.player.speed = 200;
+  const first = new BossProjectile(0, 110, 1, 2000, game.camera.bounds);
+  const onPath = new BossProjectile(115, 110, 1, 1, game.camera.bounds);
+  game.boss.projectiles = [first, onPath];
+  game.inputManager.keys.ArrowRight = true;
+  game.update(16);
+  expect(game.lives).toBe(3);
+  expect(first.active).toBe(false);
+  expect(onPath.active).toBe(false);
+});

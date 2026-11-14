@@ -255,7 +255,7 @@ export class Game {
 
     // Update player
     const keys = this.inputManager.getKeys();
-    const previousPlayer = { x: this.player.x, y: this.player.y };
+    let previousPlayer = { x: this.player.x, y: this.player.y };
     const previousY = previousPlayer.y;
     this.player.update(keys, deltaTime);
 
@@ -313,11 +313,16 @@ export class Game {
         ) !== null
       ) {
         projectile.active = false;
+        const livesBefore = this.lives;
         this.lives = this.player.takeDamage(this.lives);
         if (this.lives <= 0) {
           this.gameOver = true;
           this.player.dispose();
           return;
+        }
+        if (this.lives < livesBefore) {
+          // A respawn is a teleport, not a path later shots may sweep.
+          previousPlayer = { x: this.player.x, y: this.player.y };
         }
       }
     }
