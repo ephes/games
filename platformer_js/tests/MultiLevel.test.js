@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Game } from '../src/Game.js';
 import { LEVELS } from '../src/utils/constants.js';
 
@@ -22,31 +22,27 @@ describe('Multi-Level Support', () => {
       }))
     };
 
-    mockCanvas = {
-      getContext: vi.fn(() => mockCtx),
-      width: 800,
-      height: 400
-    };
-
-    // Mock DOM
-    global.document = {
-      getElementById: vi.fn(() => mockCanvas),
-      addEventListener: vi.fn()
-    };
+    document.body.innerHTML =
+      '<canvas id="gameCanvas" width="800" height="400"></canvas>';
+    mockCanvas = document.getElementById('gameCanvas');
+    vi.spyOn(mockCanvas, 'getContext').mockReturnValue(mockCtx);
 
     // Mock Image
-    global.Image = class {
-      constructor() {
-        this.src = '';
-        this.complete = true;
-        this.onload = null;
-        setTimeout(() => {
-          if (this.onload) {
-            this.onload();
-          }
-        }, 0);
+    vi.stubGlobal(
+      'Image',
+      class {
+        constructor() {
+          this.src = '';
+          this.complete = true;
+          this.onload = null;
+          setTimeout(() => {
+            if (this.onload) {
+              this.onload();
+            }
+          }, 0);
+        }
       }
-    };
+    );
 
     game = new Game('gameCanvas');
 
@@ -57,6 +53,12 @@ describe('Multi-Level Support', () => {
       width: 64,
       height: 64
     });
+  });
+
+  afterEach(() => {
+    game.dispose();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   describe('Level Structure', () => {

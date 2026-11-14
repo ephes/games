@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Ignore editable, composing and already prevented keyboard events, releasing held
+  gameplay keys on focus changes. Scope Game input to its keyboard/pointer-focused
+  canvas and prevent native defaults only for handled, unmodified gameplay keys.
+
 - Sweep boss shots relative to player motion before culling, consuming each shot
   once and retaining protection/death behavior.
 - Restart the boss-shot sweep at the respawn point after a hit, so later shots

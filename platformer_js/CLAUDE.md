@@ -147,7 +147,9 @@ replace the projectile owner. Programmatic boss speed zero stays stationary.
 
 ### Systems
 
-- **InputManager**: Centralized keyboard input handling with event system
+- **InputManager**: Keyboard actions scoped to the Game canvas focus; editing,
+  composition, prevented events and browser shortcuts do not become gameplay.
+  Test focus/default actions in Chromium, and dispose every manager/game.
 - **CollisionSystem**: Static methods for all collision detection logic
 - **Camera**: Smooth camera following with boundary constraints
 - **SpriteLoader**: Async sprite loading with caching

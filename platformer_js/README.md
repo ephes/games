@@ -225,6 +225,14 @@ Shooting requires successful initialization and a playable game. Both direct
 failed initialization without allocating projectiles or consuming cooldown.
 Live level resets/replacements preserve power-up and cooldown behavior.
 
+Click or Tab to the canvas to give that game keyboard focus. Only the focused
+canvas responds; moving focus away releases held keys. Handled, unmodified keys
+cancel native scrolling while focused. Tab, browser shortcuts, unrelated keys,
+text inputs, selects, contenteditable regions, IME composition and already
+prevented events remain available to their native owners. Standalone
+`new InputManager()` retains document delivery with the same editing filters;
+pass a focusable surface to scope it to a game.
+
 Switching windows or hiding the tab clears held movement and shooting keys.
 Press again after returning. Retired players cancel both damage timers after a successful level replacement,
 on win/death, or on disposal. Failed level construction retains the active

@@ -6,7 +6,8 @@
  * Manages keyboard input for the game
  */
 export class InputManager {
-  constructor() {
+  constructor(surface = document) {
+    this.surface = surface;
     this.keys = {};
     this.keyBindings = new Map();
     this.listeners = new Map();
@@ -34,6 +35,15 @@ export class InputManager {
     this.onKeyDown = event => this.handleKeyDown(event);
     this.onKeyUp = event => this.handleKeyUp(event);
     this.onBlur = () => this.reset();
+    this.onFocusIn = event => {
+      if (
+        this.isEditable(event) ||
+        (this.surface !== document && event.target !== this.surface)
+      ) {
+        this.reset();
+      }
+    };
+    this.onCompositionStart = () => this.reset();
     this.onVisibilityChange = () => {
       if (document.hidden) {
         this.reset();
@@ -42,6 +52,8 @@ export class InputManager {
     document.addEventListener('keydown', this.onKeyDown);
     document.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
+    document.addEventListener('focusin', this.onFocusIn);
+    document.addEventListener('compositionstart', this.onCompositionStart);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
   }
 
@@ -52,6 +64,8 @@ export class InputManager {
     document.removeEventListener('keydown', this.onKeyDown);
     document.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
+    document.removeEventListener('focusin', this.onFocusIn);
+    document.removeEventListener('compositionstart', this.onCompositionStart);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.disable();
     this.listeners.clear();
@@ -62,10 +76,13 @@ export class InputManager {
    * @param {KeyboardEvent} event - Keyboard event
    */
   handleKeyDown(event) {
-    if (!this.enabled) {
+    if (!this.accepts(event)) {
       return;
     }
 
+    if (this.surface !== document) {
+      event.preventDefault();
+    }
     const key = event.key;
     const wasPressed = this.keys[key];
     this.keys[key] = true;
@@ -81,10 +98,13 @@ export class InputManager {
    * @param {KeyboardEvent} event - Keyboard event
    */
   handleKeyUp(event) {
-    if (!this.enabled) {
+    if (!this.accepts(event)) {
       return;
     }
 
+    if (this.surface !== document) {
+      event.preventDefault();
+    }
     const key = event.key;
     this.keys[key] = false;
 
@@ -92,6 +112,39 @@ export class InputManager {
     if (action) {
       this.triggerAction(action, 'up');
     }
+  }
+
+  /** Ignore native editing/IME/shortcut events before touching held state. */
+  isEditable(event) {
+    const path = event.composedPath?.() ?? [event.target];
+    return path.some(node => {
+      if (!node?.closest) {
+        return false;
+      }
+      const editable = node.closest('[contenteditable]');
+      return (
+        !!node.closest('input, textarea, select') ||
+        (editable && editable.getAttribute('contenteditable') !== 'false')
+      );
+    });
+  }
+
+  /** Only the focused surface owns gameplay keys; document is a standalone fallback. */
+  accepts(event) {
+    return (
+      this.enabled &&
+      !event.defaultPrevented &&
+      !event.isComposing &&
+      event.keyCode !== 229 &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      !this.isEditable(event) &&
+      this.keyBindings.has(event.key) &&
+      (this.surface === document ||
+        (document.activeElement === this.surface &&
+          event.target === this.surface))
+    );
   }
 
   /**

@@ -41,7 +41,12 @@ export class Game {
     this.totalLevels = this.levels.length;
 
     // Systems
-    this.inputManager = new InputManager();
+    if (!this.canvas.hasAttribute('tabindex')) {
+      this.canvas.tabIndex = 0;
+    }
+    this.onPointerDown = () => this.canvas.focus({ preventScroll: true });
+    this.canvas.addEventListener('pointerdown', this.onPointerDown);
+    this.inputManager = new InputManager(this.canvas);
     this.spriteLoader = new SpriteLoader();
     this.spriteController = new AbortController();
     this.camera = new Camera(this.canvas.width, this.canvas.height);
@@ -584,6 +589,7 @@ export class Game {
     this.spriteController.abort();
     cancelAnimationFrame(this.animationFrameId);
     this.inputManager.dispose();
+    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
     this.player?.dispose();
   }
 
