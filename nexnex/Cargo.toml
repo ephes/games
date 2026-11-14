@@ -15,3 +15,8 @@ bevy_rapier2d = "0.33.0"
 
 [dev-dependencies]
 serde_json = "1"
+
+# Parry 0.25 has no release containing the partial-root removal fix (#409).
+# Keep the Bevy/Rapier API versions and backport that fix until upgrading them.
+[patch.crates-io]
+parry2d = { path = "vendor/parry2d" }

@@ -117,13 +117,20 @@ collision observation and movement and clears any surviving detector's grounded
 state. Re-adding creates a fresh sensor identity, including removal/reinsertion
 within one frame; queued contacts for retired sensors cannot enable a jump.
 The component lifecycle tests cover actual grounded Rapier players and queued
-retired contacts; an ECS test also covers same-frame Collider reinsertion.
+retired contacts. Removing a Collider also retires its Rapier handle explicitly,
+so removal/reinsertion before backend synchronization cannot retain the old
+handle while the sensor gets a fresh identity. A three-collider Rapier regression
+(player, foot sensor, floor; no padding geometry) repeatedly removes and restores
+the pair both within one frame and across physics steps. It checks handle and
+entity ownership, one sensor attached to the surviving body, stale-contact
+rejection and grounding from new real overlaps.
 
-Known dependency limitation: in a minimal scene containing only the player's
-collider, its foot sensor and one floor, removing both player colliders, stepping,
-then restoring them can panic in Rapier 0.31/Parry 0.25's BVH insertion (`key not
-present`). This dependency-level reinsertion issue is separate from sensor
-ownership; this change does not upgrade or patch the physics engine.
+Parry 0.25.3 leaves orphaned BVH nodes when multiple removals reduce the tree to
+one leaf. Its optimizer can corrupt that partial root, causing `key not present`
+on the next insertion. NexNex uses a local backport of the upstream partial-root
+cleanup fix via Cargo's dependency patch mechanism; the Bevy/Rapier versions stay
+unchanged. See [vendor maintenance notes](vendor/README.md) for provenance,
+the exact changes and when to remove the patch.
 
 Local checks (headless tests use synthetic ECS entities, geometry and in-memory
 LDtk data, no window or GPU):

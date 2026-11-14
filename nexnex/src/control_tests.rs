@@ -330,6 +330,114 @@ fn removed_ground_components_retire_sensors_and_queued_contacts() {
 }
 
 #[test]
+fn collider_and_sensor_reinsertion_preserves_rapier_ownership() {
+    for immediate in [false, true] {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            TransformPlugin,
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
+            ground_detection::GroundDetectionPlugin,
+        ))
+        .insert_resource(TimestepMode::Fixed {
+            dt: 1. / 60.,
+            substeps: 1,
+        });
+        let player = app
+            .world_mut()
+            .spawn((
+                GroundDetection::default(),
+                RigidBody::KinematicVelocityBased,
+                Collider::cuboid(6., 14.),
+                Transform::from_xyz(0., 20., 0.),
+            ))
+            .id();
+        let floor = app
+            .world_mut()
+            .spawn((
+                RigidBody::Fixed,
+                ActiveCollisionTypes::all(),
+                Collider::cuboid(20., 2.),
+                Transform::from_xyz(0., 4., 0.),
+            ))
+            .id();
+        for _ in 0..6 {
+            app.update();
+        }
+        assert!(
+            app.world()
+                .get::<GroundDetection>(player)
+                .unwrap()
+                .on_ground
+        );
+        // No padding geometry: the BVH must survive collapsing from three leaves
+        // to the single floor and growing back on every cycle.
+        for _ in 0..4 {
+            let old = assert_sensor(&mut app, player, Vec2::new(3., 2.), -14.);
+            let old_body_shape = app.world().get::<RapierColliderHandle>(player).unwrap().0;
+            let old_sensor_shape = app.world().get::<RapierColliderHandle>(old).unwrap().0;
+            app.world_mut().entity_mut(player).remove::<Collider>();
+            if !immediate {
+                app.update();
+                assert!(app.world().get_entity(old).is_err());
+                assert!(
+                    !app.world()
+                        .get::<GroundDetection>(player)
+                        .unwrap()
+                        .on_ground
+                );
+            }
+            app.world_mut()
+                .entity_mut(player)
+                .insert(Collider::cuboid(6., 14.));
+            app.world_mut().write_message(CollisionEvent::Started(
+                old,
+                floor,
+                CollisionEventFlags::empty(),
+            ));
+            app.update();
+            let new = assert_sensor(&mut app, player, Vec2::new(3., 2.), -14.);
+            assert_ne!(old, new);
+            assert!(app.world().get_entity(old).is_err());
+            let body_shape = app.world().get::<RapierColliderHandle>(player).unwrap().0;
+            let sensor_shape = app.world().get::<RapierColliderHandle>(new).unwrap().0;
+            assert_ne!(old_body_shape, body_shape);
+            assert_ne!(old_sensor_shape, sensor_shape);
+            let context = app
+                .world_mut()
+                .query::<&RapierContextColliders>()
+                .single(app.world())
+                .unwrap();
+            assert_eq!(context.colliders.len(), 3);
+            assert_eq!(context.entity2collider().len(), 3);
+            assert!(!context.colliders.contains(old_body_shape));
+            assert!(!context.colliders.contains(old_sensor_shape));
+            assert_eq!(context.entity2collider().get(&player), Some(&body_shape));
+            assert_eq!(context.entity2collider().get(&new), Some(&sensor_shape));
+            assert!(!context.entity2collider().contains_key(&old));
+            let body = app.world().get::<RapierRigidBodyHandle>(player).unwrap().0;
+            assert_eq!(context.colliders[body_shape].parent(), Some(body));
+            assert_eq!(context.colliders[sensor_shape].parent(), Some(body));
+            assert!(
+                !app.world()
+                    .get::<GroundDetection>(player)
+                    .unwrap()
+                    .on_ground
+            );
+            for _ in 0..6 {
+                app.update();
+            }
+            assert!(
+                app.world()
+                    .get::<GroundDetection>(player)
+                    .unwrap()
+                    .on_ground
+            );
+        }
+    }
+}
+
+#[test]
 fn live_collider_replacement_refreshes_ground_contacts_and_jump_eligibility() {
     let mut app = App::new();
     app.add_plugins((
