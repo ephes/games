@@ -100,7 +100,10 @@ inclusive viewport margins: x at `cameraX - 100` or
 `cameraX + screenWidth + 100` remains in bounds; only points beyond retire.
 These player-shot limits differ from boss shots' world bounds.
 Player shots sweep their whole step against enemies and the boss, accounting for
-both projectile and target movement. The earliest live contact takes one hit;
+both projectile and target movement. Each step builds one balanced tree of
+target swept bounds, shared by all player shots. Queries prune disjoint subtrees
+before exact contact tests; dense intersecting targets still require exact tests.
+The conservative bounds include target motion, and preserve exhaustive hit ordering. The earliest live contact takes one hit;
 contacts are resolved before off-screen culling. Equal-time contacts use target
 x/y/width/height order, then enemy before boss; identical enemy rectangles keep
 level order. Stationary edge touches and tangential grazing do not hit. Drawing subtracts
@@ -214,7 +217,10 @@ failed initialization without allocating projectiles or consuming cooldown.
 Live level resets/replacements preserve power-up and cooldown behavior.
 
 Switching windows or hiding the tab clears held movement and shooting keys.
-Press again after returning. Call `game.dispose()` before replacing a game to
+Press again after returning. Retired players cancel both damage timers after a successful level replacement,
+on win/death, or on disposal. Failed level construction retains the active
+player and its protection timers. `player.dispose()` is idempotent and terminal
+for timer renewal. Call `game.dispose()` before replacing a game to
 cancel its animation and remove input listeners; standalone input managers have
 `dispose()` too. Call `await game.init()` before `game.start()`. Starts before or during
 initialization are ignored without disposing the game or requesting an animation

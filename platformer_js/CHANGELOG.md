@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Cancel retired player damage timers on successful replacement, win/death and
+  disposal, while retaining timers when replacement fails.
+- Share a swept-bounds broad phase across player shots, pruning distant targets
+  before exact contact tests without changing hit order.
+
 - Ignore starts before/during initialization without retiring the game or
   accessing an unconstructed world. Start explicitly after successful init;
   retain one animation chain and terminal initialization failures/disposal.

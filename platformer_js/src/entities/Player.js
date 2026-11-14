@@ -27,6 +27,7 @@ export class Player {
     this.direction = 1; // 1 for right, -1 for left
     this.isHit = false;
     this.hitAnimationTimer = 0;
+    this.disposed = false;
     this.hitTimeout = null;
     this.invulnerabilityTimeout = null;
     this.hitAnimationDuration = 500; // Duration of hit animation in milliseconds
@@ -142,6 +143,7 @@ export class Player {
    * @param {number} duration - Duration in milliseconds
    */
   makeInvulnerable(duration = 2000) {
+    if (this.disposed) return;
     clearTimeout(this.hitTimeout);
     clearTimeout(this.invulnerabilityTimeout);
     this.isInvulnerable = true;
@@ -157,6 +159,16 @@ export class Player {
     this.invulnerabilityTimeout = setTimeout(() => {
       this.isInvulnerable = false;
     }, duration);
+  }
+
+  /** Release timers when this player leaves the playable world. */
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    clearTimeout(this.hitTimeout);
+    clearTimeout(this.invulnerabilityTimeout);
+    this.hitTimeout = null;
+    this.invulnerabilityTimeout = null;
   }
 
   /**
