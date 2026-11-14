@@ -53,16 +53,18 @@ afterEach(() => {
 describe('Repeated world admission', () => {
   it('refuses the first cumulative platform overrun without publishing anything', async () => {
     expect(await game.loadLDtkLevels('synthetic')).toBe(true);
-    expect(await game.addLDtkLevels('synthetic')).toBe(true);
+    await game.addLDtkLevels('synthetic');
+    expect(game.levels).toHaveLength(2);
     const boundary = world();
     boundary.levels[0].layerInstances[0].intGridCsv = [1, 1, 1];
     mockWorldFetch().mockResolvedValueOnce(boundary).mockResolvedValue(world());
-    expect(await game.addLDtkLevels('exact-boundary')).toBe(true);
+    await game.addLDtkLevels('exact-boundary');
+    expect(game.levels).toHaveLength(3);
     const previousWorld = game.ldtkLoader.world;
     const before = { ...game };
     const bounds = game.camera.bounds;
     game.camera.x = 35;
-    expect(await game.addLDtkLevels('synthetic')).toBe(false);
+    const accepted = await game.addLDtkLevels('synthetic');
     for (const key of [
       'levels',
       'player',
@@ -74,6 +76,7 @@ describe('Repeated world admission', () => {
     ]) {
       expect(game[key]).toBe(before[key]);
     }
+    expect(accepted).toBe(false);
     expect(game.ldtkLoader.world).toBe(previousWorld);
     expect(game.camera.bounds).toBe(bounds);
     expect(game.camera.x).toBe(35);

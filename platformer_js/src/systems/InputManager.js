@@ -52,6 +52,9 @@ export class InputManager {
     document.addEventListener('keydown', this.onKeyDown);
     document.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
+    if (this.surface !== document) {
+      this.surface.addEventListener('blur', this.onBlur);
+    }
     document.addEventListener('focusin', this.onFocusIn);
     document.addEventListener('compositionstart', this.onCompositionStart);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -64,6 +67,9 @@ export class InputManager {
     document.removeEventListener('keydown', this.onKeyDown);
     document.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
+    if (this.surface !== document) {
+      this.surface.removeEventListener('blur', this.onBlur);
+    }
     document.removeEventListener('focusin', this.onFocusIn);
     document.removeEventListener('compositionstart', this.onCompositionStart);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);

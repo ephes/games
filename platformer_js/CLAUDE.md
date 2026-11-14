@@ -173,7 +173,11 @@ reset/replacement restores initial lives and clears terminal flags only after
 construction succeeds, preserving score and shooting/cooldown state. Suspension gaps over 250 ms reset simulation
 timing, with at most five catch-up steps otherwise. Player and boss shot cooldowns use `performance.now()` independently of wall-clock
 changes. Player cooldowns survive level reloads; the first shot is immediately
-available. Timed visual effects retain wall-clock semantics.
+available. Enemy animation and 300 ms defeated visuals use accumulated simulation
+elapsed time; hit resets the frame clock. Player timers and boss visual effects
+retain wall-clock semantics. Authored LDtk dimensions are validated and retained;
+Game derives complete object extents and shares bounds with its player, camera
+and boss shots, including vertical camera following in tall levels.
 
 ## Recent Improvements
 

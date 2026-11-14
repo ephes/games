@@ -117,17 +117,28 @@ export class Game {
     const enemies = levelData.enemies.map(data => new Enemy(data));
     const portal = new Portal(levelData.portal.x, levelData.portal.y);
     portal.setSprite(this.spriteLoader.getSprite('portal'));
+    const boss = new Boss(levelData.boss);
     const bounds = {
       minX: 0,
-      maxX: levelData.platforms.reduce(
-        (right, platform) => Math.max(right, platform.x + platform.width),
-        this.canvas.width
-      ),
+      maxX: Math.max(this.canvas.width, levelData.width ?? 0),
       minY: 0,
-      maxY: this.canvas.height
+      maxY: Math.max(this.canvas.height, levelData.height ?? 0)
     };
-
-    const boss = new Boss(levelData.boss, bounds);
+    // Reduce each collection without spreading large collision meshes into a call.
+    for (const objects of [platforms, coins, enemies, [player, boss, portal]]) {
+      for (const object of objects) {
+        const right = object.x + object.width;
+        const bottom = object.y + object.height;
+        if (![object.x, object.y, right, bottom].every(Number.isFinite)) {
+          throw new Error('Invalid level object extent');
+        }
+        bounds.minX = Math.min(bounds.minX, object.x);
+        bounds.minY = Math.min(bounds.minY, object.y);
+        bounds.maxX = Math.max(bounds.maxX, right);
+        bounds.maxY = Math.max(bounds.maxY, bottom);
+      }
+    }
+    boss.bounds = bounds;
 
     this.player?.dispose();
     this.player = player;
@@ -268,7 +279,7 @@ export class Game {
     const bounds = {
       minX: this.camera.bounds.minX,
       maxX: this.camera.bounds.maxX,
-      maxY: this.canvas.height
+      maxY: this.camera.bounds.maxY
     };
     const clamped = CollisionSystem.keepInBounds(this.player, bounds);
     this.player.x = clamped.x;
@@ -291,7 +302,7 @@ export class Game {
     }
 
     // Update camera
-    this.camera.follow(this.player);
+    this.camera.follow(this.player, true);
 
     // Snapshot target positions before movement for relative projectile sweeps.
     const previousTargets = new Map(

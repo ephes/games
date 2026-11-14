@@ -67,6 +67,10 @@ describe('Keyboard admission', () => {
     expect(
       press(canvas, { key: 'ArrowLeft', ctrlKey: true }).defaultPrevented
     ).toBe(false);
+    canvas.blur();
+    expect(input.getKeys()).toEqual({});
+    canvas.focus();
+    press(canvas);
     document.querySelector('button').focus();
     expect(input.getKeys()).toEqual({});
     expect(press(document.body).defaultPrevented).toBe(false);

@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve validated authored level dimensions and derive complete object extents
+  for player, camera and boss-shot bounds, including tall levels and entities
+  beyond the last platform. Follow vertical movement within the playable world.
+- Advance enemy frames and defeated hit visuals from simulation elapsed time,
+  retaining fractional frames and one defeat despite wall-clock jumps.
+
 - Bound retained converted world geometry to 20,000 platforms across repeated
   appends, retaining the old table/objects on refusal and returning a boolean.
 - Restore playable state and initial lives after terminal reset/replacement;

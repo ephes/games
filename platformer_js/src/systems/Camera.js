@@ -30,10 +30,15 @@ export class Camera {
   /**
    * Update camera to follow target
    * @param {Object} target - Target to follow (usually player)
+   * @param {boolean} followY - Follow vertical movement as well (default false)
    */
-  follow(target) {
+  follow(target, followY = false) {
     // Center camera on target with offset
     this.x = target.x - this.width / 3;
+
+    if (followY) {
+      this.y = target.y - this.height / 2;
+    }
 
     // Apply bounds if set
     if (this.bounds) {

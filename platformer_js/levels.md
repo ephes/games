@@ -81,3 +81,9 @@ and recognized fields, or nonboolean coin IsPowerUp values, reject the import
 while preserving play. Missing Player and optional entity fields retain their
 documented defaults. If next-level construction throws, the current level index,
 objects, projectiles and camera remain available for a retry.
+
+Imported positive safe integer `pxWid`/`pxHei` dimensions are retained as
+`width`/`height`. Game expands bounds to include every platform/entity rectangle,
+including required spawn/boss/portal geometry, and follows the player vertically
+in tall worlds. Built-in/legacy levels with no authored dimensions derive their
+extents from objects and the viewport. Platform routes remain an authoring task.

@@ -100,10 +100,11 @@ accept an optional AbortSignal and a positive finite per-image deadline (default
 callbacks, timers and signal listeners. Failed batches abort their remaining
 images; a new batch aborts its predecessor. Game disposal aborts initialization
 images; startup failure remains terminal for that Game.
-Direct Enemy tests control `Date.now()`: running frames 0–9 advance only after
-more than 1/15 second; a hit resets to frame 0 and cycles frames 0–4 after
-more than 50 ms per frame during the 300 ms hit window. These are wall-clock
-thresholds, independent of the simulation delta.
+Direct Enemy tests advance simulation elapsed milliseconds: running frames 0–9
+cycle at 15 fps and hit frames 0–4 at 20 fps, carrying fractional frame time
+across steps. A hit resets the frame clock and retires its visual after 300 ms
+of simulation, independent of system-clock changes. Split elapsed steps produce
+the same frames and retirement; suspended time discarded by Game is not replayed.
 Player Projectile tests cover a fixed 10 px step in either direction and
 inclusive viewport margins: x at `cameraX - 100` or
 `cameraX + screenWidth + 100` remains in bounds; only points beyond retire.
@@ -265,17 +266,22 @@ can run at most five simulation steps; gaps over 250 ms discard accumulated time
 so returning from suspension does not replay missed movement. Player and boss shooting cooldowns use monotonic `performance.now()` time,
 so changing the system clock cannot stall or bypass them. The first shot is
 immediately available; live player level reloads preserve the cooldown.
-Invulnerability and hit animations continue to use wall-clock time. Renewing
+Player invulnerability/hit timers and boss visual effects retain wall-clock time. Renewing
 protection restarts both timers: hit visuals expire after 500 ms and protection
 after the requested duration, unaffected by older expirations. Action delivery
 uses the subscribers present at the start of each edge; changes to subscriptions
 take effect on the next edge.
 
-Camera and player horizontal bounds refresh on level creation, transitions,
-resets, and LDtk replacement. The right edge is the farthest platform's
-`x + width`, with at least one viewport of width; vertical bounds stay fixed to
-the canvas height. Bounds are reduced over platforms without spreading them into
-a function call, including large valid imported collision meshes.
+Camera, player and boss-shot bounds refresh together on level creation,
+transitions, resets and LDtk replacement. Imported `pxWid`/`pxHei` are retained
+as level `width`/`height`: when supplied, both must be positive safe integers.
+Legacy records with neither dimension and built-in levels derive complete extents
+from platforms, the player start, enemies, coins, boss and portal rectangles.
+Bounds include negative origins, every object edge and at least one viewport;
+authored dimensions provide additional empty playable space. Game follows both
+horizontal and vertical player movement inside these bounds. This establishes
+spatial reachability; authors still provide platforms/jump routes to exits.
+Large collision meshes are reduced without spreading into function arguments.
 
 Damage respawns the player at the active level's start, clearing vertical speed
 and jumping state while retaining the usual life loss and invulnerability.

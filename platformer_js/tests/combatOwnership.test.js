@@ -7,12 +7,12 @@ import { Renderer } from '../src/rendering/Renderer.js';
 
 const level = (width = 5000) => ({
   name: 'Synthetic combat',
-  playerStart: { x: 4100, y: 250 },
+  playerStart: { x: Math.min(4100, width - 30), y: 250 },
   platforms: [{ x: 0, y: 350, width, height: 50 }],
   coins: [],
   enemies: [],
-  boss: { x: 4000, y: 254, speed: 0, platformIndex: 0 },
-  portal: { x: 4500, y: 200 }
+  boss: { x: Math.min(4000, width - 64), y: 254, speed: 0, platformIndex: 0 },
+  portal: { x: Math.min(4500, width - 128), y: 200 }
 });
 
 describe('Combat transitions and world-owned projectiles', () => {
@@ -58,14 +58,16 @@ describe('Combat transitions and world-owned projectiles', () => {
       renderer.drawEnemy(enemy);
       expect(renderer.ctx.drawImage).toHaveBeenCalled();
       vi.advanceTimersByTime(100);
-      enemy.update(game.platforms, 1000 / 60);
+      enemy.update(game.platforms, 50);
       expect(enemy.x).toBe(x);
       expect(enemy.frameX).toBe(1);
       vi.advanceTimersByTime(199);
+      enemy.update(game.platforms, 249);
       renderer.ctx.drawImage.mockClear();
       renderer.drawEnemy(enemy);
       expect(renderer.ctx.drawImage).toHaveBeenCalled();
       vi.advanceTimersByTime(1);
+      enemy.update(game.platforms, 1);
       renderer.ctx.drawImage.mockClear();
       renderer.drawEnemy(enemy);
       expect(renderer.ctx.drawImage).not.toHaveBeenCalled();

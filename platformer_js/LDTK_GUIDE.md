@@ -141,6 +141,14 @@ returned world to `getAllLevels(world)` to convert the intended request.
 For game imports use `await game.loadLDtkLevels(url)` or
 `await game.addLDtkLevels(url)` so the coordinator owns publication.
 
+## Playable extents
+
+LDtk `pxWid` and `pxHei`, when present, must both be positive safe integers.
+They preserve empty playable space beyond painted platforms; Game also includes
+all entity rectangles in shared player/camera/boss-shot bounds. Tall levels use
+vertical camera following. Legacy records with neither dimension derive bounds
+from their objects. Provide platform routes to required bosses and portals.
+
 ## Tips
 
 ### Platform Design

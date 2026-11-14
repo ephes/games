@@ -151,8 +151,20 @@ export class LDtkLoader {
    * @returns {Object} Game level format
    */
   convertLevel(ldtkLevel) {
+    const hasDimensions = 'pxWid' in ldtkLevel || 'pxHei' in ldtkLevel;
+    if (
+      hasDimensions &&
+      ![ldtkLevel.pxWid, ldtkLevel.pxHei].every(
+        value => Number.isSafeInteger(value) && value > 0
+      )
+    ) {
+      throw new Error('Invalid LDtk level dimensions');
+    }
     const level = {
       name: this.getLevelName(ldtkLevel),
+      ...(hasDimensions
+        ? { width: ldtkLevel.pxWid, height: ldtkLevel.pxHei }
+        : {}),
       playerStart: { x: 50, y: 200 }, // Default, will be overridden
       platforms: [],
       coins: [],
