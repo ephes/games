@@ -117,9 +117,13 @@ The collider oracle pins exact extents. Replacing/resizing a live cuboid retires
 the old foot sensor and clears grounding before movement, then creates exactly
 one sensor with half-width equal to half the body's half-width, height 4 and
 offset at the body's bottom. Grounding resumes only from new collision messages;
-unchanged geometry retains its sensor and contacts. Unsupported shapes remove
-the sensor, warn and remain ungrounded until a cuboid returns. A headless Rapier
-fixture replaces the collider on an already grounded player, checks geometry,
+unchanged geometry retains its sensor and contacts.
+A single owner-to-sensor inventory serves all changed detectors per update, so
+loading or resizing many bodies needs linear average ownership work rather than
+one complete sensor scan per body. Tests count owner reads for 1, 100 and 1000
+simultaneous changes and verify retained/replaced sensor identities. Unsupported
+shapes remove the sensor, warn and remain ungrounded until a cuboid returns.
+A headless Rapier fixture replaces the collider on an already grounded player, checks geometry,
 verifies jump refusal until new support overlaps, and exercises unsupported-shape
 replacement and recovery.
 Removing either Collider or GroundDetection retires every owned sensor before
