@@ -157,6 +157,7 @@ describe('Renderer sprite geometry', () => {
         alive: true,
         isHit: true,
         hitTimer: 1000,
+        simulationTime: 1100,
         hitDuration: 500,
         getHealthPercentage: () => 0.5
       };

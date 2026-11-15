@@ -74,7 +74,13 @@ synthetic sprite provider to check source cells, destinations, left-facing
 transforms and save/restore balance, including boss hit compositing before health
 bars and later entities. Coin tests pin one award per coin, no collected drawing,
 and shooting enabled only by power-ups across repeated Game collision frames.
-Keep these fixtures synthetic, dispose each Game and restore timer/global mocks.
+Platform sweeps accept a full previous x/y pose and measure support at the
+vertical contact time (legacy Y-only snapshots keep fixed X). Body contacts use
+earliest swept contact across enemies/boss with projectile geometry tie rules;
+bounce/respawn retires previous player and target sweeps. Coins use the same
+swept rectangle primitive with the pre-step player pose, skipping collected coins
+and respawn teleport paths. Keep these fixtures synthetic, dispose each Game and
+restore timer/global mocks.
 
 ```bash
 # Run tests in watch mode (for development)
@@ -168,18 +174,24 @@ and does not queue an automatic start. `dispose()` is terminal and releases inpu
 failure disposes the partial game while retaining the original error. Deferred
 initialization and imports cannot publish after disposal. Replacement and append
 LDtk requests publish only the latest requested candidate; conversion never reads
-another in-flight request's world. Replacement/append share a 20,000-platform
+another in-flight request's world. Preflight and direct level conversion reject
+duplicate Platforms/Entities layer identifiers, while unrelated layers remain
+allowed; failed import retains the old playable world. Replacement/append share
+a 20,000-platform
 world budget; append checks the complete retained table. Successful terminal
 reset/replacement restores initial lives and clears terminal flags only after
 construction succeeds, preserving score and shooting/cooldown state. Suspension gaps over 250 ms reset simulation
 timing, with at most five catch-up steps otherwise. Player and boss shot cooldowns use `performance.now()` independently of wall-clock
 changes. Player cooldowns survive level reloads; the first shot is immediately
 available. Enemy animation and 300 ms defeated visuals use accumulated simulation
-elapsed time; hit resets the frame clock. Boss overrides `isInHitAnimation()`
-to false: a defeated boss is not drawn (its hit flash has its own timer). Player hit visuals and
-protection each expire on their own owned real-time timeout (500 ms and the requested duration),
+elapsed time; hit resets the frame clock. Boss animation keeps a simulation-time
+frame remainder (200 ms per sequence step)
+and a monotonic accumulated clock shared by hit expiry and renderer fading.
+Accepted damage renews the 400 ms hit visual without resetting animation.
+Boss overrides `isInHitAnimation()` to false: a defeated boss is not drawn.
+Player hit visuals and protection each expire on their own owned real-time timeout (500 ms and the requested duration),
 both restarted on renewal and cancelled by `dispose()`, independent of simulation duration and
-system-clock changes; boss visual effects retain wall-clock semantics. Authored LDtk dimensions are validated and retained;
+system-clock changes. Authored LDtk dimensions are validated and retained;
 Game derives complete object extents and shares bounds with its player, camera
 and boss shots, including vertical camera following in tall levels.
 

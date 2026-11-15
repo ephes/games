@@ -149,6 +149,7 @@ export class LDtkLoader {
     let cells = 0,
       entities = 0;
     for (const level of data.levels) {
+      this.recognizedLayers(level);
       let activeEntities = 0;
       for (const layer of level.layerInstances ?? []) {
         if (layer.intGridCsv) {
@@ -169,6 +170,21 @@ export class LDtkLoader {
     }
   }
 
+  /** Reject ambiguous gameplay layers while leaving unrelated layers untouched. */
+  recognizedLayers(level) {
+    const layers = new Map();
+    for (const layer of level.layerInstances ?? []) {
+      const name = layer.__identifier;
+      if (name === 'Platforms' || name === 'Entities') {
+        if (layers.has(name)) {
+          throw new Error(`Duplicate LDtk ${name} layer`);
+        }
+        layers.set(name, layer);
+      }
+    }
+    return layers;
+  }
+
   /**
    * Convert LDtk level to game format, validating geometry, singletons and fields.
    * Coordinates and enemy speeds must be finite numbers; enemy/boss platform
@@ -182,6 +198,7 @@ export class LDtkLoader {
    * @returns {Object} Game level format
    */
   convertLevel(ldtkLevel) {
+    const layers = this.recognizedLayers(ldtkLevel);
     const hasDimensions = 'pxWid' in ldtkLevel || 'pxHei' in ldtkLevel;
     if (
       hasDimensions &&
@@ -205,18 +222,14 @@ export class LDtkLoader {
     };
 
     // Process platforms layer
-    const platformsLayer = ldtkLevel.layerInstances.find(
-      layer => layer.__identifier === 'Platforms'
-    );
+    const platformsLayer = layers.get('Platforms');
 
     if (platformsLayer) {
       this.processPlatforms(platformsLayer, level);
     }
 
     // Process entities layer
-    const entitiesLayer = ldtkLevel.layerInstances.find(
-      layer => layer.__identifier === 'Entities'
-    );
+    const entitiesLayer = layers.get('Entities');
 
     if (entitiesLayer) {
       this.processEntities(entitiesLayer, level);
