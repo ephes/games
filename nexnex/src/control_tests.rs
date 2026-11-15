@@ -696,3 +696,99 @@ fn removing_climber_restores_owned_gravity_before_rapier_step() {
     app.update();
     assert!(app.world().get_entity(body).is_err());
 }
+
+#[test]
+fn gravity_component_generations_reacquire_only_the_new_base() {
+    for same_frame in [false, true] {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            TransformPlugin,
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
+        ))
+        .init_resource::<climbing::GravityInsertions>()
+        .add_observer(climbing::observe_gravity_insert)
+        .add_systems(Update, climbing::ignore_gravity_if_climbing)
+        .insert_resource(TimestepMode::Fixed {
+            dt: 1. / 60.,
+            substeps: 1,
+        });
+        // A non-player Climber is not dirtied every frame by player controls.
+        let body = app
+            .world_mut()
+            .spawn((
+                Climber {
+                    climbing: true,
+                    ..default()
+                },
+                GravityScale(2.5),
+                RigidBody::Dynamic,
+                Collider::cuboid(6., 14.),
+                Velocity::zero(),
+                Transform::default(),
+            ))
+            .id();
+        app.update();
+        assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.);
+        app.world_mut().entity_mut(body).remove::<GravityScale>();
+        if !same_frame {
+            app.update();
+            assert!(app.world().get::<GravityScale>(body).is_none());
+        }
+        app.world_mut().entity_mut(body).insert(GravityScale(0.75));
+        app.world_mut().entity_mut(body).insert(Velocity::zero());
+        app.update();
+        assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.);
+        assert_eq!(app.world().get::<Velocity>(body).unwrap().linvel.y, 0.);
+        app.world_mut().get_mut::<Climber>(body).unwrap().climbing = false;
+        app.update();
+        assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.75);
+        assert!(app.world().get::<Velocity>(body).unwrap().linvel.y < 0.);
+
+        // Inserting over an existing component is a new generation too;
+        // ordinary mutable writes from another feature are not insertions.
+        app.world_mut().get_mut::<Climber>(body).unwrap().climbing = true;
+        app.update();
+        app.world_mut().entity_mut(body).insert(GravityScale(1.5));
+        app.update();
+        assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.);
+        app.world_mut().get_mut::<Climber>(body).unwrap().climbing = false;
+        app.update();
+        assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 1.5);
+
+        // Simultaneously retiring both components cannot restore the old base
+        // into the new generation, including a legitimate zero base.
+        app.world_mut().get_mut::<Climber>(body).unwrap().climbing = true;
+        app.update();
+        app.world_mut()
+            .entity_mut(body)
+            .remove::<(GravityScale, Climber)>();
+        app.world_mut().entity_mut(body).insert((
+            GravityScale(0.),
+            Climber {
+                climbing: true,
+                ..default()
+            },
+        ));
+        app.update();
+        app.world_mut().entity_mut(body).remove::<Climber>();
+        app.update();
+        assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.);
+
+        app.world_mut().entity_mut(body).insert(Climber {
+            climbing: true,
+            ..default()
+        });
+        app.update();
+        app.world_mut().get_mut::<GravityScale>(body).unwrap().0 = 1.25;
+        app.world_mut().entity_mut(body).remove::<Climber>();
+        app.update();
+        assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 1.25);
+        app.world_mut().entity_mut(body).remove::<GravityScale>();
+        app.update();
+        assert!(app.world().get::<GravityScale>(body).is_none());
+        app.world_mut().despawn(body);
+        app.update();
+        assert!(app.world().get_entity(body).is_err());
+    }
+}

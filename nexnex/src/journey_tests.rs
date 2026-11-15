@@ -1147,3 +1147,45 @@ fn unloaded_restart_accepts_checked_extremes_and_parent_transforms() {
         );
     }
 }
+
+#[test]
+fn level_selection_reads_loaded_transforms_once_per_pass() {
+    for count in [100, 200, 400] {
+        let levels = (0..count)
+            .map(|i| bevy_ecs_ldtk::ldtk::Level {
+                iid: format!("level-{i}"),
+                uid: i + 1,
+                ..testing::level()
+            })
+            .collect();
+        let (mut app, handle) = testing::project_app(levels);
+        app.insert_resource(LevelSelection::Uid(1))
+            .init_resource::<game_flow::SelectionWork>()
+            .add_systems(PostUpdate, game_flow::update_level_selection);
+        app.world_mut().spawn(LdtkProjectHandle::from(handle));
+        // Reverse ECS order; the player is outside all levels, so every authored
+        // candidate is tested and the current selection must remain unchanged.
+        for i in (0..count).rev() {
+            app.world_mut().spawn((
+                LevelIid::new(format!("level-{i}")),
+                GlobalTransform::from_translation(Vec3::new(i as f32 * 128., 0., 0.)),
+            ));
+        }
+        app.world_mut().spawn((
+            Player,
+            GlobalTransform::from_translation(Vec3::new(-1., 64., 0.)),
+        ));
+        app.update();
+        let work = app.world().resource::<game_flow::SelectionWork>();
+        assert!(
+            work.transform_reads <= count as usize,
+            "{count} levels read {} transforms",
+            work.transform_reads
+        );
+        assert_eq!(work.containment_checks, count as usize + 1);
+        assert_eq!(
+            *app.world().resource::<LevelSelection>(),
+            LevelSelection::Uid(1)
+        );
+    }
+}

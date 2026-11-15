@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Index loaded level transforms once per selection pass, keeping current-level
+  preference, authored overlap order and half-open world-space bounds.
+- Bind climbing gravity ownership to each inserted GravityScale generation,
+  including replacement and same-frame removal/reinsertion; restore only the
+  new base without recreating missing components or entities.
+
 - Admit positive patrol layer/entity geometry, checked pixel extents and coordinate
   conversion before constructing routes. Use widened integer point adjustments
   to avoid overflow, saturation and premature float rounding; refuse a bad mob's

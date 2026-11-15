@@ -14,6 +14,10 @@ import { CollisionSystem } from './systems/CollisionSystem.js';
 import { Camera } from './systems/Camera.js';
 import { SpriteLoader } from './systems/SpriteLoader.js';
 import { Renderer } from './rendering/Renderer.js';
+import {
+  buildStaticWorldIndex,
+  visibleStaticObjects
+} from './rendering/staticWorld.js';
 import { GAME_CONFIG, LEVELS } from './utils/constants.js';
 import { LDtkLoader, WORLD_LIMITS } from './systems/LDtkLoader.js';
 
@@ -55,6 +59,7 @@ export class Game {
 
     // Game objects
     this.player = null;
+    this.staticWorldIndex = null;
     this.platforms = [];
     this.coins = [];
     this.enemies = [];
@@ -139,9 +144,11 @@ export class Game {
       }
     }
     boss.bounds = bounds;
+    const staticWorldIndex = buildStaticWorldIndex(platforms, coins);
 
     this.player?.dispose();
     this.player = player;
+    this.staticWorldIndex = staticWorldIndex;
     this.platforms = platforms;
     this.coins = coins;
     this.enemies = enemies;
@@ -162,6 +169,7 @@ export class Game {
       this.gameWon = true;
       this.player.dispose();
       // Clear objects when game is won
+      this.staticWorldIndex = null;
       this.platforms = [];
       this.coins = [];
       this.enemies = [];
@@ -510,8 +518,12 @@ export class Game {
       this.camera.applyTransform(this.ctx);
 
       // Draw game objects
-      this.platforms.forEach(platform => platform.draw(this.ctx, 0));
-      this.coins.forEach(coin => coin.draw(this.ctx, 0));
+      for (const object of visibleStaticObjects(
+        this.staticWorldIndex,
+        this.camera
+      )) {
+        object.draw(this.ctx, 0);
+      }
       this.enemies.forEach(enemy => this.renderer.drawEnemy(enemy));
       this.renderer.drawBoss(this.boss);
 
