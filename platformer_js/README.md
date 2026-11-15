@@ -271,7 +271,7 @@ Player hit visuals and invulnerability use owned elapsed real-time timers,
 independent of simulation steps and system-clock changes. Renewing protection
 restarts both timers: hit visuals expire after 500 ms and protection after the
 requested duration, unaffected by older expirations. Retiring the player cancels
-both callbacks and prevents renewal. Boss visual effects retain real-time timers.
+both callbacks and prevents renewal. Boss visual effects retain wall-clock (`Date.now()`) timers.
 Action delivery uses the subscribers present at the start of each edge; changes
 to subscriptions take effect on the next edge.
 
