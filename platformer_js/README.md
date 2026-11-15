@@ -126,6 +126,17 @@ coordinate conversion, transforms and reset, without changing camera policy.
 Game rendering integration tests record boss-shot fallback arcs and sprite frame
 coordinates under the parent camera transform: each path translates world space
 once, leaves shot coordinates unchanged and balances context save/restore.
+Level creation snapshots platform and coin bounds into a balanced static tree.
+Rendering queries the camera's world-space viewport with a two-pixel margin
+(including the power-up coin stroke) and draws only intersecting candidates in
+original painter order: platforms, then coins. Touching edges are included;
+collected coins keep their index entry and draw nothing. Camera translation is
+still applied exactly once. Platform/coin geometry is static until the next
+successful level creation; changing its coordinates directly requires recreating
+the level. Failed construction retains the previous index, while transitions,
+resets and imports replace it and winning clears it. Dynamic entities retain
+their existing rendering behavior. Canvas regressions cover 10,000 off-screen
+objects of each kind, viewport/margin edges, painter order and level replacement.
 Inactive boss shots draw nothing. Every saved canvas scope restores in `finally`,
 including nested sprite, portal and fireball scopes. Rendering failures retain
 loop disposal/error propagation and allow a fresh Game to reuse the same canvas.

@@ -18,7 +18,11 @@ contacts are pruned even when no stopped message arrives. Climbing owns the
 zero-gravity override only while active: leaving a ladder or removing `Climber`
 restores the pre-climb gravity scale before Rapier runs. A different nonzero
 gravity override is retained; removal/readdition starts fresh ownership, and
-despawn never recreates an entity.
+despawn never recreates an entity. Removing or inserting/replacing `GravityScale`
+retires the old component's cached base, including removal/reinsertion within one
+frame. A new gravity component on an active climber is suppressed before Rapier
+steps and its own base is restored on exit. Ordinary mutable nonzero overrides
+from other features remain intact on exit; removed components stay absent.
 
 Missing, wrongly typed or null-containing Mob `patrol` arrays produce one
 authoring warning and a stationary route at the spawn, without partially
@@ -51,7 +55,10 @@ Level selection keeps the current level while the player remains inside it.
 Otherwise, overlapping candidates use authored project order, independent of ECS
 spawn order. Bounds are half-open: minimum edges belong to a level, maximum
 edges belong to the neighboring level beginning there. Outside every loaded
-level, the current selection is retained.
+level, the current selection is retained. Each selection pass indexes the loaded
+IID-to-world-transform pairs once, then checks candidates in project order with
+constant-time average lookup. Headless operation-count tests cover 100, 200 and
+400 loaded levels alongside the overlap/seam fixtures.
 
 Selection and camera fitting use propagated world coordinates after physics and
 transform propagation. Level bounds include parent translation and scale; the

@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Index static platform/coin bounds at level creation and render only viewport
+  candidates with a two-pixel margin, preserving painter order, collected coins
+  and camera transforms across successful/failed level replacement and win.
+
 - Refuse duplicate recognized LDtk Platforms/Entities layers before conversion
   or publication, retaining the old world while allowing unrelated decoration.
 - Drive boss frames, renewed 400 ms hit visuals and renderer fading from coherent

@@ -58,12 +58,36 @@ pub fn detect_climb_range(
     }
 }
 
+#[derive(Resource, Default)]
+pub(crate) struct GravityInsertions(HashSet<Entity>);
+
+pub(crate) fn observe_gravity_insert(
+    event: On<Insert, GravityScale>,
+    mut insertions: ResMut<GravityInsertions>,
+) {
+    // Insert fires for both a new component and insertion over an existing one,
+    // but not for ordinary Mut writes (including our own zero-gravity write).
+    insertions.0.insert(event.entity);
+}
+
 pub fn ignore_gravity_if_climbing(
     mut removed: RemovedComponents<Climber>,
+    mut removed_gravity: RemovedComponents<GravityScale>,
     changed: Query<Entity, Changed<Climber>>,
     mut bodies: Query<(&mut GravityScale, Option<&Climber>)>,
+    mut insertions: ResMut<GravityInsertions>,
     mut owned_gravity: Local<HashMap<Entity, f32>>,
 ) {
+    let mut candidates: HashSet<_> = changed.iter().collect();
+    for entity in insertions.0.drain() {
+        owned_gravity.remove(&entity);
+        candidates.insert(entity);
+    }
+    // A removed gravity component retires its base before Climber cleanup can
+    // restore anything. Reinsertion (even in this update) owns a new base.
+    for entity in removed_gravity.read() {
+        owned_gravity.remove(&entity);
+    }
     // Retire ownership first, including removal and readdition in one update.
     // A different nonzero gravity value belongs to another feature.
     for entity in removed.read() {
@@ -75,7 +99,7 @@ pub fn ignore_gravity_if_climbing(
             }
         }
     }
-    for entity in &changed {
+    for entity in candidates {
         let Ok((mut gravity, Some(climber))) = bodies.get_mut(entity) else {
             continue;
         };
@@ -94,14 +118,16 @@ pub struct ClimbingPlugin;
 
 impl Plugin for ClimbingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            detect_climb_range.in_set(crate::ControlSet::Observe),
-        )
-        .add_systems(
-            Update,
-            ignore_gravity_if_climbing.in_set(crate::ControlSet::Gravity),
-        )
-        .register_ldtk_int_cell::<LadderBundle>(2);
+        app.init_resource::<GravityInsertions>()
+            .add_observer(observe_gravity_insert)
+            .add_systems(
+                Update,
+                detect_climb_range.in_set(crate::ControlSet::Observe),
+            )
+            .add_systems(
+                Update,
+                ignore_gravity_if_climbing.in_set(crate::ControlSet::Gravity),
+            )
+            .register_ldtk_int_cell::<LadderBundle>(2);
     }
 }
