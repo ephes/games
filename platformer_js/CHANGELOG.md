@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refuse duplicate recognized LDtk Platforms/Entities layers before conversion
+  or publication, retaining the old world while allowing unrelated decoration.
+- Drive boss frames, renewed 400 ms hit visuals and renderer fading from coherent
+  simulation time; preserve fractional frame progress across fixed steps and
+  ignore wall-clock jumps/discarded suspension time.
+
+- Measure diagonal platform support at vertical crossing time, preserving half-width
+  landing support and positive ceiling overlap.
+- Resolve the earliest enemy/boss body contact with deterministic geometric ties;
+  recheck current poses after bounce or respawn instead of replaying old motion.
+- Sweep ordinary and power-up coins across each player step, awarding once and
+  excluding respawn teleports.
+
 - Reject malformed UTF-8 and duplicate JSON members (including escaped aliases)
   before converting or publishing an LDtk world; retain the current playable world.
 - Give player hit pose expiry one owned elapsed timer, keeping its 500 ms duration

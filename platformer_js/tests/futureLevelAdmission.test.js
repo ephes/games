@@ -143,6 +143,63 @@ describe('Future level admission and publication', () => {
     }
   );
 
+  it.each(
+    ['Entities', 'Platforms'].flatMap(kind =>
+      ['replace', 'append'].flatMap(mode =>
+        [false, true].map(reverse => [kind, mode, reverse])
+      )
+    )
+  )(
+    'refuses duplicate %s layers via %s (reverse=%s)',
+    async (kind, mode, reverse) => {
+      const candidate = level('Ambiguous layers');
+      const duplicate = structuredClone(
+        candidate.layerInstances.find(layer => layer.__identifier === kind)
+      );
+      if (kind === 'Entities') {
+        duplicate.entityInstances = duplicate.entityInstances.filter(
+          entity => entity.__identifier !== 'Portal'
+        );
+      } else {
+        duplicate.intGridCsv = [0];
+      }
+      candidate.layerInstances.push(duplicate);
+      if (reverse) {
+        candidate.layerInstances.reverse();
+      }
+      expect(() => game.ldtkLoader.convertLevel(candidate)).toThrow(
+        `Duplicate LDtk ${kind} layer`
+      );
+      source.mockResolvedValue({ levels: [candidate] });
+      const before = snapshot();
+      const accepted =
+        mode === 'replace'
+          ? await game.loadLDtkLevels('synthetic')
+          : await game.addLDtkLevels('synthetic');
+      expect(accepted).toBe(false);
+      expectUnchanged(before);
+      expect(console.error).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          message: expect.stringContaining(`Duplicate LDtk ${kind} layer`)
+        })
+      );
+    }
+  );
+
+  it('retains unrelated decoration layers, including repeated identifiers', async () => {
+    const candidate = level('Decorated');
+    candidate.layerInstances.push(
+      ...Array.from({ length: 2 }, () => ({
+        __identifier: 'Decoration',
+        entityInstances: []
+      }))
+    );
+    source.mockResolvedValue({ levels: [candidate] });
+    expect(await game.loadLDtkLevels('synthetic')).toBe(true);
+    expect(game.levels[0].name).toBe('Decorated');
+  });
+
   const ambiguousEntities = [
     [
       'duplicate LevelName',

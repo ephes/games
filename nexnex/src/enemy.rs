@@ -34,52 +34,73 @@ impl LdtkEntity for Patrol {
         _: &AssetServer,
         _: &mut Assets<TextureAtlasLayout>,
     ) -> Patrol {
-        let mut points = Vec::new();
-        points.push(ldtk_pixel_coords_to_translation_pivoted(
-            entity_instance.px,
-            layer_instance.c_hei * layer_instance.grid_size,
-            IVec2::new(entity_instance.width, entity_instance.height),
-            entity_instance.pivot,
-        ));
-
-        let ldtk_patrol_points = match entity_instance.iter_points_field("patrol") {
-            Ok(points) => points,
+        // Check both extents before invoking LDtk's signed coordinate helper.
+        let pixel_height =
+            (layer_instance.c_wid > 0 && layer_instance.c_hei > 0 && layer_instance.grid_size > 0)
+                .then(|| {
+                    layer_instance.c_wid.checked_mul(layer_instance.grid_size)?;
+                    layer_instance.c_hei.checked_mul(layer_instance.grid_size)
+                })
+                .flatten();
+        let spawn = pixel_height
+            .and_then(|height| patrol_position(entity_instance, height, entity_instance.px));
+        let admitted = (|| {
+            let mut points = vec![spawn.ok_or("invalid layer or spawn geometry")?];
+            let height = pixel_height.unwrap();
+            let route = entity_instance
+                .iter_points_field("patrol")
+                .map_err(|_| "missing or malformed patrol points")?;
+            for point in route {
+                // Preserve the sample world's half-cell X / full-cell Y pivot
+                // adjustment in widened integer arithmetic, before f32 conversion.
+                let grid = i64::from(layer_instance.grid_size);
+                let x = (2 * i64::from(point.x) + 1) * grid / 2;
+                let y = (i64::from(point.y) + 1) * grid;
+                let px = IVec2::new(
+                    i32::try_from(x).map_err(|_| "patrol X exceeds signed pixel coordinates")?,
+                    i32::try_from(y).map_err(|_| "patrol Y exceeds signed pixel coordinates")?,
+                );
+                points.push(
+                    patrol_position(entity_instance, height, px)
+                        .ok_or("invalid patrol coordinate conversion")?,
+                );
+            }
+            points.dedup();
+            Ok::<_, &str>(points)
+        })();
+        match admitted {
+            Ok(points) => Patrol {
+                index: usize::from(points.len() > 1),
+                points,
+                forward: true,
+            },
             Err(error) => {
                 warn!(
-                    "Invalid patrol field on entity {}: {error}; using stationary patrol",
+                    "Invalid patrol on entity {}: {error}; using stationary patrol",
                     entity_instance.iid
                 );
-                return Patrol {
-                    points,
+                Patrol {
+                    points: spawn.into_iter().collect(),
                     index: 0,
                     forward: true,
-                };
+                }
             }
-        };
-
-        for ldtk_point in ldtk_patrol_points {
-            // The +1 is necessary here due to the pivot of the entities in the sample
-            // file.
-            // The patrols set up in the file look flat and grounded,
-            // but technically they're not if you consider the pivot,
-            // which is at the bottom-center for the skulls.
-            let pixel_coords = (ldtk_point.as_vec2() + Vec2::new(0.5, 1.))
-                * Vec2::splat(layer_instance.grid_size as f32);
-
-            points.push(ldtk_pixel_coords_to_translation_pivoted(
-                pixel_coords.as_ivec2(),
-                layer_instance.c_hei * layer_instance.grid_size,
-                IVec2::new(entity_instance.width, entity_instance.height),
-                entity_instance.pivot,
-            ));
-        }
-
-        Patrol {
-            points,
-            index: 1,
-            forward: true,
         }
     }
+}
+
+fn patrol_position(entity: &EntityInstance, height: i32, px: IVec2) -> Option<Vec2> {
+    if entity.width <= 0 || entity.height <= 0 || !entity.pivot.is_finite() {
+        return None;
+    }
+    height.checked_sub(px.y)?;
+    let position = ldtk_pixel_coords_to_translation_pivoted(
+        px,
+        height,
+        IVec2::new(entity.width, entity.height),
+        entity.pivot,
+    );
+    position.is_finite().then_some(position)
 }
 
 // Avoid partition-dependent direction at an endpoint due to f32 physics drift.
@@ -167,6 +188,224 @@ impl Plugin for EnemyPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::log::{
+        tracing,
+        tracing_subscriber::{self, prelude::*},
+    };
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    struct Warnings(Arc<AtomicUsize>);
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Warnings {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            if *event.metadata().level() == tracing::Level::WARN {
+                self.0.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
+    fn authored_route(
+        layer: &LayerInstance,
+        points: Vec<IVec2>,
+        expected_warnings: usize,
+    ) -> Patrol {
+        let (app, _) = crate::testing::project_app(vec![]);
+        let entity = EntityInstance {
+            iid: "synthetic-mob".into(),
+            px: IVec2::new(8, 16),
+            width: 10,
+            height: 10,
+            pivot: Vec2::splat(0.5),
+            field_instances: vec![bevy_ecs_ldtk::ldtk::FieldInstance {
+                identifier: "patrol".into(),
+                value: FieldValue::Points(points.into_iter().map(Some).collect()),
+                field_instance_type: "Array<Point>".into(),
+                tile: None,
+                def_uid: 7,
+                real_editor_values: vec![],
+            }],
+            ..default()
+        };
+        let count = Arc::new(AtomicUsize::new(0));
+        let subscriber = tracing_subscriber::registry().with(Warnings(count.clone()));
+        let route = tracing::subscriber::with_default(subscriber, || {
+            Patrol::bundle_entity(
+                &entity,
+                layer,
+                None,
+                None,
+                app.world().resource::<AssetServer>(),
+                &mut Assets::default(),
+            )
+        });
+        assert_eq!(count.load(Ordering::Relaxed), expected_warnings);
+        route
+    }
+
+    fn authored_layer() -> LayerInstance {
+        LayerInstance {
+            c_wid: 8,
+            c_hei: 8,
+            grid_size: 16,
+            ..default()
+        }
+    }
+
+    #[test]
+    fn authored_patrol_refuses_overflow_without_moving_or_blocking_siblings() {
+        for (width, height, grid, point) in [
+            (8, i32::MAX, 16, IVec2::ZERO),
+            (i32::MAX, 8, 16, IVec2::ZERO),
+            (0, 8, 16, IVec2::ZERO),
+            (8, -1, 16, IVec2::ZERO),
+            (8, 8, 0, IVec2::ZERO),
+            (8, 8, 16, IVec2::new(i32::MAX, 0)),
+            (8, 8, 16, IVec2::new(0, i32::MIN)),
+            (8, 8, 16, IVec2::new(0, i32::MAX)),
+        ] {
+            let layer = LayerInstance {
+                c_wid: width,
+                c_hei: height,
+                grid_size: grid,
+                ..default()
+            };
+            let route = authored_route(&layer, vec![IVec2::ZERO, point], 1);
+            assert!(route.points.len() <= 1, "{layer:?}: {route:?}");
+            let mut app = App::new();
+            app.add_systems(Update, patrol);
+            let id = app
+                .world_mut()
+                .spawn((
+                    Transform::from_xyz(8., 112., 0.),
+                    Velocity::linear(Vec2::X),
+                    route,
+                ))
+                .id();
+            app.update();
+            assert_eq!(app.world().get::<Velocity>(id).unwrap().linvel, Vec2::ZERO);
+            assert_eq!(
+                app.world().get::<Transform>(id).unwrap().translation,
+                Vec3::new(8., 112., 0.)
+            );
+            let sibling = authored_route(&authored_layer(), vec![IVec2::new(6, 1)], 0);
+            assert_eq!(
+                sibling.points,
+                vec![Vec2::new(8., 112.), Vec2::new(104., 96.)]
+            );
+        }
+    }
+
+    #[test]
+    fn authored_patrol_converts_before_float_rounding() {
+        let layer = LayerInstance {
+            c_wid: 1,
+            c_hei: 64,
+            grid_size: 2,
+            ..default()
+        };
+        let route = authored_route(&layer, vec![IVec2::new(16_777_217, 1)], 0);
+        assert_eq!(route.points[1], Vec2::new(33_554_435_i32 as f32, 124.));
+    }
+
+    #[test]
+    fn authored_patrol_accepts_checked_coordinate_boundaries() {
+        let layer = LayerInstance {
+            c_wid: 1,
+            c_hei: 1,
+            grid_size: 1,
+            ..default()
+        };
+        let route = authored_route(&layer, vec![IVec2::new(i32::MAX, i32::MIN + 1)], 0);
+        assert_eq!(route.points[1], Vec2::splat(i32::MAX as f32));
+        assert!(patrol_position(
+            &EntityInstance {
+                width: 10,
+                height: 10,
+                pivot: Vec2::splat(f32::NAN),
+                ..default()
+            },
+            1,
+            IVec2::ZERO
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn authored_repeated_waypoints_collapse_once() {
+        let route = authored_route(&authored_layer(), vec![IVec2::ZERO; 50_000], 0);
+        assert_eq!(route.points.len(), 1);
+        assert_eq!(route.points[0], Vec2::new(8., 112.));
+        let mut app = App::new();
+        app.add_systems(Update, patrol);
+        let id = app
+            .world_mut()
+            .spawn((Transform::from_xyz(8., 112., 0.), Velocity::zero(), route))
+            .id();
+        for _ in 0..10 {
+            app.update();
+            assert_eq!(app.world().get::<Patrol>(id).unwrap().points.len(), 1);
+            assert_eq!(app.world().get::<Velocity>(id).unwrap().linvel, Vec2::ZERO);
+        }
+    }
+
+    #[test]
+    fn authored_revisits_preserve_partitioned_travel() {
+        use bevy_rapier2d::prelude::*;
+        for frames in [1, 2, 19, 38, 76] {
+            let route = authored_route(
+                &authored_layer(),
+                vec![IVec2::ZERO, IVec2::X, IVec2::X, IVec2::ZERO],
+                0,
+            );
+            assert_eq!(
+                route.points,
+                vec![
+                    Vec2::new(8., 112.),
+                    Vec2::new(24., 112.),
+                    Vec2::new(8., 112.)
+                ]
+            );
+            let mut app = App::new();
+            app.add_plugins((
+                MinimalPlugins,
+                TransformPlugin,
+                RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
+                EnemyPlugin,
+            ))
+            .insert_resource(TimestepMode::Fixed {
+                dt: 24. / 75. / frames as f32,
+                substeps: 1,
+            });
+            let id = app
+                .world_mut()
+                .spawn((
+                    Transform::from_xyz(8., 112., 0.),
+                    RigidBody::KinematicVelocityBased,
+                    Velocity::zero(),
+                    route,
+                ))
+                .id();
+            for _ in 0..frames {
+                app.update();
+            }
+            assert!(app
+                .world()
+                .get::<Transform>(id)
+                .unwrap()
+                .translation
+                .abs_diff_eq(Vec3::new(16., 112., 0.), 0.001));
+            assert_eq!(
+                app.world().get::<Velocity>(id).unwrap().linvel,
+                -Vec2::X * 75.
+            );
+        }
+    }
 
     #[test]
     fn arrival_and_repeated_waypoints_stay_finite() {

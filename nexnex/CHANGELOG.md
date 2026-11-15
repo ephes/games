@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Admit positive patrol layer/entity geometry, checked pixel extents and coordinate
+  conversion before constructing routes. Use widened integer point adjustments
+  to avoid overflow, saturation and premature float rounding; refuse a bad mob's
+  route with one warning while retaining stationary behavior and valid siblings.
+- Collapse consecutive identical authored patrol points once at construction;
+  stationary routes retain one point for constant update work, while A-B-A
+  revisits preserve travel across frame partitions.
+
 - Index ground sensors by owner once per update for linear average ownership
   work during bulk load/resize, preserving equal geometry and contact retirement.
 

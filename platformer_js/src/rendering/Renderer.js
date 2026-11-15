@@ -185,7 +185,7 @@ export class Renderer {
       // Apply hit effect overlay after drawing the sprite
       if (boss.isHit) {
         // Create a more stable flash effect with slower pulsing
-        const timeSinceHit = Date.now() - boss.hitTimer;
+        const timeSinceHit = boss.simulationTime - boss.hitTimer;
         const flashPhase = timeSinceHit / boss.hitDuration;
         const flashIntensity = Math.max(0, 1 - flashPhase) * 0.6; // Fade out over hit duration
 
@@ -226,7 +226,7 @@ export class Renderer {
         boss.y - 35
       );
       this.ctx.fillText(
-        `Timer: ${Date.now() - boss.frameTimer}ms`,
+        `Timer: ${boss.frameTimer}ms`,
         boss.x - 45,
         boss.y - 25
       );

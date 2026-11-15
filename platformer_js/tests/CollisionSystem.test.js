@@ -164,3 +164,66 @@ describe('Platform contact boundaries', () => {
     }
   });
 });
+
+// At y=80 (bottom=100), contact is halfway through this diagonal step.
+it.each([
+  ['enter after crossing', -60, 20, 100, false],
+  ['leave after crossing', 20, 140, 100, true],
+  ['exact half support', 80, 100, 100, true],
+  ['below half support', 80.2, 100, 100, false],
+  ['narrow support', 0, 0, 9, false]
+])(
+  'checks horizontal support at top contact: %s',
+  (_, startX, x, width, grounded) => {
+    const platform = { x: 0, y: 100, width, height: 2 };
+    for (const fractions of [[1], [0.25, 0.5, 1]]) {
+      let previous = { x: startX, y: 0 };
+      let landed = false;
+      for (const fraction of fractions) {
+        const entity = {
+          x: startX + (x - startX) * fraction,
+          y: 160 * fraction,
+          width: 20,
+          height: 20,
+          velocityY: 160
+        };
+        landed = CollisionSystem.checkPlatformCollisions(
+          entity,
+          [platform],
+          previous
+        ).isGrounded;
+        if (landed) {
+          break;
+        }
+        previous = { x: entity.x, y: entity.y };
+      }
+      expect(landed).toBe(grounded);
+    }
+  }
+);
+
+it.each([
+  [-60, 20, null],
+  [20, 140, 'bottom'],
+  [80, 120, null]
+])(
+  'checks horizontal overlap at ceiling contact (%s -> %s)',
+  (startX, x, side) => {
+    const entity = {
+      x,
+      y: 0,
+      width: 20,
+      height: 20,
+      velocityY: -200,
+      isJumping: true
+    };
+    const platform = { x: 0, y: 98, width: 100, height: 2 };
+    expect(
+      CollisionSystem.checkPlatformCollisions(entity, [platform], {
+        x: startX,
+        y: 200
+      }).side
+    ).toBe(side);
+    expect(entity.isJumping).toBe(true);
+  }
+);

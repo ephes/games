@@ -23,13 +23,22 @@ despawn never recreates an entity.
 Missing, wrongly typed or null-containing Mob `patrol` arrays produce one
 authoring warning and a stationary route at the spawn, without partially
 importing points or preventing valid sibling mobs from loading. Empty arrays
-also stay at the spawn.
+also stay at the spawn. Patrol construction checks positive layer and entity
+sizes, both signed 32-bit pixel extents, finite pivots and checked Y inversion.
+Authored point adjustments use widened integer arithmetic before conversion to
+world floats; coordinates outside the signed pixel range are refused. A bad
+route emits one warning and keeps only its safe spawn point (or no points when
+even spawn geometry is invalid); patrol updates leave that mob stationary and
+valid siblings continue loading. No partial route is admitted.
 
 Patrols travel at 75 world units per simulated second and turn at endpoints.
 After Rapier writes back movement, distance beyond a waypoint carries around
 subsequent corners before transform propagation/rendering. Complete out-and-back
 cycles are skipped arithmetically, so even a long step or repeated points needs
-at most one bounded traversal; an entirely coincident route stops. Headless
+at most one bounded traversal. Construction collapses consecutive identical
+waypoints, including an initial point equal to the spawn; an entirely coincident
+route retains one point and takes constant work per update. Nonconsecutive
+revisits such as A-B-A remain part of the route. Headless
 Rapier tests compare equal elapsed time split into 1, 2, 19, 38 and 76 steps,
 including multiple short legs, a full cycle, repeated points and both exact
 turnaround times. A 0.0001 world-unit arrival tolerance absorbs f32 drift at
@@ -149,9 +158,12 @@ the exact changes and when to remove the patch.
 Local checks (headless tests use synthetic ECS entities, geometry and in-memory
 LDtk data, no window or GPU):
 
+The application currently ignores Cargo.lock. On a fresh checkout, generate the
+local lockfile once with `cargo generate-lockfile` before running locked tests.
+
 ```sh
 cargo fmt --check
 cargo check
 cargo clippy --all-targets -- -D warnings
-cargo test
+cargo test --locked
 ```

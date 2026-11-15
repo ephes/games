@@ -954,6 +954,11 @@ fn malformed_authored_patrols_are_stationary_and_do_not_block_siblings() {
         Some(FieldValue::Int(Some(7))),
         Some(FieldValue::Points(vec![None])),
         Some(FieldValue::Points(vec![Some(IVec2::new(6, 1)), None])),
+        Some(FieldValue::Points(vec![
+            Some(IVec2::ZERO),
+            Some(IVec2::new(i32::MAX, 0)),
+        ])),
+        Some(FieldValue::Points(vec![Some(IVec2::new(0, i32::MIN))])),
     ] {
         let mut data = physics_project();
         let entities = &mut data.levels[0].layer_instances.as_mut().unwrap()[0].entity_instances;

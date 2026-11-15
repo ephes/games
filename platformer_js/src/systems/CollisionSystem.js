@@ -25,10 +25,14 @@ export class CollisionSystem {
    * Check platform collisions for an entity
    * @param {Object} entity - Entity to check
    * @param {Array} platforms - List of platforms
-   * @param {number} [previousY] - Y before this simulation step (enables swept contact)
+   * @param {Object|number} [previousPose] - Pre-step x/y (legacy Y-only is supported)
    * @returns {Object} Collision info
    */
-  static checkPlatformCollisions(entity, platforms, previousY) {
+  static checkPlatformCollisions(entity, platforms, previousPose) {
+    const previousY =
+      typeof previousPose === 'number' ? previousPose : previousPose?.y;
+    const previousX =
+      typeof previousPose === 'object' ? previousPose.x : entity.x;
     const result = { isGrounded: false, platform: null, side: null };
     const falling = entity.velocityY > 0;
     if (!falling && entity.velocityY >= 0) {
@@ -38,15 +42,20 @@ export class CollisionSystem {
     let surface = falling ? Infinity : -Infinity;
 
     for (const platform of platforms) {
-      const overlap =
-        Math.min(entity.x + entity.width, platform.x + platform.width) -
-        Math.max(entity.x, platform.x);
-      if (falling ? overlap < entity.width * 0.5 : overlap <= 0) {
-        continue;
-      }
       const edge = falling ? platform.y : platform.y + platform.height;
       const next = falling ? entity.y + entity.height : entity.y;
       const previous = falling ? previousY + entity.height : previousY;
+      const time =
+        previousY === undefined || next === previous
+          ? 1
+          : (edge - previous) / (next - previous);
+      const contactX = previousX + (entity.x - previousX) * time;
+      const overlap =
+        Math.min(contactX + entity.width, platform.x + platform.width) -
+        Math.max(contactX, platform.x);
+      if (falling ? overlap < entity.width * 0.5 : overlap <= 0) {
+        continue;
+      }
       const crossed =
         previousY === undefined
           ? this.checkCollision(entity, platform) &&

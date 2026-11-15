@@ -36,7 +36,8 @@ export class Boss extends Enemy {
 
     // Initialize animation frame (parent class sets these but let's ensure they're correct)
     this.frameX = 0;
-    this.frameTimer = Date.now();
+    this.frameTimer = 0;
+    this.simulationTime = 0;
 
     // Animation sequence for smoother transitions
     // Play frames in a back-and-forth pattern: 0,1,2,3,4,3,2,1
@@ -126,10 +127,15 @@ export class Boss extends Enemy {
     }
 
     // Update boss-specific animation (NOT parent animation)
-    this.updateBossAnimation();
+    const elapsed = this.elapsed(deltaTime);
+    this.simulationTime += elapsed;
+    this.updateBossAnimation(elapsed);
 
     // Handle hit animation
-    if (this.isHit && Date.now() - this.hitTimer > this.hitDuration) {
+    if (
+      this.isHit &&
+      this.simulationTime - this.hitTimer + 1e-7 >= this.hitDuration
+    ) {
       this.isHit = false;
     }
 
@@ -147,28 +153,29 @@ export class Boss extends Enemy {
 
   /**
    * Update boss animation frames
+   * @param {number} deltaTime - Simulation elapsed milliseconds
    */
-  updateBossAnimation() {
-    const now = Date.now();
+  updateBossAnimation(deltaTime) {
+    this.frameTimer += this.elapsed(deltaTime);
+    const frames = Math.floor((this.frameTimer + 1e-7) / this.frameInterval);
+    this.frameTimer = Math.max(
+      0,
+      this.frameTimer - frames * this.frameInterval
+    );
+    this.sequenceIndex =
+      (this.sequenceIndex + frames) % this.animationSequence.length;
+    this.frameX = this.animationSequence[this.sequenceIndex];
 
-    if (now - this.frameTimer > this.frameInterval) {
-      this.frameTimer = now;
-      // Use the animation sequence for smoother transitions
-      this.sequenceIndex =
-        (this.sequenceIndex + 1) % this.animationSequence.length;
-      this.frameX = this.animationSequence[this.sequenceIndex];
-
-      if (window.DEBUG_BOSS) {
-        console.log(
-          `Boss animation: Frame ${this.frameX}, Sequence ${this.sequenceIndex}, Time: ${now}`
-        );
-      }
+    if (frames > 0 && window.DEBUG_BOSS) {
+      console.log(
+        `Boss animation: Frame ${this.frameX}, Sequence ${this.sequenceIndex}, Time: ${this.simulationTime}`
+      );
     }
   }
 
   /**
    * The boss has no death animation: its hit flash runs on its own
-   * Date-based timer (hitTimer/hitDuration), so a defeated boss is never
+   * simulation timer (hitTimer/hitDuration), so a defeated boss is never
    * "in hit animation" and the renderer stops drawing it at once.
    * @returns {boolean} Always false
    */
@@ -185,7 +192,7 @@ export class Boss extends Enemy {
       return 0;
     }
     this.isHit = true;
-    this.hitTimer = Date.now();
+    this.hitTimer = this.simulationTime;
     this.health = Math.max(0, this.health - 1);
 
     if (this.health <= 0) {

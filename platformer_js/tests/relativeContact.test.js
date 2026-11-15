@@ -164,3 +164,16 @@ it('still consumes later shots along the real path while protected', () => {
   expect(first.active).toBe(false);
   expect(onPath.active).toBe(false);
 });
+
+it('passes the full prior player pose for diagonal platform contact', () => {
+  game.player.x = 0;
+  game.player.y = 0;
+  game.player.speed = 160;
+  game.player.velocityY = 160;
+  game.inputManager.keys.ArrowRight = true;
+  game.platforms = [{ x: 0, y: 100, width: 100, height: 2 }];
+  game.update(16);
+  expect(game.player.x).toBe(160);
+  expect(game.player.y).toBe(70);
+  expect(game.player.velocityY).toBe(0);
+});

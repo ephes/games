@@ -74,10 +74,13 @@ every DOM listener after each case. Collision tests call the production system
 with synthetic rectangles: touching edges do not overlap,
 landing needs at least 50% horizontal support while falling, and an upward
 ceiling hit stops vertical speed without clearing jumping state. Game passes the
-player's previous Y into collision resolution, so fast movement hits the first
+player's previous x/y pose into collision resolution, so fast movement hits the first
 crossed support/ceiling even through thin geometry, independent of platform order.
-Landing still requires 50% horizontal support; ceilings require positive overlap.
-Direct collision callers can omit previous Y to resolve existing overlaps. Renderer tests
+Horizontal overlap is evaluated at the vertical crossing time: landing requires
+50% support and ceilings require positive overlap. Diagonal movement cannot gain
+support by entering after crossing the top or lose contact by leaving afterward.
+Direct collision callers can omit the previous pose to resolve existing overlaps;
+legacy Y-only snapshots retain fixed-X behavior. Renderer tests
 record sprite source/destination geometry, facing transforms and canvas state
 restoration without pixel snapshots. Coin tests verify one award, hidden
 collected geometry and real Game scoring/power-up behavior across repeated
@@ -267,11 +270,15 @@ can run at most five simulation steps; gaps over 250 ms discard accumulated time
 so returning from suspension does not replay missed movement. Player and boss shooting cooldowns use monotonic `performance.now()` time,
 so changing the system clock cannot stall or bypass them. The first shot is
 immediately available; live player level reloads preserve the cooldown.
-Player hit visuals and invulnerability use owned elapsed real-time timers,
+Boss frames and hit fading use accumulated simulation elapsed time: the eight-frame
+ping-pong sequence advances every 200 ms, retaining fractional time, and each
+accepted hit renews a 400 ms visual. Wall-clock jumps and discarded suspension
+time do not advance or freeze these visuals; defeated bosses still disappear
+immediately. Player hit visuals and invulnerability use owned elapsed real-time timers,
 independent of simulation steps and system-clock changes. Renewing protection
 restarts both timers: hit visuals expire after 500 ms and protection after the
 requested duration, unaffected by older expirations. Retiring the player cancels
-both callbacks and prevents renewal. Boss visual effects retain wall-clock (`Date.now()`) timers.
+both callbacks and prevents renewal.
 Action delivery uses the subscribers present at the start of each edge; changes
 to subscriptions take effect on the next edge.
 
@@ -342,7 +349,11 @@ supersession or disposal. Over-budget imports report the exceeded budget and ret
 the current playable world.
 
 Replacement and append imports validate every candidate level, including future
-levels, before publishing. Each level requires one Boss and one Portal; Player
+levels, before publishing. Each level admits at most one `Platforms` layer and
+one `Entities` layer; duplicate recognized identifiers refuse the whole import
+instead of ignoring authored content. Unrelated layers, including repeated
+decoration identifiers, remain allowed and count toward source budgets. Each
+level requires one Boss and one Portal; Player
 may be omitted to use the default start at (50, 200). Duplicate Player, Boss or
 Portal entities are rejected. Recognized fields (`LevelName`, enemy `Speed`,
 enemy/boss `PlatformIndex`, coin `IsPowerUp`) must occur at most once on their
@@ -369,7 +380,13 @@ Conversion throws on invalid data, and `game.loadLDtkLevels(url)` returns `false
 while retaining the previous playable state, including the loaded world.
 
 Lethal enemy, boss or boss-projectile contact ends that update immediately;
-the player cannot enter a portal or win on the death frame. Coins are checked
+the player cannot enter a portal or win on the death frame. Coins sweep the
+player's pre-step pose to its current pose, awarding each ordinary
+or power-up coin once even without endpoint overlap. Tangent edges do not collect;
+a boss-shot respawn retires the old pose so the teleport collects nothing in between.
+Body contacts choose the earliest relative contact across enemies and boss, with
+the same geometric ties as player shots. After bounce/respawn, checks restart at
+current poses rather than continuing the retired sweep. Coins are checked
 before enemy/boss contact, while boss projectiles are checked before player
 projectiles and other collisions. Surviving contact still permits portal entry.
 

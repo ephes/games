@@ -272,7 +272,6 @@ export class Game {
     // Update player
     const keys = this.inputManager.getKeys();
     let previousPlayer = { x: this.player.x, y: this.player.y };
-    const previousY = previousPlayer.y;
     this.player.update(keys, deltaTime);
 
     // Keep player in bounds
@@ -289,7 +288,7 @@ export class Game {
     const collisionResult = CollisionSystem.checkPlatformCollisions(
       this.player,
       this.platforms,
-      previousY
+      previousPlayer
     );
 
     // If player is not on any platform, they should be jumping/falling
@@ -422,10 +421,13 @@ export class Game {
     // Coin collisions
     this.coins.forEach(coin => {
       if (
-        CollisionSystem.checkCollision(
+        !coin.collected &&
+        CollisionSystem.sweptContactTime(
           this.player.getBounds(),
-          coin.getBounds()
-        )
+          coin.getBounds(),
+          previousPlayer ?? this.player,
+          coin
+        ) !== null
       ) {
         const result = coin.collect();
         if (result.collected) {
@@ -437,20 +439,39 @@ export class Game {
       }
     });
 
-    // Enemy collisions
-    for (const enemy of this.enemies) {
+    // Body contacts share the swept-contact ordering used by player shots.
+    // A bounce or respawn retires that sweep; subsequent checks use current poses.
+    let remaining = this.enemies;
+    let boss = this.boss;
+    while (!this.player.isInvulnerable) {
+      const hit = CollisionSystem.checkProjectileCollisions(
+        this.player,
+        remaining,
+        boss,
+        previousPlayer ?? {
+          x: this.player.x,
+          y: this.player.y - Math.max(0, this.player.velocityY)
+        },
+        previousTargets
+      );
+      if (!hit) {
+        break;
+      }
+      const { target, type } = hit;
       const collision = CollisionSystem.checkEnemyCollision(
         this.player,
-        enemy,
+        target,
         previousPlayer,
-        previousTargets.get(enemy)
+        previousTargets.get(target)
       );
       if (collision === 'stomp') {
-        if (enemy.hit()) {
-          this.player.y = enemy.y - this.player.height;
-          this.player.bounce();
-          previousPlayer = { x: this.player.x, y: this.player.y };
-          this.score += 50;
+        const points =
+          type === 'boss' ? target.takeDamage() : target.hit() ? 50 : 0;
+        this.score += points;
+        this.player.y = target.y - this.player.height;
+        this.player.bounce();
+        if (type === 'boss' && !target.alive) {
+          this.portal.unlock();
         }
       } else if (collision === 'damage') {
         this.lives = this.player.takeDamage(this.lives);
@@ -460,32 +481,12 @@ export class Game {
           return;
         }
       }
-    }
-
-    // Boss collision
-    const bossCollision = CollisionSystem.checkEnemyCollision(
-      this.player,
-      this.boss,
-      previousPlayer,
-      previousTargets.get(this.boss)
-    );
-    if (bossCollision === 'stomp') {
-      const points = this.boss.takeDamage();
-      this.player.y = this.boss.y - this.player.height;
-      this.player.bounce();
-      this.score += points;
-
-      // Check if boss is defeated
-      if (!this.boss.alive) {
-        this.portal.unlock();
+      remaining = remaining.filter(enemy => enemy !== target);
+      if (target === boss) {
+        boss = null;
       }
-    } else if (bossCollision === 'damage') {
-      this.lives = this.player.takeDamage(this.lives);
-      if (this.lives <= 0) {
-        this.gameOver = true;
-        this.player.dispose();
-        return;
-      }
+      previousPlayer = { x: this.player.x, y: this.player.y };
+      previousTargets = new Map();
     }
 
     // Portal collision - only allow entry if unlocked
