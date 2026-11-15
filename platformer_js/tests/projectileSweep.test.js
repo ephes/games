@@ -111,7 +111,8 @@ describe('Earliest swept projectile contact', () => {
     const shot = new Projectile(55, 110, 1);
     expect(CollisionSystem.checkProjectileCollisions(shot, [enemy])).toEqual({
       type: 'enemy',
-      target: enemy
+      target: enemy,
+      time: 0
     });
     const previous = { ...shot, x: 0 };
     for (const patch of [{ alive: false }, { y: 200 }, { y: 115 }]) {

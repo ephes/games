@@ -255,7 +255,7 @@ export class CollisionSystem {
    * @param {Object} [previousProjectile] - Projectile position before this step
    * @param {Map} [previousTargets] - Target positions before this step
    * @param {Array} [candidates] - Optional broad-phase query in level order
-   * @returns {Object|null} Hit target or null
+   * @returns {Object|null} Hit type, target and contact time, or null
    */
   static checkProjectileCollisions(
     projectile,
@@ -298,7 +298,7 @@ export class CollisionSystem {
       }
       if (time < earliest || before) {
         earliest = time;
-        hit = { type: candidate.type, target };
+        hit = { type: candidate.type, target, time };
       }
     }
     return hit;

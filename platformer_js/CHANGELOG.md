@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Give newborn boss shots an end-of-step birth at the muzzle. Check current
+  overlap at birth and defer movement/animation until the next step, preventing
+  damage along player motion that happened before the shot existed.
+
+- Resolve competing player shots chronologically within each fixed step, with
+  deterministic geometric ties and fresh target checks after an earlier defeat.
+  Shot storage order no longer changes combat rewards or surviving geometry.
+
 - Index static platform/coin bounds at level creation and render only viewport
   candidates with a two-pixel margin, preserving painter order, collected coins
   and camera transforms across successful/failed level replacement and win.

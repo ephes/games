@@ -328,12 +328,14 @@ export class Game {
     for (const projectile of bossProjectiles) {
       if (
         projectile.active &&
-        CollisionSystem.sweptContactTime(
-          projectile,
-          this.player,
-          projectile.previousPosition ?? projectile,
-          previousPlayer
-        ) !== null
+        (projectile.previousPosition
+          ? CollisionSystem.sweptContactTime(
+              projectile,
+              this.player,
+              projectile.previousPosition,
+              previousPlayer
+            ) !== null
+          : CollisionSystem.checkCollision(projectile, this.player))
       ) {
         projectile.active = false;
         const livesBefore = this.lives;
@@ -378,44 +380,87 @@ export class Game {
       this.boss,
       previousTargets
     );
-    for (let i = this.projectiles.length - 1; i >= 0; i--) {
-      const projectile = this.projectiles[i];
-      const previousProjectile = { x: projectile.x, y: projectile.y };
-      projectile.update(deltaTime);
-
-      // Resolve contacts before culling shots that cross the viewport margin.
-      const hit = CollisionSystem.checkProjectileCollisions(
-        projectile,
+    const pending = [];
+    const consumed = new Set();
+    const findHit = step =>
+      CollisionSystem.checkProjectileCollisions(
+        step.projectile,
         this.enemies,
         this.boss,
-        previousProjectile,
+        step.previous,
         previousTargets,
-        CollisionSystem.queryProjectileIndex(
-          index,
-          projectile,
-          previousProjectile
-        )
+        step.candidates
       );
-
-      if (hit) {
-        if (hit.type === 'enemy') {
-          if (hit.target.hit()) {
-            this.score += 50;
-          }
-        } else if (hit.type === 'boss') {
-          const points = hit.target.takeDamage();
-          this.score += points;
-
-          // Check if boss is defeated
-          if (!this.boss.alive) {
-            this.portal.unlock();
+    const compare = (a, b) => {
+      if (a.hit.time !== b.hit.time) {
+        return a.hit.time - b.hit.time;
+      }
+      // Simultaneous shots use pre-step geometry, then their endpoint. Exact
+      // duplicate trajectories are interchangeable and retain storage order.
+      for (const pose of ['previous', 'projectile']) {
+        for (const key of ['x', 'y', 'width', 'height']) {
+          const difference = a[pose][key] - b[pose][key];
+          if (difference) {
+            return difference;
           }
         }
-        this.projectiles.splice(i, 1);
-      } else if (projectile.isOutOfBounds(this.camera.x, this.canvas.width)) {
-        this.projectiles.splice(i, 1);
+      }
+      return 0;
+    };
+    for (const projectile of this.projectiles) {
+      const previous = {
+        x: projectile.x,
+        y: projectile.y,
+        width: projectile.width,
+        height: projectile.height
+      };
+      projectile.update(deltaTime);
+      const step = {
+        projectile,
+        previous,
+        candidates: CollisionSystem.queryProjectileIndex(
+          index,
+          projectile,
+          previous
+        )
+      };
+      step.hit = findHit(step);
+      if (step.hit) {
+        pending.push(step);
       }
     }
+    pending.sort(compare);
+    while (pending.length) {
+      const step = pending.shift();
+      const { hit, projectile } = step;
+      if (!hit.target.alive) {
+        // An earlier shot retired this target. Re-query the same swept path
+        // and reinsert its next live contact into the remaining chronology.
+        step.hit = findHit(step);
+        if (step.hit) {
+          pending.push(step);
+          pending.sort(compare);
+        }
+        continue;
+      }
+      if (hit.type === 'enemy') {
+        if (hit.target.hit()) {
+          this.score += 50;
+        }
+      } else {
+        this.score += hit.target.takeDamage();
+        if (!this.boss.alive) {
+          this.portal.unlock();
+        }
+      }
+      consumed.add(projectile);
+    }
+    // Contacts take precedence over off-screen retirement for every shot.
+    this.projectiles = this.projectiles.filter(
+      projectile =>
+        !consumed.has(projectile) &&
+        !projectile.isOutOfBounds(this.camera.x, this.canvas.width)
+    );
   }
 
   /**
