@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
@@ -9,6 +9,19 @@ use bevy_rapier2d::prelude::*;
 pub struct GroundSensor {
     pub ground_detection_entity: Entity,
     pub intersecting_ground_entities: HashSet<Entity>,
+}
+
+impl GroundSensor {
+    fn owner(&self) -> Entity {
+        #[cfg(test)]
+        OWNER_PROBES.with(|probes| probes.set(probes.get() + 1));
+        self.ground_detection_entity
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static OWNER_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[derive(Clone, Default, Component)]
@@ -61,6 +74,13 @@ pub fn spawn_ground_sensor(
     >,
     sensors: Query<(Entity, &GroundSensor, Option<&Collider>, Option<&Transform>)>,
 ) {
+    if detect_ground_for.is_empty() {
+        return;
+    }
+    let mut by_owner: HashMap<_, Vec<_>> = HashMap::new();
+    for sensor in &sensors {
+        by_owner.entry(sensor.1.owner()).or_default().push(sensor);
+    }
     for (entity, shape, mut ground_detection) in &mut detect_ground_for {
         let geometry = shape.as_cuboid().map(|cuboid| {
             let half_extents = cuboid.half_extents();
@@ -69,10 +89,7 @@ pub fn spawn_ground_sensor(
                 Vec3::new(0., -half_extents.y, 0.),
             )
         });
-        let owned: Vec<_> = sensors
-            .iter()
-            .filter(|(_, sensor, _, _)| sensor.ground_detection_entity == entity)
-            .collect();
+        let owned = by_owner.remove(&entity).unwrap_or_default();
         if let Some((extents, translation)) = geometry {
             if owned.len() == 1 {
                 let (_, _, collider, transform) = owned[0];
@@ -187,6 +204,85 @@ impl Plugin for GroundDetectionPlugin {
 mod tests {
     use super::*;
     use bevy_rapier2d::rapier::geometry::CollisionEventFlags;
+
+    #[test]
+    fn simultaneous_detector_changes_use_linear_owner_inventory() {
+        for count in [1, 100, 1000] {
+            let mut app = App::new();
+            app.add_systems(Update, spawn_ground_sensor);
+            let owners: Vec<_> = (0..count)
+                .map(|_| {
+                    app.world_mut()
+                        .spawn((Collider::cuboid(6., 14.), GroundDetection::default()))
+                        .id()
+                })
+                .collect();
+            app.update();
+            let original: Vec<_> = app
+                .world_mut()
+                .query::<(Entity, &GroundSensor)>()
+                .iter(app.world())
+                .map(|(id, sensor)| (id, sensor.ground_detection_entity))
+                .collect();
+            assert_eq!(original.len(), count);
+            let floor = app.world_mut().spawn_empty().id();
+            for &(sensor, _) in &original {
+                app.world_mut()
+                    .get_mut::<GroundSensor>(sensor)
+                    .unwrap()
+                    .intersecting_ground_entities
+                    .insert(floor);
+            }
+            for &owner in &owners {
+                app.world_mut()
+                    .entity_mut(owner)
+                    .insert(Collider::cuboid(6., 14.));
+                app.world_mut()
+                    .get_mut::<GroundDetection>(owner)
+                    .unwrap()
+                    .on_ground = true;
+            }
+            OWNER_PROBES.with(|probes| probes.set(0));
+            app.update();
+            assert_eq!(OWNER_PROBES.with(|probes| probes.get()), count);
+            // Equal geometry preserves identities and grounding.
+            for &(id, owner) in &original {
+                assert_eq!(
+                    app.world()
+                        .get::<GroundSensor>(id)
+                        .unwrap()
+                        .intersecting_ground_entities,
+                    HashSet::from([floor])
+                );
+                assert!(app.world().get::<GroundDetection>(owner).unwrap().on_ground);
+                app.world_mut()
+                    .entity_mut(owner)
+                    .insert(Collider::cuboid(10., 20.));
+            }
+            OWNER_PROBES.with(|probes| probes.set(0));
+            app.update();
+            assert_eq!(OWNER_PROBES.with(|probes| probes.get()), count);
+            for &(id, owner) in &original {
+                assert!(app.world().get_entity(id).is_err());
+                assert!(!app.world().get::<GroundDetection>(owner).unwrap().on_ground);
+            }
+            let mut seen = HashSet::new();
+            for (sensor, collider, transform) in app
+                .world_mut()
+                .query::<(&GroundSensor, &Collider, &Transform)>()
+                .iter(app.world())
+            {
+                assert!(seen.insert(sensor.ground_detection_entity));
+                assert!(sensor.intersecting_ground_entities.is_empty());
+                assert_eq!(
+                    collider.as_cuboid().unwrap().half_extents(),
+                    Vec2::new(5., 2.)
+                );
+                assert_eq!(transform.translation, Vec3::new(0., -20., 0.));
+            }
+            assert_eq!(seen.len(), count);
+        }
+    }
 
     #[test]
     fn collider_removed_and_reinserted_before_update_retires_contact_identity() {

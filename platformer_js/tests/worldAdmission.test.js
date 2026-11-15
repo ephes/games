@@ -62,6 +62,82 @@ describe('World transfer admission', () => {
     expect(game.boss.x).toBe(0);
   });
 
+  it.each([
+    ['invalid continuation', () => new Uint8Array([0xc3, 0x28])],
+    ['truncated sequence', () => new Uint8Array([0xe2, 0x82])],
+    ['overlong encoding', () => new Uint8Array([0xc0, 0xaf])],
+    ['encoded surrogate', () => new Uint8Array([0xed, 0xa0, 0x80])],
+    ['duplicate levels', text => `{"levels":[],${text.slice(1)}`],
+    ['escaped levels alias', text => `{"lev\\u0065ls":[],${text.slice(1)}`],
+    [
+      'duplicate grid',
+      text => text.replace('"__gridSize":64', '"__gridSize":1,"__gridSize":64')
+    ],
+    [
+      'escaped grid alias',
+      text =>
+        text.replace('"__gridSize":64', '"__gridSiz\\u0065":1,"__gridSize":64')
+    ],
+    [
+      'duplicate unknown member',
+      text => text.replace('"identifier":', '"extra":1,"extra":2,"identifier":')
+    ]
+  ])(
+    'refuses %s without replacing a playable world',
+    async (label, corrupt) => {
+      const content = JSON.stringify({ levels: [level()] });
+      const valid = new TextEncoder().encode(content);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(response(stream(valid)))
+      );
+      expect(await game.loadLDtkLevels('valid')).toBe(true);
+      const player = game.player,
+        levels = game.levels,
+        world = game.ldtkLoader.world;
+      const replacement = corrupt(content);
+      // Invalid bytes inside an otherwise valid JSON string used to become U+FFFD.
+      const wire =
+        typeof replacement === 'string'
+          ? new TextEncoder().encode(replacement)
+          : new Uint8Array([
+              ...new TextEncoder().encode('{"note":"'),
+              ...replacement,
+              ...new TextEncoder().encode(`",${content.slice(1)}`)
+            ]);
+      fetch.mockResolvedValue(response(stream(wire)));
+      expect(await game.loadLDtkLevels('invalid')).toBe(false);
+      expect(game.player).toBe(player);
+      expect(game.levels).toBe(levels);
+      expect(game.ldtkLoader.world).toBe(world);
+      expect(player.disposed).toBe(false);
+    }
+  );
+
+  it('accepts Unicode, escaped keys, nested scopes and punctuation in strings', async () => {
+    const data = {
+      levels: [level(), level()],
+      note: 'Grüße 🌍 "{}:,',
+      nested: [{ key: 1 }, { key: 2 }]
+    };
+    data.levels[0].identifier = 'Welt 🌍';
+    const text = JSON.stringify(data).replace('"levels"', '"lev\\u0065ls"');
+    const wire = new TextEncoder().encode(text);
+    const body = new ReadableStream({
+      start(c) {
+        // Split every multibyte sequence across transfer chunks.
+        for (const byte of wire) {
+          c.enqueue(new Uint8Array([byte]));
+        }
+        c.close();
+      }
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body)));
+    expect(await game.loadLDtkLevels('unicode')).toBe(true);
+    expect(game.ldtkLoader.world).toEqual(data);
+    expect(game.levels[0].name).toBe('Welt 🌍');
+  });
+
   it('accepts exactly the byte ceiling', async () => {
     const content = JSON.stringify({ levels: [level()] });
     const padded = content + ' '.repeat(WORLD_LIMITS.bytes - content.length);

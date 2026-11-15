@@ -267,11 +267,13 @@ can run at most five simulation steps; gaps over 250 ms discard accumulated time
 so returning from suspension does not replay missed movement. Player and boss shooting cooldowns use monotonic `performance.now()` time,
 so changing the system clock cannot stall or bypass them. The first shot is
 immediately available; live player level reloads preserve the cooldown.
-Player invulnerability/hit timers and boss visual effects retain wall-clock time. Renewing
-protection restarts both timers: hit visuals expire after 500 ms and protection
-after the requested duration, unaffected by older expirations. Action delivery
-uses the subscribers present at the start of each edge; changes to subscriptions
-take effect on the next edge.
+Player hit visuals and invulnerability use owned elapsed real-time timers,
+independent of simulation steps and system-clock changes. Renewing protection
+restarts both timers: hit visuals expire after 500 ms and protection after the
+requested duration, unaffected by older expirations. Retiring the player cancels
+both callbacks and prevents renewal. Boss visual effects retain wall-clock (`Date.now()`) timers.
+Action delivery uses the subscribers present at the start of each edge; changes
+to subscriptions take effect on the next edge.
 
 Camera, player and boss-shot bounds refresh together on level creation,
 transitions, resets and LDtk replacement. Imported `pxWid`/`pxHei` are retained
@@ -321,8 +323,12 @@ levels. Superseded replacements return false, even if the newer request fails;
 imports completed after disposal do not publish. Supersession and disposal abort
 pending transfers. Each transfer has a 10-second total deadline and a 16 MiB
 streamed response limit (actual bytes, even without an accurate Content-Length).
-The loader uses the public `JSON.parse` API and raw LDtk records, including modern
-`intGridCsv`, rather than the dependency's legacy wrapper objects.
+The loader requires valid UTF-8 and refuses duplicate JSON member names in any
+object, including names written with equivalent Unicode escapes. Native
+`JSON.parse` validates syntax; a quoted-token pass checks decoded key identities
+per object before conversion or publication. Wire refusal keeps the current
+playable world. Legal Unicode and names repeated in separate objects remain
+supported. The loader uses raw LDtk records, including modern `intGridCsv`.
 
 Before conversion, each imported world is limited to 64 levels, 2,000,000 total
 IntGrid cells and 20,000 total entities across all layers. A level may contain at

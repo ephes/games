@@ -26,7 +26,6 @@ export class Player {
     this.isInvulnerable = false;
     this.direction = 1; // 1 for right, -1 for left
     this.isHit = false;
-    this.hitAnimationTimer = 0;
     this.disposed = false;
     this.hitTimeout = null;
     this.invulnerabilityTimeout = null;
@@ -63,14 +62,6 @@ export class Player {
     // Apply gravity
     this.velocityY += this.gravity;
     this.y += this.velocityY;
-
-    // Update hit animation
-    if (
-      this.isHit &&
-      Date.now() - this.hitAnimationTimer > this.hitAnimationDuration
-    ) {
-      this.isHit = false;
-    }
 
     // Determine current animation state
     this.updateAnimation(keys);
@@ -150,9 +141,8 @@ export class Player {
     clearTimeout(this.invulnerabilityTimeout);
     this.isInvulnerable = true;
     this.isHit = true;
-    this.hitAnimationTimer = Date.now();
 
-    // Reset hit animation
+    // One owned elapsed timer controls hit expiry, independent of wall time.
     this.hitTimeout = setTimeout(() => {
       this.isHit = false;
     }, this.hitAnimationDuration);

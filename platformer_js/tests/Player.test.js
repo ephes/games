@@ -39,6 +39,47 @@ describe('Player protection', () => {
     expect(player.isInvulnerable).toBe(true);
   });
 
+  it.each([1_000_000_000, -1_000_000_000])(
+    'keeps hit pose and renewal on elapsed timers across wall-clock jump %i',
+    wallTime => {
+      player.makeInvulnerable(2000);
+      vi.advanceTimersByTime(250);
+      vi.setSystemTime(wallTime);
+      player.update({}, 1000 / 60);
+      expect(player.currentAnimation).toBe('hit');
+      expect(player.isInvulnerable).toBe(true);
+      player.makeInvulnerable(2000);
+      vi.setSystemTime(-wallTime);
+      vi.advanceTimersByTime(250);
+      player.update({}, 1000 / 60);
+      expect(player.currentAnimation).toBe('hit');
+      vi.advanceTimersByTime(249);
+      player.update({}, 1000 / 60);
+      expect(player.currentAnimation).toBe('hit');
+      vi.advanceTimersByTime(1);
+      player.update({}, 1000 / 60);
+      expect(player.isHit).toBe(false);
+      expect(player.currentAnimation).toBe('idle');
+      expect(player.isInvulnerable).toBe(true);
+      vi.advanceTimersByTime(1499);
+      expect(player.isInvulnerable).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(player.isInvulnerable).toBe(false);
+    }
+  );
+
+  it('retires both elapsed callbacks and refuses renewal after disposal', () => {
+    player.makeInvulnerable();
+    player.dispose();
+    vi.setSystemTime(1_000_000_000);
+    vi.advanceTimersByTime(3000);
+    player.update({}, 1000 / 60);
+    expect(player.isHit).toBe(true);
+    expect(player.isInvulnerable).toBe(true);
+    player.makeInvulnerable();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('loses one life and respawns once while protected, then accepts damage again', () => {
     Object.assign(player, { x: 100, y: 200, velocityY: -4, isJumping: true });
     let lives = player.takeDamage(3);
@@ -130,7 +171,7 @@ describe('Player animation', () => {
     expect(player.currentAnimation).toBe('fall');
   });
 
-  it('expires hit state by wall time, independently of fixed simulation steps', () => {
+  it('expires hit state by elapsed real time, independently of fixed simulation steps', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     try {

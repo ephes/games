@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Index ground sensors by owner once per update for linear average ownership
+  work during bulk load/resize, preserving equal geometry and contact retirement.
+
 - Restore the pre-climb gravity scale when Climber is removed or climbing ends;
   preserve unrelated gravity overrides and retire ownership on despawn/readdition.
 - Refuse overflowing or malformed restart geometry before resetting any player

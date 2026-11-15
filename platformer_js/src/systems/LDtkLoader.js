@@ -14,6 +14,35 @@ export const WORLD_LIMITS = Object.freeze({
 });
 
 /**
+ * Admit JSON syntax with the native parser, then check member names while the
+ * wire still retains duplicates. Quoted tokens consume escaped punctuation;
+ * only native-decoded keys in the same object share an identity.
+ * @param {string} text - Decoded world JSON
+ * @returns {Object} Unambiguous world data
+ */
+function parseWorldJSON(text) {
+  const data = JSON.parse(text);
+  const objects = [];
+  let previous;
+  for (const [token] of text.matchAll(/"(?:[^"\\]|\\.)*"|[{}:]/g)) {
+    if (token === '{') {
+      objects.push(new Set());
+    } else if (token === '}') {
+      objects.pop();
+    } else if (token === ':') {
+      const key = JSON.parse(previous);
+      const keys = objects[objects.length - 1];
+      if (keys.has(key)) {
+        throw new Error('Duplicate LDtk JSON member');
+      }
+      keys.add(key);
+    }
+    previous = token;
+  }
+  return data;
+}
+
+/**
  * LDtk level loader
  */
 export class LDtkLoader {
@@ -82,7 +111,9 @@ export class LDtkLoader {
         buffer.set(chunk, offset);
         offset += chunk.byteLength;
       }
-      const data = JSON.parse(new TextDecoder().decode(buffer));
+      const data = parseWorldJSON(
+        new TextDecoder('utf-8', { fatal: true }).decode(buffer)
+      );
       this.preflightWorld(data);
       const world = data;
       if (publish && generation === this.loadGeneration) {

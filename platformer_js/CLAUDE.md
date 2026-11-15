@@ -176,8 +176,10 @@ timing, with at most five catch-up steps otherwise. Player and boss shot cooldow
 changes. Player cooldowns survive level reloads; the first shot is immediately
 available. Enemy animation and 300 ms defeated visuals use accumulated simulation
 elapsed time; hit resets the frame clock. Boss overrides `isInHitAnimation()`
-to false: a defeated boss is not drawn (its hit flash has its own timer). Player timers and boss visual effects
-retain wall-clock semantics. Authored LDtk dimensions are validated and retained;
+to false: a defeated boss is not drawn (its hit flash has its own timer). Player hit visuals and
+protection each expire on their own owned real-time timeout (500 ms and the requested duration),
+both restarted on renewal and cancelled by `dispose()`, independent of simulation duration and
+system-clock changes; boss visual effects retain wall-clock semantics. Authored LDtk dimensions are validated and retained;
 Game derives complete object extents and shares bounds with its player, camera
 and boss shots, including vertical camera following in tall levels.
 

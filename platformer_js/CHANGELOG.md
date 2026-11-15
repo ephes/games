@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject malformed UTF-8 and duplicate JSON members (including escaped aliases)
+  before converting or publishing an LDtk world; retain the current playable world.
+- Give player hit pose expiry one owned elapsed timer, keeping its 500 ms duration
+  stable across system-clock jumps, protection renewal and player retirement.
+
 - Preserve validated authored level dimensions and derive complete object extents
   for player, camera and boss-shot bounds, including tall levels and entities
   beyond the last platform. Follow vertical movement within the playable world.
