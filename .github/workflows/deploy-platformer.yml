@@ -1,15 +1,6 @@
 name: Platformer quality and manual publication
 
 on:
-  push:
-    branches: [main, "fix/**"]
-    paths:
-      - "platformer_js/**"
-      - ".github/workflows/deploy-platformer.yml"
-  pull_request:
-    paths:
-      - "platformer_js/**"
-      - ".github/workflows/deploy-platformer.yml"
   workflow_dispatch:
     inputs:
       publish:

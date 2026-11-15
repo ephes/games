@@ -7,10 +7,8 @@ const workflow = parse(
 );
 
 describe('Platformer quality workflow', () => {
-  it('checks pull requests and main pushes with read-only permissions', () => {
-    expect(workflow.on).toHaveProperty('pull_request');
-    expect(workflow.on.push.branches).toContain('main');
-    expect(workflow.on.push.branches).toContain('fix/**');
+  it('runs only on manual dispatch with read-only permissions', () => {
+    expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch']);
     expect(workflow.permissions).toEqual({ contents: 'read' });
     expect(workflow.jobs.build.permissions).toBeUndefined();
     const steps = workflow.jobs.build.steps;

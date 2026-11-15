@@ -127,7 +127,7 @@ npm run build:docs
 npm run preview
 ```
 
-GitHub Actions checks pull requests, main and fix/\*\* pushes, including
+GitHub Actions runs only on manual dispatch; a run checks the build, including
 `npm run test:browser` after `npx playwright install --with-deps chromium`. Pages publication requires
 a manual workflow run with `publish` enabled (disabled by default).
 
