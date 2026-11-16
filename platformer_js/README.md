@@ -139,8 +139,10 @@ collected coins keep their index entry and draw nothing. Camera translation is
 still applied exactly once. Platform/coin geometry is static until the next
 successful level creation; changing its coordinates directly requires recreating
 the level. Failed construction retains the previous index, while transitions,
-resets and imports replace it and winning clears it. Dynamic entities retain
-their existing rendering behavior. Canvas regressions cover 10,000 off-screen
+resets and imports replace it and winning clears it. The same tree queries the player's swept bounds for platform and coin collision
+candidates, retaining level order and the existing narrow-phase rules. Collected
+coins retire from collision queries, including whole exhausted subtrees; resets
+and level replacement rebuild candidate ownership. Canvas regressions cover 10,000 off-screen
 objects of each kind, viewport/margin edges, painter order and level replacement.
 Inactive boss shots draw nothing. Every saved canvas scope restores in `finally`,
 including nested sprite, portal and fireball scopes. Rendering failures retain
@@ -309,11 +311,26 @@ horizontal and vertical player movement inside these bounds. This establishes
 spatial reachability; authors still provide platforms/jump routes to exits.
 Large collision meshes are reduced without spreading into function arguments.
 
+Coins and enemy/boss body contacts resolve in earliest-contact order within a
+step; coins retain precedence for an exact time tie. A lethal contact keeps only earlier
+coin awards. Stomps and respawns replace the unused sweep with current-pose
+overlaps, excluding coins along the discarded motion or teleport; coins already
+at a respawn position remain collectible. Unlocked portals test the player's
+center along the admitted movement after platform resolution, retaining the
+usual center-radius threshold. Fast crossings enter even with both endpoints
+outside; locked sweeps and discarded pre-bounce/respawn motion are not replayed.
+Only a portal that was already unlocked when the step began is swept; one unlocked
+during the step (a player shot that defeats the boss, or a stomp) admits only the
+endpoint pose.
+
 Damage respawns the player at the active level's start, clearing vertical speed
 and jumping state while retaining the usual life loss and invulnerability.
 Enemies accept one defeat and award 50 points once, even when bullets and a
 stomp overlap. Defeated enemies stop moving/colliding immediately while their
-300 ms hit animation remains visible. Boss damage awards 20 points per nonfatal
+300 ms hit animation remains visible. After its final hit frame, the level retires
+the enemy before building collision candidates. Rendering uses the camera's
+inclusive viewport against each enemy's destination rectangle, which contains
+both run and hit sprites in either facing; offscreen enemies still simulate. Boss damage awards 20 points per nonfatal
 hit and 200 once on defeat. Health stops at zero; subsequent `hit()` or
 `takeDamage()` calls return zero without changing hit state or repeating projectile
 cleanup.

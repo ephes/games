@@ -23,6 +23,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deterministic geometric ties and fresh target checks after an earlier defeat.
   Shot storage order no longer changes combat rewards or surviving geometry.
 
+- Sweep unlocked portal center entry across admitted post-platform movement,
+  excluding respawn teleports and discarded pre-bounce motion. A portal unlocked
+  during the step by a player shot that defeats the boss, or by a stomp, admits
+  only the endpoint pose.
+
+- Order swept coins and enemy/boss body effects by contact time, retaining earlier
+  awards and discarding the unused path after lethal damage, respawn or stomp.
+
+- Cull enemy draws against the camera viewport while retaining offscreen simulation;
+  retire defeated actors after their 300 ms hit visual, preserving one score award.
+
+- Query the owned static tree for swept player/platform and coin contacts; prune
+  collected coin branches and rebuild ownership with every successful level.
+
 - Index static platform/coin bounds at level creation and render only viewport
   candidates with a two-pixel margin, preserving painter order, collected coins
   and camera transforms across successful/failed level replacement and win.
