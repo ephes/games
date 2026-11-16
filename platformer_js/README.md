@@ -273,7 +273,18 @@ cancel its animation and remove input listeners; standalone input managers have
 initialization are ignored without disposing the game or requesting an animation
 frame; call `start()` again once initialization succeeds. Starting twice keeps
 one animation chain. Disposal is terminal:
-create a fresh Game to restart. Concurrent and later `init()` calls share one initialization and register controls
+create a fresh Game to restart.
+The `main.js` entry point owns one current Game, including while sprites load.
+Every `pagehide` disposes it immediately. A persisted `pageshow` (BFCache return)
+starts a fresh game at level zero with initial score/lives; progress is not restored.
+Ordinary tab hiding only releases held input and keeps the current game.
+Duplicate restore events do not start extra games or retry failed startup;
+after failure, another hide/restore cycle can try a fresh Game. Retired startup
+completions cannot start or replace the current game. Vite hot replacement calls
+`disposePage()` before reinitializing; embedders removing the entry point can call
+that same terminal cleanup to release its DOM/page listeners and Game.
+
+Concurrent and later `init()` calls share one initialization and register controls
 once. Failed initialization disposes input; every later `init()` call rejects
 with the same startup error. Create a fresh Game to retry. Disposal during sprite
 loading prevents later activation: while image requests are still pending it
@@ -282,6 +293,11 @@ purpose can ignore that error); after the sprites have loaded, `init()` resolves
 without activating the game. Update/render failures also dispose the game
 and rethrow the original error: synchronous startup errors reach the caller of
 `start()`, and scheduled-frame errors reach the browser error surface.
+
+Portal pulses advance by simulation elapsed time (3 radians per second), wrapping
+at 2π for both locked barriers and unlocked glows. Drawing never advances their
+phase; extra renders and different display refresh rates show the same simulated
+state. Terminal game states freeze the phase, and level creation starts it at zero.
 
 Simulation uses fixed 60 Hz steps and renders once per animation frame. A frame
 can run at most five simulation steps; gaps over 250 ms discard accumulated time

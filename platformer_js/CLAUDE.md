@@ -172,10 +172,20 @@ replace the projectile owner. Programmatic boss speed zero stays stationary.
 
 ### Game Flow
 
-1. `main.js` initializes the game when DOM is ready
+1. `main.js` owns one Game from DOM readiness through page retirement
 2. `Game.js` coordinates all systems and game objects
 3. One owned RAF loop runs bounded fixed 60 Hz simulation steps and renders once per frame
 4. Renderer handles all drawing operations with sprite animations
+
+The entry point disposes its current Game on every `pagehide`, including pending
+initialization. A persisted `pageshow` starts a fresh game (level zero, initial
+score/lives); BFCache does not preserve progress. Ordinary hidden-tab input reset
+keeps the Game. Duplicate restore events do not retry failed initialization;
+another hide/restore cycle can retry with a new instance. `disposePage()` removes
+entry-point listeners and retires the Game, and Vite HMR calls it before replacement.
+Old initialization completion/rejection cannot affect the replacement owner.
+`pageLifetime.test.js` and the Chromium smoke cover synthetic retirement,
+restoration, pending initialization, failed re-entry and replacement sequences.
 
 `start()` is idempotent and ignores calls until initialization succeeds. Call
 `await game.init()` then `game.start()`; an early call leaves the instance usable
@@ -192,7 +202,9 @@ reset/replacement restores initial lives and clears terminal flags only after
 construction succeeds, preserving score and shooting/cooldown state. Suspension gaps over 250 ms reset simulation
 timing, with at most five catch-up steps otherwise. Player and boss shot cooldowns use `performance.now()` independently of wall-clock
 changes. Player cooldowns survive level reloads; the first shot is immediately
-available. Enemy animation and 300 ms defeated visuals use accumulated simulation
+available. Portal pulse phase advances at 3 radians per second in `Game.update`,
+wraps at 2π, and stays unchanged by drawing or discarded suspension time.
+Terminal game states freeze it; a new level starts at zero. Enemy animation and 300 ms defeated visuals use accumulated simulation
 elapsed time; hit resets the frame clock. Boss animation keeps a simulation-time
 frame remainder (200 ms per sequence step)
 and a monotonic accumulated clock shared by hit expiry and renderer fading.
