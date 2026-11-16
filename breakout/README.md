@@ -15,24 +15,43 @@ cargo clippy --locked --all-targets
 cargo test --locked
 ```
 
-The initial round-80 validation used rustc 1.99.1 and Cargo 1.99.1, resolving
-Bevy 0.13.2 and 416 packages. Keep the generated Cargo.lock for reproducible
+The round-106 macOS validation used rustc/Cargo 1.99.0, resolving Bevy 0.13.2
+and 416 packages. The system Rust 1.100 fails compiling the old macOS dependency
+`objc2 0.4.1`; when using rustup, put its shims ahead of Homebrew so Cargo also
+uses the selected compiler:
+
+```sh
+export PATH="$HOME/.cargo/bin:$PATH"
+export RUSTUP_TOOLCHAIN=1.99.0
+```
+
+Then run the checks above. Keep the generated Cargo.lock for reproducible
 subsequent checks; a fresh resolution can select newer transitive dependencies.
 The tests use synthetic ECS entities and Bevy math, without starting default
 plugins, opening a window, loading game assets or accessing an audio device.
 
 ## Collision policy
 
-Circle/AABB contact includes exact tangency. The side is the axis with the
-larger absolute offset from the closest point on the box. Equal offsets choose
-the vertical axis; a center inside or on the box has zero offset and chooses
-Bottom. These are the example's existing classifier rules, not a penetration
-solver. The numerical tests cover translated and uniformly scaled boxes.
+The ball advances to the earliest swept circle/AABB contact, reflects and uses
+only the remaining tick time for further motion. Sweeps test straight faces and
+round corner arcs, so thin bricks/walls cannot be crossed between sampled poses
+and square corner near-misses do not become hits. Paddle collisions use relative
+motion from its old position to its clamped new position during the tick, with
+reflection in the paddle's moving frame.
 
-All contacts in one fixed tick use the incoming ball velocity. A contact only
-requests reflection when that velocity points into its face, and each axis is
-reflected at most once after collecting contacts. Each hit brick scores once
-and is despawned; each contact still emits its own event for the sound consumer.
+Simultaneous contacts are collected before response, ordered by normal and
+collider velocity rather than entity insertion order. Only approaching normals
+reflect; duplicate faces reflect once. Corner normals are radial. The solver
+allows at most 32 contact passes per tick; if exhausted it leaves remaining ball
+motion unapplied rather than crossing an unchecked obstacle. Existing overlaps
+are detected as contacts but are not yet separated by this sweep.
+
+Each hit brick scores once and is retired immediately from the remaining sweep,
+then despawned before the next fixed tick. A brick behind a reflecting wall is
+not hit. Impact events are coalesced by the sound consumer per fixed tick.
+Headless regressions compare large ticks with equivalent step partitions,
+including multiple wall bounces and moving-paddle contacts, and exercise rounded
+corner misses and contact-budget exhaustion.
 
 ## Stepping UI and fixed-tick effects
 
