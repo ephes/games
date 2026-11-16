@@ -16,6 +16,42 @@ pub(super) struct Obstacle {
 pub(super) struct Contact {
     time: f32,
     pub normal: Vec2,
+    penetration: f32,
+}
+
+// Outside the box the shortest escape is radial from its closest point.
+// Inside, choose the nearest expanded face; exact ties prefer Bottom, Top,
+// Left, Right, independent of velocity and entity iteration order.
+fn overlap(position: Vec2, radius: f32, half: Vec2) -> Option<Contact> {
+    let offset = position - position.clamp(-half, half);
+    let distance = offset.length();
+    if distance > radius {
+        return None;
+    }
+    if distance > 0. {
+        return Some(Contact {
+            time: 0.,
+            normal: offset / distance,
+            penetration: radius - distance,
+        });
+    }
+    let candidates = [
+        (Vec2::NEG_Y, half.y + position.y + radius),
+        (Vec2::Y, half.y - position.y + radius),
+        (Vec2::NEG_X, half.x + position.x + radius),
+        (Vec2::X, half.x - position.x + radius),
+    ];
+    let mut nearest = candidates[0];
+    for candidate in candidates.into_iter().skip(1) {
+        if candidate.1 < nearest.1 {
+            nearest = candidate;
+        }
+    }
+    Some(Contact {
+        time: 0.,
+        normal: nearest.0,
+        penetration: nearest.1,
+    })
 }
 
 // Test the four straight faces and four circular corner arcs of the expanded
@@ -28,11 +64,11 @@ pub(super) fn sweep_circle(
     duration: f32,
     include_resting: bool,
 ) -> Option<Contact> {
-    let offset = position - position.clamp(-half, half);
-    if offset.length_squared() <= radius * radius {
-        let normal = offset.try_normalize().unwrap_or(Vec2::NEG_Y);
-        if include_resting || velocity.dot(normal) < 0.0 {
-            return Some(Contact { time: 0., normal });
+    if let Some(contact) = overlap(position, radius, half) {
+        // Recovery is meaningful once. Exact resting/tangent wall contacts are
+        // geometrically valid but do not start another impact on every tick.
+        if include_resting || contact.penetration > 0. || velocity.dot(contact.normal) < 0. {
+            return Some(contact);
         }
         return None;
     }
@@ -44,7 +80,11 @@ pub(super) fn sweep_circle(
             && velocity.dot(normal) < 0.0
             && first.is_none_or(|hit| time < hit.time)
         {
-            first = Some(Contact { time, normal });
+            first = Some(Contact {
+                time,
+                normal,
+                penetration: 0.,
+            });
         }
     };
     for sign in [-1., 1.] {
@@ -99,7 +139,7 @@ pub(super) fn advance_ball(
     let mut removed = Vec::new();
     let mut elapsed = 0.;
     let mut remaining = duration;
-    for pass in 0..MAX_CONTACT_PASSES {
+    for _ in 0..MAX_CONTACT_PASSES {
         let mut contacts = Vec::new();
         let mut earliest = remaining;
         for (index, obstacle) in obstacles.iter().enumerate() {
@@ -113,7 +153,7 @@ pub(super) fn advance_ball(
                 radius,
                 obstacle.half_size,
                 remaining,
-                pass == 0,
+                obstacle.brick,
             ) {
                 earliest = earliest.min(contact.time);
                 contacts.push((index, contact));
@@ -149,10 +189,35 @@ pub(super) fn advance_ball(
                         .y
                         .total_cmp(&obstacles[*b].velocity.y),
                 )
+                .then(obstacles[*a].center.x.total_cmp(&obstacles[*b].center.x))
+                .then(obstacles[*a].center.y.total_cmp(&obstacles[*b].center.y))
+                .then(
+                    obstacles[*a]
+                        .half_size
+                        .x
+                        .total_cmp(&obstacles[*b].half_size.x),
+                )
+                .then(
+                    obstacles[*a]
+                        .half_size
+                        .y
+                        .total_cmp(&obstacles[*b].half_size.y),
+                )
         });
         let incoming = *velocity;
         for (index, contact) in contacts {
             let obstacle = &obstacles[index];
+            // Earlier simultaneous corrections may already have cleared this
+            // overlap, so recompute the minimum displacement at the impact pose.
+            if let Some(penetration) = overlap(
+                *position - obstacle.center - obstacle.velocity * elapsed,
+                radius,
+                obstacle.half_size,
+            ) {
+                if penetration.penetration > 0. {
+                    *position += penetration.normal * (penetration.penetration + CONTACT_TOLERANCE);
+                }
+            }
             if !impacts.contains(&obstacle.entity) {
                 impacts.push(obstacle.entity);
             }
@@ -165,9 +230,6 @@ pub(super) fn advance_ball(
             if (incoming - obstacle.velocity).dot(contact.normal) < 0. && speed < 0. {
                 *velocity -= 2. * speed * contact.normal;
             }
-        }
-        if remaining == 0. {
-            break;
         }
     }
     // On pass exhaustion leave the unresolved motion unapplied rather than
@@ -201,6 +263,39 @@ mod tests {
             false
         )
         .is_none());
+    }
+
+    #[test]
+    fn zero_duration_recovery_uses_minimum_displacement_and_explicit_face_ties() {
+        let center = Vec2::new(32., -16.);
+        let obstacles = [Obstacle {
+            entity: Entity::from_raw(0),
+            center,
+            half_size: Vec2::splat(3.),
+            velocity: Vec2::ZERO,
+            brick: false,
+        }];
+        for (offset, expected) in [
+            (Vec2::ZERO, Vec2::new(0., -5.)),
+            (Vec2::new(2., 2.), Vec2::new(2., 5.)),
+            (Vec2::new(-2., 2.), Vec2::new(-2., 5.)),
+            (Vec2::new(2., -2.), Vec2::new(2., -5.)),
+            (Vec2::new(2.5, 0.), Vec2::new(5., 0.)),
+            (Vec2::new(-2.5, 0.), Vec2::new(-5., 0.)),
+        ] {
+            let mut position = center + offset;
+            let mut velocity = Vec2::ZERO;
+            assert_eq!(
+                advance_ball(&mut position, &mut velocity, 2., 0., &obstacles).len(),
+                1
+            );
+            assert!(
+                (position - center - expected).length() < 0.0002,
+                "{position:?}"
+            );
+            assert!(advance_ball(&mut position, &mut velocity, 2., 0., &obstacles).is_empty());
+            assert_eq!(velocity, Vec2::ZERO);
+        }
     }
 
     #[test]

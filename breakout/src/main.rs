@@ -572,6 +572,124 @@ mod tests {
         }
     }
 
+    fn overlap_app(position: Vec2, velocity: Vec2) -> (App, Entity) {
+        let (mut app, ball) = motion_app(position, velocity);
+        app.world.spawn((
+            Collider,
+            Transform::default().with_scale(Vec3::new(40., 20., 1.)),
+        ));
+        (app, ball)
+    }
+
+    fn assert_outside_box(position: Vec2) {
+        let offset = position - position.clamp(Vec2::new(-20., -10.), Vec2::new(20., 10.));
+        assert!(
+            position.is_finite() && offset.length() >= 15. - 1.0e-5,
+            "still penetrating: {position:?}"
+        );
+    }
+
+    #[test]
+    fn overlap_recovery_separates_embedded_and_on_wall_balls_and_retires_sound() {
+        for (start, incoming, expected, outgoing) in [
+            (Vec2::ZERO, Vec2::ZERO, Vec2::new(0., -25.), Vec2::ZERO),
+            (
+                Vec2::new(0., -10.),
+                Vec2::ZERO,
+                Vec2::new(0., -25.),
+                Vec2::ZERO,
+            ),
+            (
+                Vec2::new(0., -10.),
+                Vec2::new(0., 10.),
+                Vec2::new(0., -25.15625),
+                Vec2::new(0., -10.),
+            ),
+            (
+                Vec2::new(19., 0.),
+                Vec2::new(-10., 0.),
+                Vec2::new(35.15625, 0.),
+                Vec2::new(10., 0.),
+            ),
+            (
+                Vec2::new(21., 11.),
+                Vec2::ZERO,
+                Vec2::new(20., 10.) + Vec2::ONE.normalize() * 15.,
+                Vec2::ZERO,
+            ),
+        ] {
+            let (mut app, ball) = overlap_app(start, incoming);
+            tick(&mut app, 1. / 64.);
+            let (position, velocity) = ball_state(&app, ball);
+            assert_outside_box(position);
+            assert_vec_close(position, expected);
+            assert_vec_close(velocity, outgoing);
+            for _ in 0..32 {
+                tick(&mut app, 1. / 64.);
+                let (position, velocity) = ball_state(&app, ball);
+                assert_outside_box(position);
+                assert!(velocity.is_finite());
+            }
+            assert_eq!(
+                app.world
+                    .query::<&Handle<AudioSource>>()
+                    .iter(&app.world)
+                    .count(),
+                1
+            );
+        }
+    }
+
+    #[test]
+    fn resting_and_tangent_contacts_do_not_replay_impact_sound() {
+        for velocity in [Vec2::ZERO, Vec2::new(10., 0.)] {
+            let start = Vec2::new(0., -25.);
+            let (mut app, ball) = overlap_app(start, velocity);
+            for _ in 0..32 {
+                tick(&mut app, 1. / 64.);
+            }
+            let (position, outgoing) = ball_state(&app, ball);
+            assert_outside_box(position);
+            assert_vec_close(position, start + velocity * 0.5);
+            assert_vec_close(outgoing, velocity);
+            assert_eq!(
+                app.world
+                    .query::<&Handle<AudioSource>>()
+                    .iter(&app.world)
+                    .count(),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn simultaneous_overlap_recovery_is_independent_of_entity_order() {
+        let simulate = |reverse: bool| {
+            let (mut app, ball) = motion_app(Vec2::ZERO, Vec2::splat(100.));
+            let mut boxes = [
+                (Vec2::new(10., 0.), Vec2::new(2., 100.)),
+                (Vec2::new(0., 10.), Vec2::new(100., 2.)),
+            ];
+            if reverse {
+                boxes.reverse();
+            }
+            for (center, size) in boxes {
+                app.world.spawn((
+                    Collider,
+                    Transform::from_translation(center.extend(0.)).with_scale(size.extend(1.)),
+                ));
+            }
+            tick(&mut app, 1. / 64.);
+            ball_state(&app, ball)
+        };
+        let forward = simulate(false);
+        let reverse = simulate(true);
+        assert_vec_close(forward.0, Vec2::splat(-7.5625));
+        assert_vec_close(forward.1, Vec2::splat(-100.));
+        assert_vec_close(reverse.0, forward.0);
+        assert_vec_close(reverse.1, forward.1);
+    }
+
     fn opposing_brick_contacts(reverse: bool, vertical: bool) -> (Vec2, usize, usize, usize) {
         let mut app = App::new();
         app.insert_resource(Scoreboard { score: 0 })
@@ -641,7 +759,7 @@ mod tests {
             (Vec2::new(2.5, 1.5), 1., Some(Collision::Top)),
             (Vec2::new(-2.5, -1.5), 1., Some(Collision::Bottom)),
             (Vec2::ZERO, 0.25, Some(Collision::Bottom)),
-            (Vec2::new(1., 0.5), 0.25, Some(Collision::Bottom)),
+            (Vec2::new(1., 0.5), 0.25, Some(Collision::Top)),
         ];
         for center in [Vec2::ZERO, Vec2::new(32., -16.)] {
             for scale in [0.5, 1., 4.] {

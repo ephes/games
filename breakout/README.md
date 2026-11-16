@@ -43,8 +43,20 @@ Simultaneous contacts are collected before response, ordered by normal and
 collider velocity rather than entity insertion order. Only approaching normals
 reflect; duplicate faces reflect once. Corner normals are radial. The solver
 allows at most 32 contact passes per tick; if exhausted it leaves remaining ball
-motion unapplied rather than crossing an unchecked obstacle. Existing overlaps
-are detected as contacts but are not yet separated by this sweep.
+motion unapplied rather than crossing an unchecked obstacle.
+
+An existing overlap is separated before continuing motion, using the shortest
+escape from the circle/box intersection plus a 0.0001-unit numerical skin. For a
+center inside/on the box, the nearest face wins; exact distance ties prefer
+Bottom, Top, Left, then Right. Outside corners separate radially. Simultaneous
+corrections are ordered by normal, collider velocity, center and size, and each
+remaining penetration is recomputed after earlier corrections. Recovery shares
+the 32-pass limit, including a zero-duration tick.
+
+A recovered penetration or approaching contact emits an impact. Exact resting,
+outgoing and tangential wall contacts do not emit repeated effects; touching a
+brick still removes/scores it once. Headless regressions keep recovered balls
+nonpenetrating and finite across later ticks and verify quiet tangent motion.
 
 Each hit brick scores once and is retired immediately from the remaining sweep,
 then despawned before the next fixed tick. A brick behind a reflecting wall is

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Separate embedded balls by the minimum circle/AABB displacement with explicit
+  face ties and bounded recovery; keep resting/tangent wall contacts quiet.
+- Add headless recovery and sound-retirement regressions for zero/inward speed,
+  on-wall and corner overlaps, and repeated tangent motion.
+
 - Advance the ball through earliest swept circle/AABB contacts, including round
   corners and relative paddle motion, with bounded remaining-time bounces and
   immediate hit-brick retirement to prevent tunnelling and through-wall scores.
