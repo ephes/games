@@ -2,8 +2,23 @@
 
 ## Unreleased
 
-- Reflect simultaneous contacts once per axis using incoming velocity, independent
-  of collider insertion order, while preserving brick scoring and contact events.
+- Separate embedded balls by the minimum circle/AABB displacement with explicit
+  face ties and bounded recovery; keep resting/tangent wall contacts quiet.
+- Add headless recovery and sound-retirement regressions for zero/inward speed,
+  on-wall and corner overlaps, and repeated tangent motion.
+
+- Advance the ball through earliest swept circle/AABB contacts, including round
+  corners and relative paddle motion, with bounded remaining-time bounces and
+  immediate hit-brick retirement to prevent tunnelling and through-wall scores.
+- Compare high-speed wall, thin-brick and moving-paddle motion against equivalent
+  step partitions in headless fixed-schedule regressions.
+- Limit moving-paddle responses to the paddle's own normal speed so side and
+  corner hits or paddle/wall squeezes cannot accelerate the ball without bound.
+- Stop the paddle one ball diameter short of a wall while the ball is beside it,
+  so overlap recovery cannot push a squeezed ball through the wall.
+
+- Keep simultaneous face contacts independent of collider insertion order while
+  preserving brick scoring and contact events.
 - Add headless numerical contact tests for faces, corners, tangency, misses and
   embedded centers, including translated and scaled colliders.
 - Keep stepping UI initialization retryable until every selected schedule is

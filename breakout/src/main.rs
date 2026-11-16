@@ -1,11 +1,8 @@
 //! A simplified implementation of the classic game "Breakout".
 
-use bevy::{
-    math::bounding::{Aabb2d, BoundingCircle, BoundingVolume, IntersectsVolume},
-    prelude::*,
-    sprite::MaterialMesh2dBundle,
-};
+use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 
+mod physics;
 mod stepping;
 
 // These constants are defined in `Transform` units.
@@ -15,6 +12,8 @@ const GAP_BETWEEN_PADDLE_AND_FLOOR: f32 = 60.0;
 const PADDLE_SPEED: f32 = 500.0;
 // How close can the paddle get to the wall
 const PADDLE_PADDING: f32 = 10.0;
+// Gap the paddle keeps from a wall while the ball is beside it.
+const BALL_SIDE_ROOM: f32 = BALL_DIAMETER + 1.0;
 
 // We set the z-value of the ball to 1 so it renders on top in the case of overlapping sprites.
 const BALL_STARTING_POSITION: Vec3 = Vec3::new(0.0, -50.0, 1.0);
@@ -71,17 +70,13 @@ fn main() {
 
 // Keep the live game and headless schedule tests on the same ordered systems.
 fn gameplay_systems() -> bevy::ecs::schedule::SystemConfigs {
-    (
-        apply_velocity,
-        move_paddle,
-        check_for_collisions,
-        play_collision_sound,
-    )
-        .chain()
+    (move_paddle, check_for_collisions, play_collision_sound).chain()
 }
 
-#[derive(Component)]
-struct Paddle;
+#[derive(Component, Default)]
+struct Paddle {
+    velocity: Vec2,
+}
 
 #[derive(Component)]
 struct Ball;
@@ -212,7 +207,7 @@ fn setup(
             },
             ..default()
         },
-        Paddle,
+        Paddle::default(),
         Collider,
     ));
 
@@ -318,10 +313,12 @@ fn setup(
 
 fn move_paddle(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<&mut Transform, With<Paddle>>,
+    mut query: Query<(&mut Transform, &mut Paddle)>,
+    ball_query: Query<&Transform, (With<Ball>, Without<Paddle>)>,
     time: Res<Time>,
 ) {
-    let mut paddle_transform = query.single_mut();
+    let (mut paddle_transform, mut paddle) = query.single_mut();
+    let start = paddle_transform.translation.truncate();
     let mut direction = 0.0;
 
     if keyboard_input.pressed(KeyCode::ArrowLeft) {
@@ -338,17 +335,33 @@ fn move_paddle(
 
     // Update the paddle position,
     // making sure it doesn't cause the paddle to leave the arena
-    let left_bound = LEFT_WALL + WALL_THICKNESS / 2.0 + PADDLE_SIZE.x / 2.0 + PADDLE_PADDING;
-    let right_bound = RIGHT_WALL - WALL_THICKNESS / 2.0 - PADDLE_SIZE.x / 2.0 - PADDLE_PADDING;
+    let mut left_bound = LEFT_WALL + WALL_THICKNESS / 2.0 + PADDLE_SIZE.x / 2.0 + PADDLE_PADDING;
+    let mut right_bound = RIGHT_WALL - WALL_THICKNESS / 2.0 - PADDLE_SIZE.x / 2.0 - PADDLE_PADDING;
+
+    // PADDLE_PADDING is narrower than the ball. While the ball is beside the
+    // paddle (level with it, not above it), stop the paddle early enough that
+    // the ball still fits between paddle and wall. The contact solver can then
+    // never be asked to squeeze the ball into a gap narrower than its diameter.
+    if let Ok(ball) = ball_query.get_single() {
+        let offset = ball.translation.truncate() - start;
+        if offset.x.abs() > PADDLE_SIZE.x / 2.0
+            && offset.y.abs() < PADDLE_SIZE.y / 2.0 + BALL_DIAMETER
+        {
+            let room = PADDLE_SIZE.x / 2.0 + BALL_SIDE_ROOM;
+            if offset.x > 0.0 {
+                right_bound = right_bound.min(RIGHT_WALL - WALL_THICKNESS / 2.0 - room);
+            } else {
+                left_bound = left_bound.max(LEFT_WALL + WALL_THICKNESS / 2.0 + room);
+            }
+        }
+    }
 
     paddle_transform.translation.x = new_paddle_position.clamp(left_bound, right_bound);
-}
-
-fn apply_velocity(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>) {
-    for (mut transform, velocity) in &mut query {
-        transform.translation.x += velocity.x * time.delta_seconds();
-        transform.translation.y += velocity.y * time.delta_seconds();
-    }
+    paddle.velocity = if time.delta_seconds() > 0. {
+        (paddle_transform.translation.truncate() - start) / time.delta_seconds()
+    } else {
+        Vec2::ZERO
+    };
 }
 
 fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text, With<ScoreboardUi>>) {
@@ -356,55 +369,58 @@ fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text, Wi
     text.sections[1].value = scoreboard.score.to_string();
 }
 
+// The exclusion makes ball/collider transform access disjoint to Bevy's scheduler.
+type Colliders<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        Option<&'static Brick>,
+        Option<&'static Paddle>,
+    ),
+    (With<Collider>, Without<Ball>),
+>;
+
 fn check_for_collisions(
     mut commands: Commands,
     mut scoreboard: ResMut<Scoreboard>,
-    mut ball_query: Query<(&mut Velocity, &Transform), With<Ball>>,
-    collider_query: Query<(Entity, &Transform, Option<&Brick>), With<Collider>>,
+    mut ball_query: Query<(&mut Velocity, &mut Transform), With<Ball>>,
+    collider_query: Colliders,
+    time: Res<Time>,
     mut collision_events: EventWriter<CollisionEvent>,
 ) {
-    let (mut ball_velocity, ball_transform) = ball_query.single_mut();
-
-    let incoming_velocity = ball_velocity.0;
-    let mut reflect_x = false;
-    let mut reflect_y = false;
-
-    // Collect contacts before changing velocity so traversal order cannot affect reflection.
-    for (collider_entity, transform, maybe_brick) in &collider_query {
-        let collision = collide_with_side(
-            BoundingCircle::new(ball_transform.translation.truncate(), BALL_DIAMETER / 2.),
-            Aabb2d::new(
-                transform.translation.truncate(),
-                transform.scale.truncate() / 2.,
-            ),
-        );
-
-        if let Some(collision) = collision {
-            // Sends a collision event so that other systems can react to the collision
-            collision_events.send_default();
-
-            // Bricks should be despawned and increment the scoreboard on collision
-            if maybe_brick.is_some() {
-                scoreboard.score += 1;
-                commands.entity(collider_entity).despawn();
+    let (mut ball_velocity, mut ball_transform) = ball_query.single_mut();
+    let duration = time.delta_seconds();
+    let obstacles: Vec<_> = collider_query
+        .iter()
+        .map(|(entity, transform, brick, paddle)| {
+            let velocity = paddle.map_or(Vec2::ZERO, |paddle| paddle.velocity);
+            physics::Obstacle {
+                entity,
+                center: transform.translation.truncate() - velocity * duration,
+                half_size: transform.scale.truncate() / 2.,
+                velocity,
+                brick: brick.is_some(),
             }
-
-            // Only reflect when the incoming velocity points into this face.
-            match collision {
-                Collision::Left => reflect_x |= incoming_velocity.x > 0.0,
-                Collision::Right => reflect_x |= incoming_velocity.x < 0.0,
-                Collision::Top => reflect_y |= incoming_velocity.y < 0.0,
-                Collision::Bottom => reflect_y |= incoming_velocity.y > 0.0,
-            }
+        })
+        .collect();
+    let mut position = ball_transform.translation.truncate();
+    for entity in physics::advance_ball(
+        &mut position,
+        &mut ball_velocity.0,
+        BALL_DIAMETER / 2.,
+        duration,
+        &obstacles,
+    ) {
+        collision_events.send_default();
+        if collider_query.get(entity).unwrap().2.is_some() {
+            scoreboard.score += 1;
+            commands.entity(entity).despawn();
         }
     }
-
-    if reflect_x {
-        ball_velocity.x = -incoming_velocity.x;
-    }
-    if reflect_y {
-        ball_velocity.y = -incoming_velocity.y;
-    }
+    ball_transform.translation.x = position.x;
+    ball_transform.translation.y = position.y;
 }
 
 fn play_collision_sound(
@@ -424,45 +440,368 @@ fn play_collision_sound(
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-enum Collision {
-    Left,
-    Right,
-    Top,
-    Bottom,
-}
-
-// Returns `Some` if `ball` collides with `wall`. The returned `Collision` is the
-// side of `wall` that `ball` hit.
-fn collide_with_side(ball: BoundingCircle, wall: Aabb2d) -> Option<Collision> {
-    if !ball.intersects(&wall) {
-        return None;
-    }
-
-    let closest = wall.closest_point(ball.center());
-    let offset = ball.center() - closest;
-    let side = if offset.x.abs() > offset.y.abs() {
-        if offset.x < 0. {
-            Collision::Left
-        } else {
-            Collision::Right
-        }
-    } else if offset.y > 0. {
-        Collision::Top
-    } else {
-        Collision::Bottom
-    };
-
-    Some(side)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[derive(Debug, PartialEq, Eq, Copy, Clone)]
+    enum Collision {
+        Left,
+        Right,
+        Top,
+        Bottom,
+    }
+
+    // Exercise the actual fixed schedule, including paddle motion and sound draining.
+    fn motion_app(position: Vec2, velocity: Vec2) -> (App, Entity) {
+        let mut app = App::new();
+        app.insert_resource(Time::<()>::default())
+            .insert_resource(ButtonInput::<KeyCode>::default())
+            .insert_resource(Scoreboard { score: 0 })
+            .insert_resource(CollisionSound(Handle::default()))
+            .add_event::<CollisionEvent>()
+            .add_systems(FixedUpdate, gameplay_systems());
+        let ball = app
+            .world
+            .spawn((
+                Ball,
+                Transform::from_translation(position.extend(1.)),
+                Velocity(velocity),
+            ))
+            .id();
+        app.world.spawn((
+            Paddle::default(),
+            Transform::from_xyz(-100., 0., 0.).with_scale(Vec3::new(20., 20., 1.)),
+        ));
+        (app, ball)
+    }
+
+    fn tick(app: &mut App, dt: f64) {
+        app.world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs_f64(dt));
+        app.world.run_schedule(FixedUpdate);
+    }
+
+    fn ball_state(app: &App, ball: Entity) -> (Vec2, Vec2) {
+        (
+            app.world
+                .get::<Transform>(ball)
+                .unwrap()
+                .translation
+                .truncate(),
+            app.world.get::<Velocity>(ball).unwrap().0,
+        )
+    }
+
+    fn assert_vec_close(actual: Vec2, expected: Vec2) {
+        assert!(
+            (actual - expected).length() < 0.002,
+            "{actual:?} != {expected:?}"
+        );
+    }
+
+    #[test]
+    fn swept_first_contact_blocks_wall_and_thin_brick_crossings() {
+        for brick in [false, true] {
+            let (mut app, ball) = motion_app(Vec2::new(-50., 50.), Vec2::new(1000., 0.));
+            let obstacle = app
+                .world
+                .spawn((
+                    Collider,
+                    Transform::from_xyz(0., 50., 0.).with_scale(Vec3::new(2., 200., 1.)),
+                ))
+                .id();
+            if brick {
+                app.world.entity_mut(obstacle).insert(Brick);
+            }
+            // A brick behind the first obstacle must never be scored through it.
+            let hidden = app
+                .world
+                .spawn((
+                    Collider,
+                    Brick,
+                    Transform::from_xyz(25., 50., 0.).with_scale(Vec3::new(2., 200., 1.)),
+                ))
+                .id();
+            tick(&mut app, 0.1);
+            let (position, velocity) = ball_state(&app, ball);
+            assert_vec_close(position, Vec2::new(-82., 50.));
+            assert_vec_close(velocity, Vec2::new(-1000., 0.));
+            assert_eq!(app.world.resource::<Scoreboard>().score, usize::from(brick));
+            assert!(app.world.get_entity(hidden).is_some());
+            assert_eq!(app.world.get_entity(obstacle).is_none(), brick);
+            assert_eq!(
+                app.world
+                    .query::<&Handle<AudioSource>>()
+                    .iter(&app.world)
+                    .count(),
+                1
+            );
+        }
+    }
+
+    #[test]
+    fn swept_wall_bounces_agree_across_step_partitions() {
+        let simulate = |steps: usize| {
+            let (mut app, ball) = motion_app(Vec2::new(0., 50.), Vec2::new(1000., 0.));
+            for x in [-50., 50.] {
+                app.world.spawn((
+                    Collider,
+                    Transform::from_xyz(x, 50., 0.).with_scale(Vec3::new(2., 100., 1.)),
+                ));
+            }
+            for _ in 0..steps {
+                tick(&mut app, 0.2 / steps as f64);
+            }
+            ball_state(&app, ball)
+        };
+        let whole = simulate(1);
+        assert_vec_close(whole.0, Vec2::new(4., 50.));
+        assert_vec_close(whole.1, Vec2::new(-1000., 0.));
+        for steps in [2, 20, 200] {
+            let split = simulate(steps);
+            assert_vec_close(split.0, whole.0);
+            assert_vec_close(split.1, whole.1);
+        }
+    }
+
+    #[test]
+    fn moving_paddle_uses_relative_swept_contact_across_step_partitions() {
+        let simulate = |steps: usize| {
+            let (mut app, ball) = motion_app(Vec2::new(-50., 0.), Vec2::ZERO);
+            let paddle = app
+                .world
+                .query_filtered::<Entity, With<Paddle>>()
+                .single(&app.world);
+            app.world.entity_mut(paddle).insert(Collider);
+            app.world
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::ArrowRight);
+            for _ in 0..steps {
+                tick(&mut app, 0.1 / steps as f64);
+            }
+            let sounds = app
+                .world
+                .query::<&Handle<AudioSource>>()
+                .iter(&app.world)
+                .count();
+            (ball_state(&app, ball), sounds)
+        };
+        // The paddle contacts the resting ball halfway through the step and
+        // pushes it at its own speed; it adds no energy beyond that push.
+        let (whole, sounds) = simulate(1);
+        assert_vec_close(whole.0, Vec2::new(-25., 0.));
+        assert_vec_close(whole.1, Vec2::new(PADDLE_SPEED, 0.));
+        assert_eq!(sounds, 1);
+        for steps in [2, 10, 100] {
+            let (split, sounds) = simulate(steps);
+            assert_vec_close(split.0, whole.0);
+            assert_vec_close(split.1, whole.1);
+            // Riding along the pushing paddle is one contact, not one per tick.
+            assert_eq!(sounds, 1, "steps={steps}");
+        }
+    }
+
+    // Paddle at the real paddle height and size between the real arena walls.
+    fn squeeze_app(ball: Vec2, velocity: Vec2, paddle_x: f32, key: KeyCode) -> (App, Entity) {
+        let (mut app, ball) = motion_app(ball, velocity);
+        let paddle = app
+            .world
+            .query_filtered::<Entity, With<Paddle>>()
+            .single(&app.world);
+        app.world.entity_mut(paddle).insert((
+            Collider,
+            Transform::from_xyz(paddle_x, -240., 0.).with_scale(PADDLE_SIZE),
+        ));
+        for x in [LEFT_WALL, RIGHT_WALL] {
+            app.world.spawn((
+                Collider,
+                Transform::from_xyz(x, 0., 0.).with_scale(Vec3::new(WALL_THICKNESS, 600., 1.)),
+            ));
+        }
+        for y in [BOTTOM_WALL, TOP_WALL] {
+            app.world.spawn((
+                Collider,
+                Transform::from_xyz(0., y, 0.).with_scale(Vec3::new(
+                    RIGHT_WALL - LEFT_WALL + WALL_THICKNESS,
+                    WALL_THICKNESS,
+                    1.,
+                )),
+            ));
+        }
+        app.world.resource_mut::<ButtonInput<KeyCode>>().press(key);
+        (app, ball)
+    }
+
+    #[test]
+    fn paddle_wall_squeeze_keeps_ball_inside_the_arena_with_bounded_speed() {
+        let inner = Vec2::new(
+            RIGHT_WALL - WALL_THICKNESS / 2. - BALL_DIAMETER / 2.,
+            TOP_WALL - WALL_THICKNESS / 2. - BALL_DIAMETER / 2.,
+        );
+        let limit = Vec2::new(PADDLE_SPEED, BALL_SPEED).length() + 1.;
+        let diagonal = INITIAL_BALL_DIRECTION.normalize() * BALL_SPEED;
+        let mut cases = vec![
+            (Vec2::new(390., -200.), Vec2::new(0., -BALL_SPEED), 300.),
+            (Vec2::new(429., -204.), diagonal, 290.),
+        ];
+        for step in 0..20 {
+            let y = -246. + step as f32;
+            cases.push((Vec2::new(400., y), Vec2::ZERO, 300.));
+            cases.push((Vec2::new(429., y), Vec2::new(0., -10.), 330.));
+            cases.push((Vec2::new(380., y), diagonal, 250.));
+        }
+        for (start, velocity, paddle_x) in cases {
+            // Mirror every case so both walls are covered.
+            for mirror in [1., -1.] {
+                let key = if mirror > 0. {
+                    KeyCode::ArrowRight
+                } else {
+                    KeyCode::ArrowLeft
+                };
+                let flip = Vec2::new(mirror, 1.);
+                let (mut app, ball) =
+                    squeeze_app(start * flip, velocity * flip, paddle_x * mirror, key);
+                for _ in 0..128 {
+                    tick(&mut app, 1. / 64.);
+                    let (position, velocity) = ball_state(&app, ball);
+                    assert!(position.is_finite() && velocity.is_finite());
+                    assert!(
+                        velocity.length() <= limit,
+                        "{start:?} {mirror}: {position:?} {velocity:?}"
+                    );
+                    assert!(
+                        position.abs().cmple(inner + 0.01).all(),
+                        "{start:?} {mirror}: escaped to {position:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    fn overlap_app(position: Vec2, velocity: Vec2) -> (App, Entity) {
+        let (mut app, ball) = motion_app(position, velocity);
+        app.world.spawn((
+            Collider,
+            Transform::default().with_scale(Vec3::new(40., 20., 1.)),
+        ));
+        (app, ball)
+    }
+
+    fn assert_outside_box(position: Vec2) {
+        let offset = position - position.clamp(Vec2::new(-20., -10.), Vec2::new(20., 10.));
+        assert!(
+            position.is_finite() && offset.length() >= 15. - 1.0e-5,
+            "still penetrating: {position:?}"
+        );
+    }
+
+    #[test]
+    fn overlap_recovery_separates_embedded_and_on_wall_balls_and_retires_sound() {
+        for (start, incoming, expected, outgoing) in [
+            (Vec2::ZERO, Vec2::ZERO, Vec2::new(0., -25.), Vec2::ZERO),
+            (
+                Vec2::new(0., -10.),
+                Vec2::ZERO,
+                Vec2::new(0., -25.),
+                Vec2::ZERO,
+            ),
+            (
+                Vec2::new(0., -10.),
+                Vec2::new(0., 10.),
+                Vec2::new(0., -25.15625),
+                Vec2::new(0., -10.),
+            ),
+            (
+                Vec2::new(19., 0.),
+                Vec2::new(-10., 0.),
+                Vec2::new(35.15625, 0.),
+                Vec2::new(10., 0.),
+            ),
+            (
+                Vec2::new(21., 11.),
+                Vec2::ZERO,
+                Vec2::new(20., 10.) + Vec2::ONE.normalize() * 15.,
+                Vec2::ZERO,
+            ),
+        ] {
+            let (mut app, ball) = overlap_app(start, incoming);
+            tick(&mut app, 1. / 64.);
+            let (position, velocity) = ball_state(&app, ball);
+            assert_outside_box(position);
+            assert_vec_close(position, expected);
+            assert_vec_close(velocity, outgoing);
+            for _ in 0..32 {
+                tick(&mut app, 1. / 64.);
+                let (position, velocity) = ball_state(&app, ball);
+                assert_outside_box(position);
+                assert!(velocity.is_finite());
+            }
+            assert_eq!(
+                app.world
+                    .query::<&Handle<AudioSource>>()
+                    .iter(&app.world)
+                    .count(),
+                1
+            );
+        }
+    }
+
+    #[test]
+    fn resting_and_tangent_contacts_do_not_replay_impact_sound() {
+        for velocity in [Vec2::ZERO, Vec2::new(10., 0.)] {
+            let start = Vec2::new(0., -25.);
+            let (mut app, ball) = overlap_app(start, velocity);
+            for _ in 0..32 {
+                tick(&mut app, 1. / 64.);
+            }
+            let (position, outgoing) = ball_state(&app, ball);
+            assert_outside_box(position);
+            assert_vec_close(position, start + velocity * 0.5);
+            assert_vec_close(outgoing, velocity);
+            assert_eq!(
+                app.world
+                    .query::<&Handle<AudioSource>>()
+                    .iter(&app.world)
+                    .count(),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn simultaneous_overlap_recovery_is_independent_of_entity_order() {
+        let simulate = |reverse: bool| {
+            let (mut app, ball) = motion_app(Vec2::ZERO, Vec2::splat(100.));
+            let mut boxes = [
+                (Vec2::new(10., 0.), Vec2::new(2., 100.)),
+                (Vec2::new(0., 10.), Vec2::new(100., 2.)),
+            ];
+            if reverse {
+                boxes.reverse();
+            }
+            for (center, size) in boxes {
+                app.world.spawn((
+                    Collider,
+                    Transform::from_translation(center.extend(0.)).with_scale(size.extend(1.)),
+                ));
+            }
+            tick(&mut app, 1. / 64.);
+            ball_state(&app, ball)
+        };
+        let forward = simulate(false);
+        let reverse = simulate(true);
+        assert_vec_close(forward.0, Vec2::splat(-7.5625));
+        assert_vec_close(forward.1, Vec2::splat(-100.));
+        assert_vec_close(reverse.0, forward.0);
+        assert_vec_close(reverse.1, forward.1);
+    }
+
     fn opposing_brick_contacts(reverse: bool, vertical: bool) -> (Vec2, usize, usize, usize) {
         let mut app = App::new();
         app.insert_resource(Scoreboard { score: 0 })
+            .insert_resource(Time::<()>::default())
             .add_event::<CollisionEvent>()
             .add_systems(FixedUpdate, check_for_collisions);
         let ball = app
@@ -528,16 +867,36 @@ mod tests {
             (Vec2::new(2.5, 1.5), 1., Some(Collision::Top)),
             (Vec2::new(-2.5, -1.5), 1., Some(Collision::Bottom)),
             (Vec2::ZERO, 0.25, Some(Collision::Bottom)),
-            (Vec2::new(1., 0.5), 0.25, Some(Collision::Bottom)),
+            (Vec2::new(1., 0.5), 0.25, Some(Collision::Top)),
         ];
         for center in [Vec2::ZERO, Vec2::new(32., -16.)] {
             for scale in [0.5, 1., 4.] {
-                let wall = Aabb2d::new(center, Vec2::new(2., 1.) * scale);
                 for (offset, radius, expected) in cases {
-                    let ball = BoundingCircle::new(center + offset * scale, radius * scale);
+                    let position = center + offset * scale;
+                    let actual = physics::sweep_circle(
+                        position - center,
+                        Vec2::ZERO,
+                        radius * scale,
+                        Vec2::new(2., 1.) * scale,
+                        0.,
+                        true,
+                    )
+                    .map(|hit| {
+                        let normal = hit.normal;
+                        if normal.x.abs() > normal.y.abs() {
+                            if normal.x < 0. {
+                                Collision::Left
+                            } else {
+                                Collision::Right
+                            }
+                        } else if normal.y > 0. {
+                            Collision::Top
+                        } else {
+                            Collision::Bottom
+                        }
+                    });
                     assert_eq!(
-                        collide_with_side(ball, wall),
-                        expected,
+                        actual, expected,
                         "offset={offset:?}, radius={radius}, center={center:?}, scale={scale}"
                     );
                 }
@@ -562,7 +921,7 @@ mod tests {
             .spawn((Ball, Transform::default(), Velocity(Vec2::new(100., 100.))))
             .id();
         app.world
-            .spawn((Paddle, Transform::from_xyz(0., -200., 0.)));
+            .spawn((Paddle::default(), Transform::from_xyz(0., -200., 0.)));
         let brick = app
             .world
             .spawn((
