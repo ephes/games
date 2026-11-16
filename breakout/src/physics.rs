@@ -228,7 +228,12 @@ pub(super) fn advance_ball(
             // reverse a response just made against another collider.
             let speed = (*velocity - obstacle.velocity).dot(contact.normal);
             if (incoming - obstacle.velocity).dot(contact.normal) < 0. && speed < 0. {
-                *velocity -= 2. * speed * contact.normal;
+                // Reflect the ball's own normal speed. A moving collider may
+                // push the ball up to its own normal speed but never adds
+                // energy on top, so repeated paddle/wall squeezes stay bounded.
+                let own = velocity.dot(contact.normal);
+                let pushed = obstacle.velocity.dot(contact.normal).max(0.);
+                *velocity += ((-own).max(pushed) - own) * contact.normal;
             }
         }
     }

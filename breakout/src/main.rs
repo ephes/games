@@ -560,15 +560,52 @@ mod tests {
             for _ in 0..steps {
                 tick(&mut app, 0.1 / steps as f64);
             }
-            ball_state(&app, ball)
+            let sounds = app
+                .world
+                .query::<&Handle<AudioSource>>()
+                .iter(&app.world)
+                .count();
+            (ball_state(&app, ball), sounds)
         };
-        let whole = simulate(1);
-        assert_vec_close(whole.0, Vec2::ZERO);
-        assert_vec_close(whole.1, Vec2::new(1000., 0.));
+        // The paddle contacts the resting ball halfway through the step and
+        // pushes it at its own speed; it adds no energy beyond that push.
+        let (whole, sounds) = simulate(1);
+        assert_vec_close(whole.0, Vec2::new(-25., 0.));
+        assert_vec_close(whole.1, Vec2::new(PADDLE_SPEED, 0.));
+        assert_eq!(sounds, 1);
         for steps in [2, 10, 100] {
-            let split = simulate(steps);
+            let (split, sounds) = simulate(steps);
             assert_vec_close(split.0, whole.0);
             assert_vec_close(split.1, whole.1);
+            // Riding along the pushing paddle is one contact, not one per tick.
+            assert_eq!(sounds, 1, "steps={steps}");
+        }
+    }
+
+    #[test]
+    fn paddle_wall_squeeze_keeps_ball_speed_bounded() {
+        let (mut app, ball) = motion_app(Vec2::new(390., -200.), Vec2::new(0., -BALL_SPEED));
+        let paddle = app
+            .world
+            .query_filtered::<Entity, With<Paddle>>()
+            .single(&app.world);
+        app.world.entity_mut(paddle).insert((
+            Collider,
+            Transform::from_xyz(300., -240., 0.).with_scale(PADDLE_SIZE),
+        ));
+        app.world.spawn((
+            Collider,
+            Transform::from_xyz(RIGHT_WALL, 0., 0.).with_scale(Vec3::new(WALL_THICKNESS, 600., 1.)),
+        ));
+        app.world
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::ArrowRight);
+        let limit = Vec2::new(PADDLE_SPEED, BALL_SPEED).length() + 1.;
+        for _ in 0..128 {
+            tick(&mut app, 1. / 64.);
+            let (position, velocity) = ball_state(&app, ball);
+            assert!(position.is_finite() && velocity.is_finite());
+            assert!(velocity.length() <= limit, "{position:?} {velocity:?}");
         }
     }
 

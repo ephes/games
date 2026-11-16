@@ -12,6 +12,8 @@
   immediate hit-brick retirement to prevent tunnelling and through-wall scores.
 - Compare high-speed wall, thin-brick and moving-paddle motion against equivalent
   step partitions in headless fixed-schedule regressions.
+- Limit moving-paddle responses to the paddle's own normal speed so side and
+  corner hits or paddle/wall squeezes cannot accelerate the ball without bound.
 
 - Keep simultaneous face contacts independent of collider insertion order while
   preserving brick scoring and contact events.

@@ -36,8 +36,12 @@ The ball advances to the earliest swept circle/AABB contact, reflects and uses
 only the remaining tick time for further motion. Sweeps test straight faces and
 round corner arcs, so thin bricks/walls cannot be crossed between sampled poses
 and square corner near-misses do not become hits. Paddle collisions use relative
-motion from its old position to its clamped new position during the tick, with
-reflection in the paddle's moving frame.
+motion from its old position to its clamped new position during the tick for
+contact detection. The response reflects the ball's own normal speed; a moving
+paddle can raise the outgoing normal speed at most to its own normal speed, so
+it pushes the ball but never adds energy on top. Top hits from a horizontally
+moving paddle are plain reflections, and a ball squeezed between paddle and
+wall keeps a bounded speed.
 
 Simultaneous contacts are collected before response, ordered by normal and
 collider velocity rather than entity insertion order. Only approaching normals
