@@ -116,7 +116,12 @@ Player shots sweep their whole step against enemies and the boss, accounting for
 both projectile and target movement. Each step builds one balanced tree of
 target swept bounds, shared by all player shots. Queries prune disjoint subtrees
 before exact contact tests; dense intersecting targets still require exact tests.
-The conservative bounds include target motion, and preserve exhaustive hit ordering. The earliest live contact takes one hit;
+The conservative bounds include target motion, and preserve exhaustive hit ordering.
+Competing shots resolve in contact-time order across the whole fixed step. A shot
+whose selected target was defeated earlier checks its path again for the next
+live target. Simultaneous shots use pre-step x/y/width/height, then endpoint
+x/y/width/height order; identical trajectories are interchangeable and retain
+storage order. The earliest live contact takes one hit;
 contacts are resolved before off-screen culling. Equal-time contacts use target
 x/y/width/height order, then enemy before boss; identical enemy rectangles keep
 level order. Stationary edge touches and tangential grazing do not hit. Drawing subtracts
@@ -317,8 +322,12 @@ omitted speed defaults to 2. Boss shots use the active level's camera bounds,
 with a 200 px horizontal and 100 px vertical off-world margin. Recreating a level
 replaces its boss and projectile collection.
 
-Boss shots also sweep relative to the player's pre-step position, resolving
-contact before off-world culling. Each shot is consumed once, even during
+Established boss shots sweep relative to the player's pre-step position, resolving
+contact before off-world culling. Boss shots created during an update are born
+at the end-of-step muzzle position: they do not move or animate until the next
+step, and only overlap with the player's current pose can hit at birth. Earlier
+player movement cannot collide retroactively with a newborn shot. From the next
+step onward they use the usual relative sweep. Each shot is consumed once, even during
 protection. Stomps require the first relative contact to cross the enemy top
 downward; falling side entry causes damage. The boss head center is evaluated
 at that contact (central 40%, inside its top 20%). Fast top crossings therefore

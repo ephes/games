@@ -139,16 +139,17 @@ export class Boss extends Enemy {
       this.isHit = false;
     }
 
-    // Update projectile shooting
-    this.updateShooting(player);
-
-    // Update projectiles (only if boss is alive)
+    // Advance only shots present at the start of this step.
     if (this.alive) {
       this.projectiles = this.projectiles.filter(projectile => {
         projectile.update(deltaTime, deferProjectileCulling);
         return projectile.active;
       });
     }
+
+    // Birth is at the end-of-step muzzle. New shots remain here until the next
+    // update; Game checks only current player overlap at this boundary.
+    this.updateShooting(player);
   }
 
   /**
