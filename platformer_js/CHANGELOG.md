@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Advance portal pulses from fixed simulation time with a bounded phase; drawing
+  no longer changes animation state or makes pulse speed depend on refresh rate.
+
 - Give newborn boss shots an end-of-step birth at the muzzle. Check current
   overlap at birth and defer movement/animation until the next step, preventing
   damage along player motion that happened before the shot existed.

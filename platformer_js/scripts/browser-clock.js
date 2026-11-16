@@ -32,6 +32,11 @@ try {
     window.cancelAnimationFrame = key => frames.delete(key);
     performance.now = () => 0;
     Date.now = () => 0;
+    function assertPortalPhase(actual, expected) {
+      if (Math.abs(actual - expected) > 1e-10) {
+        throw Error(`portal pulse mismatch: ${actual} vs ${expected}`);
+      }
+    }
     const results = [];
     for (const hz of [30, 60, 144]) {
       frames = new Map();
@@ -81,6 +86,11 @@ try {
         game.enemies[0].x,
         game.boss.projectiles[0]?.x
       ];
+      assertPortalPhase(game.portal.pulseTime, 3);
+      const phase = game.portal.pulseTime;
+      render();
+      render();
+      assertPortalPhase(game.portal.pulseTime, phase);
       const stale = frames.values().next().value;
       game.dispose();
       stale(2000);

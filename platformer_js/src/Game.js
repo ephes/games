@@ -282,6 +282,8 @@ export class Game {
       return;
     }
 
+    this.portal.update(deltaTime);
+
     // A portal unlocked during this step (a player shot defeating the boss, or a
     // stomp) admits only the endpoint; the motion before the unlock must not be
     // replayed as an entry.

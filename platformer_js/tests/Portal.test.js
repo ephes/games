@@ -33,7 +33,7 @@ describe('Portal', () => {
       expect(typeof portal.pulseTime).toBe('number');
     });
 
-    it('should update pulse time during draw', () => {
+    it('keeps pulse state unchanged across repeated draws', () => {
       const mockCtx = {
         save: () => {},
         restore: () => {},
@@ -56,8 +56,10 @@ describe('Portal', () => {
       };
 
       const initialPulseTime = portal.pulseTime;
-      portal.draw(mockCtx, 0);
-      expect(portal.pulseTime).toBeGreaterThan(initialPulseTime);
+      for (let i = 0; i < 10; i++) {
+        portal.draw(mockCtx, 0);
+      }
+      expect(portal.pulseTime).toBe(initialPulseTime);
     });
   });
 

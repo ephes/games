@@ -57,6 +57,16 @@ export class Portal {
   }
 
   /**
+   * Advance the pulse from simulation elapsed time, retaining a bounded phase.
+   * @param {number} deltaTime - Simulation milliseconds since last update
+   */
+  update(deltaTime = 1000 / 60) {
+    if (Number.isFinite(deltaTime) && deltaTime > 0) {
+      this.pulseTime = (this.pulseTime + deltaTime * 0.003) % (2 * Math.PI);
+    }
+  }
+
+  /**
    * Draw the portal
    * @param {CanvasRenderingContext2D} ctx - Canvas context
    * @param {number} cameraX - Camera X offset
@@ -65,9 +75,6 @@ export class Portal {
     const centerX = this.x - cameraX + this.width / 2;
     const centerY = this.y + this.height / 2;
     const radius = this.width / 2;
-
-    // Update pulse animation
-    this.pulseTime += 0.05;
 
     if (this.sprite && this.sprite.complete) {
       // Create circular clipping region

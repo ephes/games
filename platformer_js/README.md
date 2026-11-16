@@ -283,6 +283,11 @@ without activating the game. Update/render failures also dispose the game
 and rethrow the original error: synchronous startup errors reach the caller of
 `start()`, and scheduled-frame errors reach the browser error surface.
 
+Portal pulses advance by simulation elapsed time (3 radians per second), wrapping
+at 2π for both locked barriers and unlocked glows. Drawing never advances their
+phase; extra renders and different display refresh rates show the same simulated
+state. Terminal game states freeze the phase, and level creation starts it at zero.
+
 Simulation uses fixed 60 Hz steps and renders once per animation frame. A frame
 can run at most five simulation steps; gaps over 250 ms discard accumulated time
 so returning from suspension does not replay missed movement. Player and boss shooting cooldowns use monotonic `performance.now()` time,

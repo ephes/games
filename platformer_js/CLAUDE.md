@@ -192,7 +192,9 @@ reset/replacement restores initial lives and clears terminal flags only after
 construction succeeds, preserving score and shooting/cooldown state. Suspension gaps over 250 ms reset simulation
 timing, with at most five catch-up steps otherwise. Player and boss shot cooldowns use `performance.now()` independently of wall-clock
 changes. Player cooldowns survive level reloads; the first shot is immediately
-available. Enemy animation and 300 ms defeated visuals use accumulated simulation
+available. Portal pulse phase advances at 3 radians per second in `Game.update`,
+wraps at 2π, and stays unchanged by drawing or discarded suspension time.
+Terminal game states freeze it; a new level starts at zero. Enemy animation and 300 ms defeated visuals use accumulated simulation
 elapsed time; hit resets the frame clock. Boss animation keeps a simulation-time
 frame remainder (200 ms per sequence step)
 and a monotonic accumulated clock shared by hit expiry and renderer fading.
