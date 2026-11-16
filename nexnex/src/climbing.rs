@@ -15,11 +15,27 @@ pub struct Climber {
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
 pub struct Climbable;
 
-#[derive(Clone, Default, Bundle, LdtkIntCell)]
+#[derive(Clone, Default, Bundle)]
 pub struct LadderBundle {
-    #[from_int_grid_cell]
     pub sensor_bundle: SensorBundle,
     pub climbable: Climbable,
+}
+
+impl LdtkIntCell for LadderBundle {
+    fn bundle_int_cell(_: IntGridCell, layer: &LayerInstance) -> Self {
+        Self {
+            sensor_bundle: SensorBundle {
+                collider: Collider::cuboid(
+                    layer.grid_size as f32 / 2.,
+                    layer.grid_size as f32 / 2.,
+                ),
+                sensor: Sensor,
+                active_events: ActiveEvents::COLLISION_EVENTS,
+                rotation_constraints: LockedAxes::ROTATION_LOCKED,
+            },
+            climbable: Climbable,
+        }
+    }
 }
 
 pub fn detect_climb_range(

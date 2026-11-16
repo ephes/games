@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Size ladder sensors from their authored LDtk layer grid rather than assuming
+  16 pixels, preserving real climb coverage without reaching adjacent cells.
+- Cache validated patrol cycle lengths with immutable route points at construction
+  and replacement; reuse them at arrivals while retaining residual travel and
+  endpoint behavior across frame partitions.
+
 - Index loaded level transforms once per selection pass, keeping current-level
   preference, authored overlap order and half-open world-space bounds.
 - Bind climbing gravity ownership to each inserted GravityScale generation,

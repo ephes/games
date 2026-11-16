@@ -36,6 +36,9 @@ even spawn geometry is invalid); patrol updates leave that mob stationary and
 valid siblings continue loading. No partial route is admitted.
 
 Patrols travel at 75 world units per simulated second and turn at endpoints.
+Each constructed/replaced route owns its validated finite out-and-back cycle
+length. Points are read-only after construction, so waypoint arrivals reuse that
+metric without scanning the route; stepping work follows the crossed legs.
 After Rapier writes back movement, distance beyond a waypoint carries around
 subsequent corners before transform propagation/rendering. Complete out-and-back
 cycles are skipped arithmetically, so even a long step or repeated points needs
@@ -125,7 +128,10 @@ zero friction with the minimum combine rule and locked rotation; Chest has a
 dynamic 16 by 16 collider, friction 0.5 and density 15; Mob has a kinematic
 velocity-based 10 by 10 collider with locked rotation. The player's single child
 foot sensor has half-extents (3, 2), sits at local (0, -14), and requests collision
-messages. Ladder IntGrid value 2 creates a 16 by 16 sensor, never solid ground.
+messages. Ladder IntGrid value 2 creates a square sensor matching the source layer's
+authored grid size through LDtk's custom bundle API, never solid ground.
+Headless LDtk/Rapier fixtures cover grids 8, 16 and 32: contacts reach the
+inside edge of a ladder tile while the adjacent ordinary cell stays unclimbable.
 Headless fixtures load synthetic Player/Chest/Mob and IntGrid entries through
 LDtk's public spawning APIs into Rapier. Fixed simulation steps verify chest
 support and actual ladder/foot-sensor overlap without synthetic collision messages.

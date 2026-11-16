@@ -1009,11 +1009,11 @@ fn malformed_authored_patrols_are_stationary_and_do_not_block_siblings() {
         for (iid, patrol, velocity, transform) in mobs {
             assert!(transform.translation.is_finite());
             if iid.as_str() == "invalid-mob" {
-                assert_eq!(patrol.points.len(), 1);
-                assert_eq!(patrol.points[0], transform.translation.truncate());
+                assert_eq!(patrol.points().len(), 1);
+                assert_eq!(patrol.points()[0], transform.translation.truncate());
                 assert_eq!(velocity.linvel, Vec2::ZERO);
             } else {
-                assert_eq!(patrol.points.len(), 2);
+                assert_eq!(patrol.points().len(), 2);
                 assert!(velocity.linvel.length() > 0.);
             }
         }
@@ -1187,5 +1187,86 @@ fn level_selection_reads_loaded_transforms_once_per_pass() {
             *app.world().resource::<LevelSelection>(),
             LevelSelection::Uid(1)
         );
+    }
+}
+
+#[test]
+fn authored_ladder_grid_matches_real_climb_contacts() {
+    for grid in [8, 16, 32] {
+        let mut data = physics_project();
+        let layer = &mut data.levels[0].layer_instances.as_mut().unwrap()[1];
+        let size = 128 / grid;
+        layer.c_wid = size;
+        layer.c_hei = size;
+        layer.grid_size = grid;
+        layer.int_grid_csv = vec![0; (size * size) as usize];
+        layer.int_grid_csv[(size + 1) as usize] = 2;
+        data.defs.layers.last_mut().unwrap().grid_size = grid;
+        let (mut app, handle) = testing::project_data_app(data);
+        lifecycle(&mut app);
+        app.add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.))
+            .insert_resource(TimestepMode::Fixed {
+                dt: 1. / 60.,
+                substeps: 1,
+            })
+            .add_systems(Update, climbing::detect_climb_range)
+            .register_ldtk_int_cell::<climbing::LadderBundle>(2);
+        app.world_mut().run_schedule(PreStartup);
+        let world = app
+            .world_mut()
+            .spawn(LdtkWorldBundle {
+                ldtk_handle: handle.into(),
+                ..default()
+            })
+            .id();
+        app.world_mut().spawn((
+            LevelIid::new("synthetic-level"),
+            Transform::default(),
+            Respawn,
+            ChildOf(world),
+        ));
+        let center = Vec2::new(grid as f32 * 1.5, 128. - grid as f32 * 1.5);
+        let probes: Vec<_> = [grid as f32 * 0.45, grid as f32 * 0.5 + 1.]
+            .into_iter()
+            .map(|offset| {
+                app.world_mut()
+                    .spawn((
+                        Transform::from_translation((center + Vec2::X * offset).extend(0.)),
+                        RigidBody::Dynamic,
+                        GravityScale(0.),
+                        Collider::cuboid(0.2, 0.2),
+                        Climber::default(),
+                    ))
+                    .id()
+            })
+            .collect();
+        for _ in 0..8 {
+            app.update();
+        }
+        let ladder = app
+            .world_mut()
+            .query_filtered::<Entity, With<climbing::Climbable>>()
+            .single(app.world())
+            .unwrap();
+        assert_eq!(
+            app.world()
+                .get::<Collider>(ladder)
+                .unwrap()
+                .as_cuboid()
+                .unwrap()
+                .half_extents(),
+            Vec2::splat(grid as f32 / 2.)
+        );
+        for (probe, inside) in probes.into_iter().zip([true, false]) {
+            assert_eq!(
+                app.world()
+                    .get::<Climber>(probe)
+                    .unwrap()
+                    .intersecting_climbables
+                    .contains(&ladder),
+                inside,
+                "grid={grid}, inside={inside}"
+            );
+        }
     }
 }
