@@ -14,6 +14,8 @@
   step partitions in headless fixed-schedule regressions.
 - Limit moving-paddle responses to the paddle's own normal speed so side and
   corner hits or paddle/wall squeezes cannot accelerate the ball without bound.
+- Stop the paddle one ball diameter short of a wall while the ball is beside it,
+  so overlap recovery cannot push a squeezed ball through the wall.
 
 - Keep simultaneous face contacts independent of collider insertion order while
   preserving brick scoring and contact events.

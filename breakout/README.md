@@ -40,8 +40,15 @@ motion from its old position to its clamped new position during the tick for
 contact detection. The response reflects the ball's own normal speed; a moving
 paddle can raise the outgoing normal speed at most to its own normal speed, so
 it pushes the ball but never adds energy on top. Top hits from a horizontally
-moving paddle are plain reflections, and a ball squeezed between paddle and
-wall keeps a bounded speed.
+moving paddle are plain reflections.
+
+The paddle's wall padding is narrower than the ball. While the ball is beside
+the paddle (outside its width and within one ball diameter of its height), the
+paddle stops at least one ball diameter plus one unit from that wall, so it can
+never squeeze the ball into a gap it does not fit. The solver itself does not
+resolve such squeezes between a moving and a static collider. Headless
+regressions push resting, slow and diagonal balls against both side walls and
+check that the ball stays inside the arena with bounded speed.
 
 Simultaneous contacts are collected before response, ordered by normal and
 collider velocity rather than entity insertion order. Only approaching normals

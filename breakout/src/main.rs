@@ -12,6 +12,8 @@ const GAP_BETWEEN_PADDLE_AND_FLOOR: f32 = 60.0;
 const PADDLE_SPEED: f32 = 500.0;
 // How close can the paddle get to the wall
 const PADDLE_PADDING: f32 = 10.0;
+// Gap the paddle keeps from a wall while the ball is beside it.
+const BALL_SIDE_ROOM: f32 = BALL_DIAMETER + 1.0;
 
 // We set the z-value of the ball to 1 so it renders on top in the case of overlapping sprites.
 const BALL_STARTING_POSITION: Vec3 = Vec3::new(0.0, -50.0, 1.0);
@@ -312,6 +314,7 @@ fn setup(
 fn move_paddle(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut query: Query<(&mut Transform, &mut Paddle)>,
+    ball_query: Query<&Transform, (With<Ball>, Without<Paddle>)>,
     time: Res<Time>,
 ) {
     let (mut paddle_transform, mut paddle) = query.single_mut();
@@ -332,8 +335,26 @@ fn move_paddle(
 
     // Update the paddle position,
     // making sure it doesn't cause the paddle to leave the arena
-    let left_bound = LEFT_WALL + WALL_THICKNESS / 2.0 + PADDLE_SIZE.x / 2.0 + PADDLE_PADDING;
-    let right_bound = RIGHT_WALL - WALL_THICKNESS / 2.0 - PADDLE_SIZE.x / 2.0 - PADDLE_PADDING;
+    let mut left_bound = LEFT_WALL + WALL_THICKNESS / 2.0 + PADDLE_SIZE.x / 2.0 + PADDLE_PADDING;
+    let mut right_bound = RIGHT_WALL - WALL_THICKNESS / 2.0 - PADDLE_SIZE.x / 2.0 - PADDLE_PADDING;
+
+    // PADDLE_PADDING is narrower than the ball. While the ball is beside the
+    // paddle (level with it, not above it), stop the paddle early enough that
+    // the ball still fits between paddle and wall. The contact solver can then
+    // never be asked to squeeze the ball into a gap narrower than its diameter.
+    if let Ok(ball) = ball_query.get_single() {
+        let offset = ball.translation.truncate() - start;
+        if offset.x.abs() > PADDLE_SIZE.x / 2.0
+            && offset.y.abs() < PADDLE_SIZE.y / 2.0 + BALL_DIAMETER
+        {
+            let room = PADDLE_SIZE.x / 2.0 + BALL_SIDE_ROOM;
+            if offset.x > 0.0 {
+                right_bound = right_bound.min(RIGHT_WALL - WALL_THICKNESS / 2.0 - room);
+            } else {
+                left_bound = left_bound.max(LEFT_WALL + WALL_THICKNESS / 2.0 + room);
+            }
+        }
+    }
 
     paddle_transform.translation.x = new_paddle_position.clamp(left_bound, right_bound);
     paddle.velocity = if time.delta_seconds() > 0. {
@@ -582,30 +603,80 @@ mod tests {
         }
     }
 
-    #[test]
-    fn paddle_wall_squeeze_keeps_ball_speed_bounded() {
-        let (mut app, ball) = motion_app(Vec2::new(390., -200.), Vec2::new(0., -BALL_SPEED));
+    // Paddle at the real paddle height and size between the real arena walls.
+    fn squeeze_app(ball: Vec2, velocity: Vec2, paddle_x: f32, key: KeyCode) -> (App, Entity) {
+        let (mut app, ball) = motion_app(ball, velocity);
         let paddle = app
             .world
             .query_filtered::<Entity, With<Paddle>>()
             .single(&app.world);
         app.world.entity_mut(paddle).insert((
             Collider,
-            Transform::from_xyz(300., -240., 0.).with_scale(PADDLE_SIZE),
+            Transform::from_xyz(paddle_x, -240., 0.).with_scale(PADDLE_SIZE),
         ));
-        app.world.spawn((
-            Collider,
-            Transform::from_xyz(RIGHT_WALL, 0., 0.).with_scale(Vec3::new(WALL_THICKNESS, 600., 1.)),
-        ));
-        app.world
-            .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::ArrowRight);
+        for x in [LEFT_WALL, RIGHT_WALL] {
+            app.world.spawn((
+                Collider,
+                Transform::from_xyz(x, 0., 0.).with_scale(Vec3::new(WALL_THICKNESS, 600., 1.)),
+            ));
+        }
+        for y in [BOTTOM_WALL, TOP_WALL] {
+            app.world.spawn((
+                Collider,
+                Transform::from_xyz(0., y, 0.).with_scale(Vec3::new(
+                    RIGHT_WALL - LEFT_WALL + WALL_THICKNESS,
+                    WALL_THICKNESS,
+                    1.,
+                )),
+            ));
+        }
+        app.world.resource_mut::<ButtonInput<KeyCode>>().press(key);
+        (app, ball)
+    }
+
+    #[test]
+    fn paddle_wall_squeeze_keeps_ball_inside_the_arena_with_bounded_speed() {
+        let inner = Vec2::new(
+            RIGHT_WALL - WALL_THICKNESS / 2. - BALL_DIAMETER / 2.,
+            TOP_WALL - WALL_THICKNESS / 2. - BALL_DIAMETER / 2.,
+        );
         let limit = Vec2::new(PADDLE_SPEED, BALL_SPEED).length() + 1.;
-        for _ in 0..128 {
-            tick(&mut app, 1. / 64.);
-            let (position, velocity) = ball_state(&app, ball);
-            assert!(position.is_finite() && velocity.is_finite());
-            assert!(velocity.length() <= limit, "{position:?} {velocity:?}");
+        let diagonal = INITIAL_BALL_DIRECTION.normalize() * BALL_SPEED;
+        let mut cases = vec![
+            (Vec2::new(390., -200.), Vec2::new(0., -BALL_SPEED), 300.),
+            (Vec2::new(429., -204.), diagonal, 290.),
+        ];
+        for step in 0..20 {
+            let y = -246. + step as f32;
+            cases.push((Vec2::new(400., y), Vec2::ZERO, 300.));
+            cases.push((Vec2::new(429., y), Vec2::new(0., -10.), 330.));
+            cases.push((Vec2::new(380., y), diagonal, 250.));
+        }
+        for (start, velocity, paddle_x) in cases {
+            // Mirror every case so both walls are covered.
+            for mirror in [1., -1.] {
+                let key = if mirror > 0. {
+                    KeyCode::ArrowRight
+                } else {
+                    KeyCode::ArrowLeft
+                };
+                let flip = Vec2::new(mirror, 1.);
+                let (mut app, ball) =
+                    squeeze_app(start * flip, velocity * flip, paddle_x * mirror, key);
+                for _ in 0..128 {
+                    tick(&mut app, 1. / 64.);
+                    let (position, velocity) = ball_state(&app, ball);
+                    assert!(position.is_finite() && velocity.is_finite());
+                    assert!(
+                        velocity.length() <= limit,
+                        "{start:?} {mirror}: {position:?} {velocity:?}"
+                    );
+                    assert!(
+                        position.abs().cmple(inner + 0.01).all(),
+                        "{start:?} {mirror}: escaped to {position:?}"
+                    );
+                }
+            }
         }
     }
 
