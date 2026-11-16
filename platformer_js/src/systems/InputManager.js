@@ -89,6 +89,11 @@ export class InputManager {
     if (this.surface !== document) {
       event.preventDefault();
     }
+    // Reset retires held keys at lifecycle boundaries. Native repeats must not
+    // resurrect them or retrigger pause before a fresh physical press.
+    if (event.repeat) {
+      return;
+    }
     const key = event.key;
     const wasPressed = this.keys[key];
     this.keys[key] = true;

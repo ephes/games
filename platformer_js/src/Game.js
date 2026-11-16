@@ -41,6 +41,7 @@ export class Game {
     this.lives = GAME_CONFIG.INITIAL_LIVES;
     this.gameOver = false;
     this.gameWon = false;
+    this.paused = false;
     this.canShoot = false;
     this.lastShotTime = -GAME_CONFIG.SHOT_COOLDOWN;
     this.currentLevel = 0;
@@ -54,6 +55,14 @@ export class Game {
     this.onPointerDown = () => this.canvas.focus({ preventScroll: true });
     this.canvas.addEventListener('pointerdown', this.onPointerDown);
     this.inputManager = new InputManager(this.canvas);
+    this.onClockBoundary = () => {
+      this.accumulator = 0;
+      this.lastTime = null;
+    };
+    window.addEventListener('blur', this.onClockBoundary);
+    window.addEventListener('focus', this.onClockBoundary);
+    this.canvas.addEventListener('blur', this.onClockBoundary);
+    document.addEventListener('visibilitychange', this.onClockBoundary);
     this.spriteLoader = new SpriteLoader();
     this.spriteController = new AbortController();
     this.camera = new Camera(this.canvas.width, this.canvas.height);
@@ -195,10 +204,21 @@ export class Game {
    * Set up input handlers
    */
   setupInputHandlers() {
+    this.inputManager.on('pause:down', () => this.togglePause());
     // Shooting
     this.inputManager.on('shoot:down', () => {
       this.shoot();
     });
+  }
+
+  /** Toggle manual pause without replacing the owned animation chain. */
+  togglePause() {
+    if (!this.initialized || this.disposed || this.gameOver || this.gameWon) {
+      return;
+    }
+    this.paused = !this.paused;
+    this.inputManager.reset();
+    this.onClockBoundary();
   }
 
   /**
@@ -210,6 +230,7 @@ export class Game {
       this.disposed ||
       this.gameOver ||
       this.gameWon ||
+      this.paused ||
       !this.canShoot
     ) {
       return;
@@ -240,10 +261,10 @@ export class Game {
     }
     try {
       const step = 1000 / 60;
-      const elapsed = Math.max(0, timestamp - this.lastTime);
+      const elapsed = Math.max(0, timestamp - (this.lastTime ?? timestamp));
       this.lastTime = timestamp;
       // Drop suspension time; ordinary slow frames can catch up at most five steps.
-      if (elapsed > 250) {
+      if (this.paused || document.hidden || elapsed > 250) {
         this.accumulator = 0;
       } else {
         this.accumulator += Math.min(elapsed, step * 5);
@@ -278,7 +299,7 @@ export class Game {
    * @param {number} deltaTime - Time since last update
    */
   update(deltaTime) {
-    if (this.gameOver || this.gameWon) {
+    if (this.paused || this.gameOver || this.gameWon) {
       return;
     }
 
@@ -658,6 +679,13 @@ export class Game {
       this.renderer.drawGameOver(this.score);
     } else if (this.gameWon) {
       this.renderer.drawWinScreen(this.score);
+    } else if (this.paused) {
+      this.renderer.drawText(
+        'Paused - Esc to resume',
+        this.canvas.width / 2,
+        this.canvas.height / 2,
+        { font: 'bold 28px Arial', align: 'center' }
+      );
     }
   }
 
@@ -681,7 +709,7 @@ export class Game {
     );
 
     // Controls
-    let controls = 'Controls: Arrow Keys to move';
+    let controls = 'Controls: Arrow Keys to move, ESC to pause';
     if (this.canShoot) {
       controls += ', SPACE to shoot';
     }
@@ -718,6 +746,10 @@ export class Game {
     this.spriteController.abort();
     cancelAnimationFrame(this.animationFrameId);
     this.inputManager.dispose();
+    window.removeEventListener('blur', this.onClockBoundary);
+    window.removeEventListener('focus', this.onClockBoundary);
+    this.canvas.removeEventListener('blur', this.onClockBoundary);
+    document.removeEventListener('visibilitychange', this.onClockBoundary);
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
     this.player?.dispose();
   }
@@ -857,8 +889,9 @@ export class Game {
     }
     this.gameOver = false;
     this.gameWon = false;
+    this.paused = false;
     this.projectiles = [];
     this.inputManager.reset();
-    this.accumulator = 0;
+    this.onClockBoundary();
   }
 }

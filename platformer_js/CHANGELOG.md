@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Connect Escape to visible reversible pause: freeze simulation and shots, retire
+  held input and clock remainder on pause/resume, and retain one render loop.
+  Ignore native key repeats after input reset; discard hidden/focus-boundary time
+  and release clock listeners on disposal. Successful reset resumes fresh play.
+
 - Retain one entry-point Game and dispose it on pagehide or hot replacement,
   including pending startup. BFCache restoration starts a fresh game without
   retaining progress; stale startup and duplicate pageshow events cannot create
