@@ -8,6 +8,8 @@ export function buildStaticWorldIndex(platforms, coins) {
     .map((object, order) => ({
       object,
       order,
+      platforms: order < platforms.length ? 1 : 0,
+      coins: order < platforms.length ? 0 : 1,
       minX: object.x,
       maxX: object.x + object.width,
       minY: object.y,
@@ -24,16 +26,27 @@ export function buildStaticWorldIndex(platforms, coins) {
     const mid = (start + end) >>> 1;
     const left = build(start, mid);
     const right = build(mid, end);
-    return {
+    const node = {
       left,
       right,
+      platforms: left.platforms + right.platforms,
+      coins: left.coins + right.coins,
       minX: Math.min(left.minX, right.minX),
       maxX: Math.max(left.maxX, right.maxX),
       minY: Math.min(left.minY, right.minY),
       maxY: Math.max(left.maxY, right.maxY)
     };
+    left.parent = node;
+    right.parent = node;
+    return node;
   };
-  return build(0, entries.length);
+  const root = build(0, entries.length);
+  if (root) {
+    root.coinEntries = new WeakMap(
+      entries.filter(entry => entry.coins).map(entry => [entry.object, entry])
+    );
+  }
+  return root;
 }
 
 /**
@@ -42,14 +55,25 @@ export function buildStaticWorldIndex(platforms, coins) {
  */
 export function visibleStaticObjects(index, camera) {
   const margin = 2;
+  return queryStaticWorld(index, {
+    minX: camera.x - margin,
+    maxX: camera.x + camera.width + margin,
+    minY: camera.y - margin,
+    maxY: camera.y + camera.height + margin
+  });
+}
+
+/** Query inclusive static bounds in original level order, optionally by kind. */
+export function queryStaticWorld(index, bounds, kind) {
   const candidates = [];
   const visit = node => {
     if (
       !node ||
-      node.minX > camera.x + camera.width + margin ||
-      node.maxX < camera.x - margin ||
-      node.minY > camera.y + camera.height + margin ||
-      node.maxY < camera.y - margin
+      (kind && !node[kind]) ||
+      node.minX > bounds.maxX ||
+      node.maxX < bounds.minX ||
+      node.minY > bounds.maxY ||
+      node.maxY < bounds.minY
     ) {
       return;
     }
@@ -64,4 +88,26 @@ export function visibleStaticObjects(index, camera) {
   return candidates
     .sort((a, b) => a.order - b.order)
     .map(entry => entry.object);
+}
+
+/** Conservative rectangle covering both ends of a linear motion. */
+export function sweptBounds(object, previous = object) {
+  return {
+    minX: Math.min(object.x, previous.x),
+    maxX: Math.max(object.x, previous.x) + object.width,
+    minY: Math.min(object.y, previous.y),
+    maxY: Math.max(object.y, previous.y) + object.height
+  };
+}
+
+/** Retire a collected coin in O(tree height), pruning future collision queries. */
+export function retireStaticCoin(index, coin) {
+  let node = index?.coinEntries.get(coin);
+  if (!node?.coins) {
+    return;
+  }
+  while (node) {
+    node.coins--;
+    node = node.parent;
+  }
 }

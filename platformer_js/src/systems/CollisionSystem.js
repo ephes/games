@@ -329,20 +329,44 @@ export class CollisionSystem {
    * @param {Object} player - Player object
    * @param {Object} portal - Portal object
    * @param {number} threshold - Distance threshold (0-1)
-   * @returns {boolean} True if centered enough
+   * @param {Object} [previousPlayer] - Start of admitted motion (no teleports)
+   * @returns {boolean} True if centered enough anywhere along the motion
    */
-  static checkPortalEntry(player, portal, threshold = 0.6) {
-    if (!this.checkCollision(player, portal)) {
-      return false;
-    }
-
+  static checkPortalEntry(
+    player,
+    portal,
+    threshold = 0.6,
+    previousPlayer = player
+  ) {
     const playerCenterX = player.x + player.width / 2;
     const playerCenterY = player.y + player.height / 2;
     const portalCenterX = portal.x + portal.width / 2;
     const portalCenterY = portal.y + portal.height / 2;
 
-    const dx = playerCenterX - portalCenterX;
-    const dy = playerCenterY - portalCenterY;
+    const startX = previousPlayer.x + player.width / 2;
+    const startY = previousPlayer.y + player.height / 2;
+    const motionX = playerCenterX - startX;
+    const motionY = playerCenterY - startY;
+    const lengthSquared = motionX * motionX + motionY * motionY;
+    const time =
+      lengthSquared === 0
+        ? 0
+        : Math.max(
+            0,
+            Math.min(
+              1,
+              ((portalCenterX - startX) * motionX +
+                (portalCenterY - startY) * motionY) /
+                lengthSquared
+            )
+          );
+    const x = previousPlayer.x + motionX * time;
+    const y = previousPlayer.y + motionY * time;
+    if (!this.checkCollision({ ...player, x, y }, portal)) {
+      return false;
+    }
+    const dx = x + player.width / 2 - portalCenterX;
+    const dy = y + player.height / 2 - portalCenterY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     const portalRadius = portal.width / 2;

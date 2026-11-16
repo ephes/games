@@ -16,6 +16,9 @@ import { SpriteLoader } from './systems/SpriteLoader.js';
 import { Renderer } from './rendering/Renderer.js';
 import {
   buildStaticWorldIndex,
+  queryStaticWorld,
+  retireStaticCoin,
+  sweptBounds,
   visibleStaticObjects
 } from './rendering/staticWorld.js';
 import { GAME_CONFIG, LEVELS } from './utils/constants.js';
@@ -150,7 +153,9 @@ export class Game {
     this.player = player;
     this.staticWorldIndex = staticWorldIndex;
     this.platforms = platforms;
+    this.indexedPlatforms = platforms;
     this.coins = coins;
+    this.indexedCoins = coins;
     this.enemies = enemies;
     this.boss = boss;
     this.portal = portal;
@@ -170,8 +175,8 @@ export class Game {
       this.player.dispose();
       // Clear objects when game is won
       this.staticWorldIndex = null;
-      this.platforms = [];
-      this.coins = [];
+      this.platforms = this.indexedPlatforms = [];
+      this.coins = this.indexedCoins = [];
       this.enemies = [];
       this.projectiles = [];
       return;
@@ -295,7 +300,13 @@ export class Game {
     // Platform collisions
     const collisionResult = CollisionSystem.checkPlatformCollisions(
       this.player,
-      this.platforms,
+      this.platforms === this.indexedPlatforms
+        ? queryStaticWorld(
+            this.staticWorldIndex,
+            sweptBounds(this.player, previousPlayer),
+            'platforms'
+          )
+        : this.platforms,
       previousPlayer
     );
 
@@ -321,6 +332,9 @@ export class Game {
 
     // Update enemies
     this.enemies.forEach(enemy => enemy.update(this.platforms, deltaTime));
+    this.enemies = this.enemies.filter(
+      enemy => enemy.alive || enemy.isInHitAnimation()
+    );
     this.boss.update(this.platforms, deltaTime, this.player, true);
 
     // Get boss projectiles and check collisions
@@ -471,42 +485,63 @@ export class Game {
       return;
     }
 
-    // Coin collisions
-    this.coins.forEach(coin => {
-      if (
-        !coin.collected &&
-        CollisionSystem.sweptContactTime(
-          this.player.getBounds(),
-          coin.getBounds(),
-          previousPlayer ?? this.player,
-          coin
-        ) !== null
-      ) {
+    // Coins retain their existing precedence for exact time ties. A bounce/respawn replaces the remaining
+    // sweep with current-pose overlaps, so coins beyond the contact cannot award.
+    let remaining = this.enemies;
+    let boss = this.boss;
+    for (;;) {
+      const bodyStart = previousPlayer ?? {
+        x: this.player.x,
+        y: this.player.y - Math.max(0, this.player.velocityY)
+      };
+      const hit = this.player.isInvulnerable
+        ? null
+        : CollisionSystem.checkProjectileCollisions(
+            this.player,
+            remaining,
+            boss,
+            bodyStart,
+            previousTargets
+          );
+      const bodyTime = hit
+        ? CollisionSystem.sweptContactTime(
+            this.player,
+            hit.target,
+            bodyStart,
+            previousTargets.get(hit.target) ?? hit.target
+          )
+        : Infinity;
+      const coins =
+        this.coins === this.indexedCoins
+          ? queryStaticWorld(
+              this.staticWorldIndex,
+              sweptBounds(this.player, previousPlayer),
+              'coins'
+            )
+          : this.coins;
+      const contacts = coins
+        .filter(coin => !coin.collected)
+        .map(coin => ({
+          coin,
+          time: CollisionSystem.sweptContactTime(
+            this.player.getBounds(),
+            coin.getBounds(),
+            previousPlayer ?? this.player,
+            coin
+          )
+        }))
+        .filter(contact => contact.time !== null && contact.time <= bodyTime)
+        .sort((a, b) => a.time - b.time);
+      for (const { coin } of contacts) {
         const result = coin.collect();
         if (result.collected) {
+          retireStaticCoin(this.staticWorldIndex, coin);
           this.score += result.points;
           if (result.powerUp) {
             this.canShoot = true;
           }
         }
       }
-    });
-
-    // Body contacts share the swept-contact ordering used by player shots.
-    // A bounce or respawn retires that sweep; subsequent checks use current poses.
-    let remaining = this.enemies;
-    let boss = this.boss;
-    while (!this.player.isInvulnerable) {
-      const hit = CollisionSystem.checkProjectileCollisions(
-        this.player,
-        remaining,
-        boss,
-        previousPlayer ?? {
-          x: this.player.x,
-          y: this.player.y - Math.max(0, this.player.velocityY)
-        },
-        previousTargets
-      );
       if (!hit) {
         break;
       }
@@ -545,7 +580,12 @@ export class Game {
     // Portal collision - only allow entry if unlocked
     if (
       !this.portal.isLocked &&
-      CollisionSystem.checkPortalEntry(this.player, this.portal)
+      CollisionSystem.checkPortalEntry(
+        this.player,
+        this.portal,
+        0.6,
+        previousPlayer
+      )
     ) {
       this.loadNextLevel();
     }
@@ -569,7 +609,12 @@ export class Game {
       )) {
         object.draw(this.ctx, 0);
       }
-      this.enemies.forEach(enemy => this.renderer.drawEnemy(enemy));
+      for (const enemy of this.enemies) {
+        // Run and hit sprites both fit the destination rectangle in either facing.
+        if (this.camera.isVisible(enemy.getBounds())) {
+          this.renderer.drawEnemy(enemy);
+        }
+      }
       this.renderer.drawBoss(this.boss);
 
       // Draw boss projectiles
