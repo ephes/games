@@ -83,7 +83,9 @@ and respawn teleport paths. Platform and coin candidates query the level-owned
 static tree in level order; collected coins retire from collision branches.
 Coins/body effects resolve by contact time, retaining coin precedence for exact
 ties and replacing unused sweeps after bounce/respawn. Unlocked portal entry
-sweeps the admitted post-platform motion with the existing center threshold.
+sweeps the admitted post-platform motion with the existing center threshold
+only when the portal was unlocked at step start; a mid-step unlock (player shot
+defeating the boss, or stomp) is endpoint-only.
 Enemy draw calls use inclusive camera bounds (run and hit sprites fit their
 destination rectangle), while offscreen simulation continues. Enemies retire
 from the level after their 300 ms hit visual finishes. Keep these fixtures synthetic, dispose each Game and

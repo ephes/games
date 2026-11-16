@@ -93,6 +93,46 @@ it('does not replay a locked crossing after a later stomp unlocks the portal', (
   expect(next).not.toHaveBeenCalled();
 });
 
+it('does not replay a locked crossing after a player shot unlocks the portal', () => {
+  Object.assign(game.boss, { health: 1 });
+  // Contact late in the step, after the fall already crossed the portal.
+  game.projectiles = [
+    {
+      x: game.boss.x,
+      y: game.boss.y,
+      width: 10,
+      height: 10,
+      update() {},
+      isOutOfBounds: () => false
+    }
+  ];
+  game.update(16);
+  expect(game.boss.alive).toBe(false);
+  expect(game.portal.isLocked).toBe(false);
+  expect(game.player.y).toBeGreaterThan(game.portal.y + game.portal.height);
+  expect(next).not.toHaveBeenCalled();
+});
+
+it('still enters at the endpoint when a shot unlocks the portal mid-step', () => {
+  Object.assign(game.boss, { health: 1 });
+  Object.assign(game.player, { y: 149, velocityY: 0 });
+  game.projectiles = [
+    {
+      x: game.boss.x,
+      y: game.boss.y,
+      width: 10,
+      height: 10,
+      update() {},
+      isOutOfBounds: () => false
+    }
+  ];
+  const boss = game.boss;
+  game.update(16);
+  // Entering loads the next level, whose new portal starts locked again.
+  expect(boss.alive).toBe(false);
+  expect(next).toHaveBeenCalledTimes(1);
+});
+
 it('does not enter on a tangential path outside the center radius', () => {
   game.portal.unlock();
   // Player center x=203 is 39 px from the portal center (radius=38.4).

@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Shot storage order no longer changes combat rewards or surviving geometry.
 
 - Sweep unlocked portal center entry across admitted post-platform movement,
-  excluding respawn teleports and discarded pre-bounce motion.
+  excluding respawn teleports and discarded pre-bounce motion. A portal unlocked
+  during the step by a player shot that defeats the boss, or by a stomp, admits
+  only the endpoint pose.
 
 - Order swept coins and enemy/boss body effects by contact time, retaining earlier
   awards and discarding the unused path after lethal damage, respawn or stomp.

@@ -282,6 +282,11 @@ export class Game {
       return;
     }
 
+    // A portal unlocked during this step (a player shot defeating the boss, or a
+    // stomp) admits only the endpoint; the motion before the unlock must not be
+    // replayed as an entry.
+    const portalOpenAtStart = !this.portal.isLocked;
+
     // Update player
     const keys = this.inputManager.getKeys();
     let previousPlayer = { x: this.player.x, y: this.player.y };
@@ -377,7 +382,7 @@ export class Game {
     this.updateProjectiles(deltaTime, previousTargets);
 
     // Check collisions
-    this.checkCollisions(previousPlayer, previousTargets);
+    this.checkCollisions(previousPlayer, previousTargets, portalOpenAtStart);
   }
 
   /**
@@ -479,8 +484,16 @@ export class Game {
 
   /**
    * Check all collisions
+   * @param {{x: number, y: number}} [previousPlayer] - Player pose at step start
+   * @param {Map} [previousTargets] - Target positions before this step
+   * @param {boolean} [portalOpenAtStart] - Whether the portal was unlocked when
+   *   the step began; otherwise only the endpoint may enter it
    */
-  checkCollisions(previousPlayer, previousTargets = new Map()) {
+  checkCollisions(
+    previousPlayer,
+    previousTargets = new Map(),
+    portalOpenAtStart = !this.portal.isLocked
+  ) {
     if (this.gameOver || this.gameWon) {
       return;
     }
@@ -584,7 +597,7 @@ export class Game {
         this.player,
         this.portal,
         0.6,
-        previousPlayer
+        portalOpenAtStart ? previousPlayer : this.player
       )
     ) {
       this.loadNextLevel();

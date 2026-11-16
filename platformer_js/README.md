@@ -319,6 +319,9 @@ at a respawn position remain collectible. Unlocked portals test the player's
 center along the admitted movement after platform resolution, retaining the
 usual center-radius threshold. Fast crossings enter even with both endpoints
 outside; locked sweeps and discarded pre-bounce/respawn motion are not replayed.
+Only a portal that was already unlocked when the step began is swept; one unlocked
+during the step (a player shot that defeats the boss, or a stomp) admits only the
+endpoint pose.
 
 Damage respawns the player at the active level's start, clearing vertical speed
 and jumping state while retaining the usual life loss and invulnerability.
