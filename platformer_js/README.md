@@ -277,7 +277,8 @@ create a fresh Game to restart.
 The `main.js` entry point owns one current Game, including while sprites load.
 Every `pagehide` disposes it immediately. A persisted `pageshow` (BFCache return)
 starts a fresh game at level zero with initial score/lives; progress is not restored.
-Ordinary tab hiding only releases held input and keeps the current game.
+Ordinary tab hiding releases held input, suspends simulation and keeps the current
+game. Visibility/focus boundaries discard partial and missed simulation time.
 Duplicate restore events do not start extra games or retry failed startup;
 after failure, another hide/restore cycle can try a fresh Game. Retired startup
 completions cannot start or replace the current game. Vite hot replacement calls
@@ -293,6 +294,21 @@ purpose can ignore that error); after the sprites have loaded, `init()` resolves
 without activating the game. Update/render failures also dispose the game
 and rethrow the original error: synchronous startup errors reach the caller of
 `start()`, and scheduled-frame errors reach the browser error surface.
+
+With the canvas focused, Escape toggles a visible **Paused - Esc to resume**
+message. Pause freezes simulation (movement, collisions, projectiles and animation)
+and refuses player shots, including direct `shoot()` calls. Rendering continues
+on the same animation chain. A fresh Escape press resumes; native key repeat
+cannot toggle pause or revive a held movement/shooting key after input reset.
+Both transitions discard held input and accumulated time, and the first resumed
+frame establishes a fresh clock baseline. Focus/visibility changes retain manual
+pause. Successful level reset or world replacement resumes play with fresh input
+and clock state; a failed replacement keeps the previous state. Disposal releases
+the pause handler and clock listeners along with the existing input/RAF ownership.
+Player protection/hit timers and shooting cooldowns retain their existing elapsed
+real-time policy during pause; they do not create simulation catch-up.
+Unit and Chromium journeys exercise real Escape input, repeats, focus, restart
+and disposal; unit fixtures also cover short hidden intervals and failed reset.
 
 Portal pulses advance by simulation elapsed time (3 radians per second), wrapping
 at 2π for both locked barriers and unlocked glows. Drawing never advances their

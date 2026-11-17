@@ -20,9 +20,43 @@ pub struct MobBundle {
 
 #[derive(Clone, PartialEq, Debug, Default, Component)]
 pub struct Patrol {
-    pub points: Vec<Vec2>,
+    points: Vec<Vec2>,
+    cycle_length: f32,
     pub index: usize,
     pub forward: bool,
+}
+
+impl Patrol {
+    fn new(points: Vec<Vec2>, index: usize, forward: bool) -> Self {
+        let cycle_length: f32 = points
+            .windows(2)
+            .map(|leg| patrol_leg_distance(leg[0], leg[1]) * 2.)
+            .sum();
+        // Keep route geometry and its metric together; replacement constructs a
+        // fresh Patrol, while ticks may mutate only the traversal cursor.
+        if !cycle_length.is_finite() || points.iter().any(|point| !point.is_finite()) {
+            warn!("Invalid patrol metric; using stationary patrol");
+            return Self::new(
+                points
+                    .into_iter()
+                    .filter(|point| point.is_finite())
+                    .take(1)
+                    .collect(),
+                0,
+                true,
+            );
+        }
+        Self {
+            points,
+            cycle_length,
+            index,
+            forward,
+        }
+    }
+
+    pub fn points(&self) -> &[Vec2] {
+        &self.points
+    }
 }
 
 impl LdtkEntity for Patrol {
@@ -69,21 +103,16 @@ impl LdtkEntity for Patrol {
             Ok::<_, &str>(points)
         })();
         match admitted {
-            Ok(points) => Patrol {
-                index: usize::from(points.len() > 1),
-                points,
-                forward: true,
-            },
+            Ok(points) => {
+                let index = usize::from(points.len() > 1);
+                Patrol::new(points, index, true)
+            }
             Err(error) => {
                 warn!(
                     "Invalid patrol on entity {}: {error}; using stationary patrol",
                     entity_instance.iid
                 );
-                Patrol {
-                    points: spawn.into_iter().collect(),
-                    index: 0,
-                    forward: true,
-                }
+                Patrol::new(spawn.into_iter().collect(), 0, true)
             }
         }
     }
@@ -103,12 +132,23 @@ fn patrol_position(entity: &EntityInstance, height: i32, px: IVec2) -> Option<Ve
     position.is_finite().then_some(position)
 }
 
+#[cfg(test)]
+thread_local! {
+    static DISTANCE_EVALUATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn patrol_leg_distance(a: Vec2, b: Vec2) -> f32 {
+    #[cfg(test)]
+    DISTANCE_EVALUATIONS.with(|count| count.set(count.get() + 1));
+    a.distance(b)
+}
+
 // Avoid partition-dependent direction at an endpoint due to f32 physics drift.
 const WAYPOINT_EPSILON: f32 = 0.0001;
 
 pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
     for (mut transform, mut velocity, mut patrol) in &mut query {
-        if patrol.points.len() <= 1 {
+        if patrol.points().len() <= 1 {
             velocity.linvel = Vec2::ZERO;
             continue;
         }
@@ -128,11 +168,7 @@ pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
         } else {
             0.
         };
-        let cycle_length: f32 = patrol
-            .points
-            .windows(2)
-            .map(|leg| leg[0].distance(leg[1]) * 2.)
-            .sum();
+        let cycle_length = patrol.cycle_length;
         if cycle_length > 0. {
             remaining %= cycle_length;
         }
@@ -151,9 +187,10 @@ pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
             } else {
                 patrol.index -= 1;
             }
-            let delta = patrol.points[patrol.index] - position;
+            let target = patrol.points[patrol.index];
+            let delta = target - position;
             if let Some(direction) = delta.try_normalize() {
-                let distance = delta.length();
+                let distance = patrol_leg_distance(position, target);
                 if remaining + WAYPOINT_EPSILON < distance {
                     position += direction * remaining;
                     velocity.linvel = direction * 75.;
@@ -255,6 +292,74 @@ mod tests {
             grid_size: 16,
             ..default()
         }
+    }
+
+    #[test]
+    fn unchanged_authored_routes_reuse_cycle_metrics() {
+        use bevy::ecs::system::RunSystemOnce;
+        const TICKS: usize = 20;
+        let mut evaluations = Vec::new();
+        for count in [100, 1000] {
+            let route = authored_route(
+                &authored_layer(),
+                (1..count).map(|x| IVec2::new(x, 0)).collect(),
+                0,
+            );
+            let mut world = World::new();
+            let id = world
+                .spawn((Transform::default(), Velocity::zero(), route))
+                .id();
+            DISTANCE_EVALUATIONS.with(|count| count.set(0));
+            for _ in 0..TICKS {
+                let route = world.get::<Patrol>(id).unwrap();
+                let target = route.points[route.index];
+                world.get_mut::<Transform>(id).unwrap().translation = target.extend(0.);
+                world.get_mut::<Velocity>(id).unwrap().linvel = Vec2::ZERO;
+                // Runs on this thread, so the thread-local counter observes
+                // every leg evaluation made by the system itself.
+                world.run_system_once(patrol).unwrap();
+            }
+            evaluations.push(DISTANCE_EVALUATIONS.with(|count| count.get()));
+        }
+        // Each arrival crosses exactly one unit leg: work is proportional to the
+        // crossed legs and independent of route length (no whole-route rescan).
+        assert_eq!(
+            evaluations,
+            [TICKS, TICKS],
+            "route length changed per-tick work"
+        );
+    }
+
+    #[test]
+    fn replacing_route_replaces_cycle_metric_and_preserves_residual() {
+        let mut app = App::new();
+        app.add_systems(Update, patrol);
+        let id = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                Velocity::zero(),
+                Patrol::new(vec![Vec2::ZERO, Vec2::X * 10.], 1, true),
+            ))
+            .id();
+        app.update();
+        app.world_mut()
+            .entity_mut(id)
+            .insert(Patrol::new(vec![Vec2::ZERO, Vec2::X * 3.], 1, true));
+        app.world_mut()
+            .get_mut::<Transform>(id)
+            .unwrap()
+            .translation
+            .x = 31.;
+        app.world_mut().get_mut::<Velocity>(id).unwrap().linvel = Vec2::X * 75.;
+        app.update();
+        // 31 units along a length-3 out-and-back: five cycles, then one unit outbound.
+        assert_eq!(app.world().get::<Transform>(id).unwrap().translation.x, 1.);
+        assert_eq!(
+            app.world().get::<Velocity>(id).unwrap().linvel,
+            Vec2::X * 75.
+        );
+        assert_eq!(app.world().get::<Patrol>(id).unwrap().index, 1);
     }
 
     #[test]
@@ -421,11 +526,7 @@ mod tests {
                 .spawn((
                     Transform::default(),
                     Velocity::zero(),
-                    Patrol {
-                        points: points.clone(),
-                        index: 0,
-                        forward: false,
-                    },
+                    Patrol::new(points.clone(), 0, false),
                 ))
                 .id();
             for _ in 0..8 {
@@ -459,11 +560,7 @@ mod tests {
             .spawn((
                 Transform::from_xyz(11., 0., 0.),
                 Velocity::linear(Vec2::X * 75.),
-                Patrol {
-                    points: vec![Vec2::ZERO, Vec2::X * 10.],
-                    index: 1,
-                    forward: true,
-                },
+                Patrol::new(vec![Vec2::ZERO, Vec2::X * 10.], 1, true),
             ))
             .id();
         app.update();
@@ -504,17 +601,17 @@ mod tests {
                         RigidBody::KinematicVelocityBased,
                         Collider::cuboid(0.1, 0.1),
                         Velocity::zero(),
-                        Patrol {
-                            points: vec![
+                        Patrol::new(
+                            vec![
                                 Vec2::ZERO,
                                 Vec2::ZERO,
                                 Vec2::new(2., 0.),
                                 Vec2::new(2., 3.),
                                 Vec2::new(5., 3.),
                             ],
-                            index: 1,
-                            forward: true,
-                        },
+                            1,
+                            true,
+                        ),
                     ))
                     .id();
                 let stationary = app
@@ -524,11 +621,7 @@ mod tests {
                         RigidBody::KinematicVelocityBased,
                         Collider::cuboid(0.1, 0.1),
                         Velocity::zero(),
-                        Patrol {
-                            points: vec![Vec2::splat(100.); 4],
-                            index: 0,
-                            forward: false,
-                        },
+                        Patrol::new(vec![Vec2::splat(100.); 4], 0, false),
                     ))
                     .id();
                 for _ in 0..frames {

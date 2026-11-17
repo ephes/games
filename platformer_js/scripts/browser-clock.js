@@ -3,6 +3,7 @@ import { chromium } from 'playwright';
 import { createServer } from 'vite';
 import { checkInputOwnership } from './browser-input.js';
 import { checkPageLifetime } from './browser-page-lifetime.js';
+import { checkPauseLifecycle } from './browser-pause.js';
 
 // All gameplay data, input and frame schedules are synthetic; no network assets.
 const server = await createServer({
@@ -146,6 +147,7 @@ try {
   });
   await checkInputOwnership(page, server.resolvedUrls.local[0]);
   await checkPageLifetime(page, server.resolvedUrls.local[0]);
+  await checkPauseLifecycle(page, server.resolvedUrls.local[0]);
   assert.deepEqual(errors, []);
   for (const { hz, positions, renders } of results) {
     assert.deepEqual(positions, [350, -9085, 2120, 1180]);
