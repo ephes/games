@@ -146,6 +146,47 @@ describe('LDtk IntGrid validation', () => {
     }
   );
 
+  it.each([
+    '1',
+    true,
+    false,
+    0.5,
+    -1,
+    null,
+    undefined,
+    NaN,
+    Infinity,
+    -Infinity,
+    Number.MAX_SAFE_INTEGER + 1
+  ])('refuses malformed cell %s before replacing any geometry', value => {
+    const loader = new LDtkLoader();
+    const platforms = [{ x: 10, y: 20, width: 100, height: 10 }];
+    const level = { platforms };
+    expect(() =>
+      loader.processPlatforms(grid({ intGridCsv: [1, 1, 1, value] }), level)
+    ).toThrow('Invalid LDtk IntGrid cell');
+    expect(level.platforms).toBe(platforms);
+  });
+
+  it('refuses sparse cell arrays instead of treating holes as empty', () => {
+    const cells = [1, 1, 1, 1];
+    delete cells[3];
+    expect(() =>
+      new LDtkLoader().processPlatforms(grid({ intGridCsv: cells }), {
+        platforms: []
+      })
+    ).toThrow('Invalid LDtk IntGrid cell');
+  });
+
+  it('keeps noncollision positive kinds distinct from solid cells', () => {
+    const level = { platforms: [] };
+    new LDtkLoader().processPlatforms(
+      grid({ intGridCsv: [1, 2, 0, Number.MAX_SAFE_INTEGER] }),
+      level
+    );
+    expect(level.platforms).toEqual([{ x: 0, y: 0, width: 16, height: 16 }]);
+  });
+
   it('accepts the cell budget boundary and rejects one cell more', () => {
     const loader = new LDtkLoader();
     const level = { platforms: [] };

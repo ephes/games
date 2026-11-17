@@ -400,11 +400,17 @@ imports completed after disposal do not publish. Supersession and disposal abort
 pending transfers. Each transfer has a 10-second total deadline and a 16 MiB
 streamed response limit (actual bytes, even without an accurate Content-Length).
 The loader requires valid UTF-8 and refuses duplicate JSON member names in any
-object, including names written with equivalent Unicode escapes. Native
-`JSON.parse` validates syntax; a quoted-token pass checks decoded key identities
-per object before conversion or publication. Wire refusal keeps the current
-playable world. Legal Unicode and names repeated in separate objects remain
-supported. The loader uses raw LDtk records, including modern `intGridCsv`.
+object, including names written with equivalent Unicode escapes. Before
+`JSON.parse` constructs the tree, a quoted-token pass admits at most 64 nested
+objects/arrays (root included), 1,000,000 total containers and 6,000,000 tokens
+(member names, scalar values and container openings). Ignored metadata counts
+toward every limit, so tiny or deeply nested metadata cannot bypass the wire
+expansion envelope. These limits accommodate the aggregate gameplay cell budget
+and the world entity budget below together, with LDtk-shaped entity records
+(including field instances). Native `JSON.parse` validates syntax; a second quoted-token
+pass checks decoded key identities per object before conversion or
+publication. Wire refusal keeps the current playable world. Legal Unicode and
+names repeated in separate objects remain supported. The loader uses raw LDtk records, including modern `intGridCsv`.
 
 Before conversion, each imported world is limited to 64 levels, 2,000,000 total
 IntGrid cells and 20,000 total entities across all layers. A level may contain at
@@ -435,9 +441,41 @@ game on that error, so a live game does not recover by itself.
 LDtk Platforms layers require positive safe integer grid size, width and height,
 with safe integer pixel extents and at most 1,000,000 cells per layer.
 `intGridCsv` must be an array containing exactly `width * height` cells, including
-zero cells for empty space; value 1 creates collision geometry. A level may omit
+zero cells for empty space. Every cell must be a nonnegative safe integer:
+value 1 creates collision geometry; other positive kinds remain noncollision
+values. Strings, booleans, nulls, fractions, negative/unsafe integers, nonfinite
+values and sparse adapter arrays are refused before constructing geometry. A level may omit
 the Platforms layer entirely when no enemy or boss needs a patrol surface.
-Recognized entities require finite numeric x/y coordinates. Enemy `Speed` must
+Recognized Platforms/Entities layers apply `__pxTotalOffsetX/Y` exactly once to
+grid/entity positions. Each optional axis defaults to zero only when absent;
+present totals must be signed safe integers. Totals already include definition
+and instance offsets, so `pxOffsetX/Y` are not added again. Level `worldX/Y` and
+entity `__worldX/Y` are not part of this level-local import. Different layer
+totals remain independent, including negative origins. Normalized grid extents
+(including empty grids) and entity runtime rectangle edges must be finite and
+within ±`Number.MAX_SAFE_INTEGER`; invalid future levels refuse the entire
+replacement or append before publication. The default omitted-Player start
+stays at level coordinates (50, 200). See the [LDtk JSON schema](https://ldtk.io/files/JSON_SCHEMA.json).
+
+Recognized entities require finite numeric x/y coordinates. Entity `px` is an
+anchor: the importer produces top-left coordinates as
+`px - __pivot * authoredSize + totalLayerOffset` on each axis. A missing
+`__pivot` defaults to `[0,0]`; a present pivot must contain exactly two finite
+numbers in `[0,1]`. If either authored `width` or `height` is present, both must
+be positive safe integers. A nonzero pivot requires both authored dimensions;
+legacy records with neither dimension remain supported only with a zero/absent
+pivot. Malformed present metadata is refused, including for zero pivots.
+Both the authored rectangle and runtime rectangle must fit the numeric extent
+contract above. For example, a 44×30 enemy anchored at (100,100) with pivot
+(0.5,1) becomes (78,70), before layer translation.
+
+Authored dimensions describe anchor geometry; they do not scale runtime sprites
+or colliders. Fixed runtime sizes are Player 30×30, Enemy 44×30, Boss 64×96,
+Coin 20×20 and Portal 128×128. Differing authored dimensions are supported for
+anchor normalization, while the runtime rectangle begins at the resulting
+top-left. Runtime sizes never substitute for missing authored anchor dimensions.
+
+Enemy `Speed` must
 be a finite number (zero stays stationary); enemy and boss `PlatformIndex` must
 be an integer in the final merged platform array. Missing fields default to speed
 2 and platform index 0; present strings, nulls or nonfinite values are rejected.

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game } from '../src/Game.js';
 import { LDtkLoader, WORLD_LIMITS } from '../src/systems/LDtkLoader.js';
+import starterWorld from '../assets/levels/platformer.ldtk?raw';
 
 const layer = cells => ({
   __identifier: 'Platforms',
@@ -136,6 +137,208 @@ describe('World transfer admission', () => {
     expect(await game.loadLDtkLevels('unicode')).toBe(true);
     expect(game.ldtkLoader.world).toEqual(data);
     expect(game.levels[0].name).toBe('Welt 🌍');
+  });
+
+  it.each([
+    ['object nesting', '{"child":'.repeat(65) + '0' + '}'.repeat(65)],
+    ['array nesting', '['.repeat(65) + '0' + ']'.repeat(65)],
+    [
+      'container count',
+      '[' + '{},'.repeat(WORLD_LIMITS.jsonContainers) + '{}]'
+    ],
+    ['token count', '[' + '0,'.repeat(WORLD_LIMITS.jsonTokens) + '0]']
+  ])(
+    'refuses ignored metadata over the %s envelope before parsing',
+    async (label, metadata) => {
+      const valid = JSON.stringify({ levels: [level()] });
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValue(response(stream(new TextEncoder().encode(valid))))
+      );
+      expect(await game.loadLDtkLevels('valid')).toBe(true);
+      const previous = { ...game };
+      const world = game.ldtkLoader.world;
+      const text = `{"metadata":${metadata},${valid.slice(1)}`;
+      expect(text.length).toBeLessThan(WORLD_LIMITS.bytes);
+      fetch.mockResolvedValue(response(stream(new TextEncoder().encode(text))));
+      const parse = vi.spyOn(JSON, 'parse');
+      expect(await game.loadLDtkLevels('over-envelope')).toBe(false);
+      expect(parse).not.toHaveBeenCalled();
+      expect(game.ldtkLoader.world).toBe(world);
+      for (const key of [
+        'levels',
+        'player',
+        'platforms',
+        'staticWorldIndex',
+        'boss',
+        'portal'
+      ]) {
+        expect(game[key]).toBe(previous[key]);
+      }
+      expect(console.error.mock.calls.at(-1)[1].message).toMatch(
+        /LDtk JSON .* budget/
+      );
+    }
+  );
+
+  it('admits the nesting boundary and bundled export through the wire path', async () => {
+    const loader = new LDtkLoader();
+    // Root object + metadata array + 62 child arrays = 64 containers deep.
+    const text = `{"metadata":${'['.repeat(63)}0${']'.repeat(63)},"levels":[]}`;
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(response(stream(new TextEncoder().encode(text))))
+    );
+    await expect(loader.loadWorld('boundary')).resolves.toEqual(
+      JSON.parse(text)
+    );
+    fetch.mockResolvedValue(
+      response(stream(new TextEncoder().encode(starterWorld)))
+    );
+    await expect(loader.loadWorld('bundled')).resolves.toEqual(
+      JSON.parse(starterWorld)
+    );
+  });
+
+  it('admits LDtk-shaped entities and cells at both aggregate boundaries at once', async () => {
+    // Exported LDtk entity instances carry several arrays and field records,
+    // so the JSON envelope must not undercut the cell and entity budgets
+    // when a world uses both together.
+    const field = (name, value) => ({
+      __identifier: name,
+      __type: 'Int',
+      __value: value,
+      __tile: null,
+      defUid: 7,
+      realEditorValues: [{ id: 'V_Int', params: [value] }]
+    });
+    const ldtkEntity = index => ({
+      __identifier: 'Decoration',
+      __grid: [index % 50, 0],
+      __pivot: [0, 0],
+      __tags: [],
+      __tile: null,
+      __smartColor: '#BE4A2F',
+      iid: `entity-${index}`,
+      width: 16,
+      height: 16,
+      defUid: 3,
+      px: [(index % 50) * 16, 0],
+      fieldInstances: [field('A', 1), field('B', 2), field('C', 3)],
+      __worldX: (index % 50) * 16,
+      __worldY: 0
+    });
+    const perLevel = 1000;
+    const levelCount = WORLD_LIMITS.entities / perLevel;
+    const cellsPerLevel = WORLD_LIMITS.cells / levelCount;
+    const data = {
+      levels: Array.from({ length: levelCount }, (_, n) => ({
+        identifier: `Level_${n}`,
+        fieldInstances: [],
+        layerInstances: [
+          {
+            __identifier: 'Background',
+            __type: 'IntGrid',
+            __gridSize: 16,
+            __cWid: 1000,
+            __cHei: cellsPerLevel / 1000,
+            intGridCsv: Array(cellsPerLevel).fill(0)
+          },
+          {
+            __identifier: 'Decorations',
+            entityInstances: Array.from({ length: perLevel }, (_, i) =>
+              ldtkEntity(n * perLevel + i)
+            )
+          }
+        ]
+      }))
+    };
+    const encoded = bytes(data);
+    expect(encoded.byteLength).toBeLessThan(WORLD_LIMITS.bytes);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(response(stream(encoded)))
+    );
+    const world = await new LDtkLoader().loadWorld('aggregate-boundary');
+    expect(
+      world.levels.flatMap(item => item.layerInstances[1].entityInstances)
+    ).toHaveLength(WORLD_LIMITS.entities);
+    expect(
+      world.levels.flatMap(item => item.layerInstances[0].intGridCsv)
+    ).toHaveLength(WORLD_LIMITS.cells);
+  });
+
+  it('admits two million streamed gameplay cells at the aggregate boundary', async () => {
+    const data = { levels: [level(), level()] };
+    for (const item of data.levels) {
+      item.layerInstances[0] = {
+        __identifier: 'Platforms',
+        __gridSize: 16,
+        __cWid: 1000,
+        __cHei: 1000,
+        intGridCsv: Array(1_000_000).fill(1)
+      };
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(response(stream(bytes(data))))
+    );
+    expect(await game.loadLDtkLevels('cell-boundary')).toBe(true);
+    expect(game.platforms).toHaveLength(1000);
+  });
+
+  it.each(['1', true, 0.5, -1, null, Number.MAX_SAFE_INTEGER + 1])(
+    'refuses malformed streamed cell %s without partial world publication',
+    async value => {
+      const valid = { levels: [level()] };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(response(stream(bytes(valid))))
+      );
+      expect(await game.loadLDtkLevels('valid')).toBe(true);
+      const previous = { ...game };
+      const world = game.ldtkLoader.world;
+      const candidate = { levels: [level(), level()] };
+      candidate.levels[1].layerInstances[0] = layer([1, value]);
+      for (const method of ['loadLDtkLevels', 'addLDtkLevels']) {
+        fetch.mockResolvedValue(response(stream(bytes(candidate))));
+        expect(await game[method]('malformed-cell')).toBe(false);
+        for (const key of [
+          'levels',
+          'player',
+          'platforms',
+          'staticWorldIndex',
+          'boss',
+          'portal'
+        ]) {
+          expect(game[key]).toBe(previous[key]);
+        }
+        expect(game.ldtkLoader.world).toBe(world);
+        expect(console.error.mock.calls.at(-1)[1].message).toMatch(
+          /Invalid LDtk IntGrid cell/
+        );
+      }
+    }
+  );
+
+  it('imports empty, solid and alternate positive cell kinds distinctly', async () => {
+    const data = { levels: [level()] };
+    data.levels[0].layerInstances[0] = layer([0, 1, 2]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(response(stream(bytes(data))))
+    );
+    expect(await game.loadLDtkLevels('valid-kinds')).toBe(true);
+    expect(game.levels[0].platforms).toEqual([
+      { x: 64, y: 0, width: 64, height: 64 }
+    ]);
+    expect(
+      game.platforms.map(({ x, y, width, height }) => ({ x, y, width, height }))
+    ).toEqual(game.levels[0].platforms);
   });
 
   it('accepts exactly the byte ceiling', async () => {
