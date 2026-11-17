@@ -142,8 +142,11 @@ describe('World transfer admission', () => {
   it.each([
     ['object nesting', '{"child":'.repeat(65) + '0' + '}'.repeat(65)],
     ['array nesting', '['.repeat(65) + '0' + ']'.repeat(65)],
-    ['container count', '[' + '{},'.repeat(100_000) + '{}]'],
-    ['token count', '[' + '0,'.repeat(3_000_000) + '0]']
+    [
+      'container count',
+      '[' + '{},'.repeat(WORLD_LIMITS.jsonContainers) + '{}]'
+    ],
+    ['token count', '[' + '0,'.repeat(WORLD_LIMITS.jsonTokens) + '0]']
   ])(
     'refuses ignored metadata over the %s envelope before parsing',
     async (label, metadata) => {
@@ -199,6 +202,74 @@ describe('World transfer admission', () => {
     await expect(loader.loadWorld('bundled')).resolves.toEqual(
       JSON.parse(starterWorld)
     );
+  });
+
+  it('admits LDtk-shaped entities and cells at both aggregate boundaries at once', async () => {
+    // Exported LDtk entity instances carry several arrays and field records,
+    // so the JSON envelope must not undercut the cell and entity budgets
+    // when a world uses both together.
+    const field = (name, value) => ({
+      __identifier: name,
+      __type: 'Int',
+      __value: value,
+      __tile: null,
+      defUid: 7,
+      realEditorValues: [{ id: 'V_Int', params: [value] }]
+    });
+    const ldtkEntity = index => ({
+      __identifier: 'Decoration',
+      __grid: [index % 50, 0],
+      __pivot: [0, 0],
+      __tags: [],
+      __tile: null,
+      __smartColor: '#BE4A2F',
+      iid: `entity-${index}`,
+      width: 16,
+      height: 16,
+      defUid: 3,
+      px: [(index % 50) * 16, 0],
+      fieldInstances: [field('A', 1), field('B', 2), field('C', 3)],
+      __worldX: (index % 50) * 16,
+      __worldY: 0
+    });
+    const perLevel = 1000;
+    const levelCount = WORLD_LIMITS.entities / perLevel;
+    const cellsPerLevel = WORLD_LIMITS.cells / levelCount;
+    const data = {
+      levels: Array.from({ length: levelCount }, (_, n) => ({
+        identifier: `Level_${n}`,
+        fieldInstances: [],
+        layerInstances: [
+          {
+            __identifier: 'Background',
+            __type: 'IntGrid',
+            __gridSize: 16,
+            __cWid: 1000,
+            __cHei: cellsPerLevel / 1000,
+            intGridCsv: Array(cellsPerLevel).fill(0)
+          },
+          {
+            __identifier: 'Decorations',
+            entityInstances: Array.from({ length: perLevel }, (_, i) =>
+              ldtkEntity(n * perLevel + i)
+            )
+          }
+        ]
+      }))
+    };
+    const encoded = bytes(data);
+    expect(encoded.byteLength).toBeLessThan(WORLD_LIMITS.bytes);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(response(stream(encoded)))
+    );
+    const world = await new LDtkLoader().loadWorld('aggregate-boundary');
+    expect(
+      world.levels.flatMap(item => item.layerInstances[1].entityInstances)
+    ).toHaveLength(WORLD_LIMITS.entities);
+    expect(
+      world.levels.flatMap(item => item.layerInstances[0].intGridCsv)
+    ).toHaveLength(WORLD_LIMITS.cells);
   });
 
   it('admits two million streamed gameplay cells at the aggregate boundary', async () => {

@@ -400,16 +400,17 @@ imports completed after disposal do not publish. Supersession and disposal abort
 pending transfers. Each transfer has a 10-second total deadline and a 16 MiB
 streamed response limit (actual bytes, even without an accurate Content-Length).
 The loader requires valid UTF-8 and refuses duplicate JSON member names in any
-object, including names written with equivalent Unicode escapes. Native
-Before `JSON.parse` constructs the tree, a quoted-token pass admits at most 64
-nested objects/arrays (root included), 100,000 total containers and 3,000,000
-tokens (member names, scalar values and container openings). Ignored metadata
-counts toward every limit, so tiny or deeply nested metadata cannot bypass the
-wire expansion envelope. These limits accommodate the aggregate gameplay cell
-budget below. Native `JSON.parse` validates syntax; a second quoted-token pass checks decoded key identities
-per object before conversion or publication. Wire refusal keeps the current
-playable world. Legal Unicode and names repeated in separate objects remain
-supported. The loader uses raw LDtk records, including modern `intGridCsv`.
+object, including names written with equivalent Unicode escapes. Before
+`JSON.parse` constructs the tree, a quoted-token pass admits at most 64 nested
+objects/arrays (root included), 1,000,000 total containers and 6,000,000 tokens
+(member names, scalar values and container openings). Ignored metadata counts
+toward every limit, so tiny or deeply nested metadata cannot bypass the wire
+expansion envelope. These limits accommodate the aggregate gameplay cell budget
+and the world entity budget below together, with LDtk-shaped entity records
+(including field instances). Native `JSON.parse` validates syntax; a second quoted-token
+pass checks decoded key identities per object before conversion or
+publication. Wire refusal keeps the current playable world. Legal Unicode and
+names repeated in separate objects remain supported. The loader uses raw LDtk records, including modern `intGridCsv`.
 
 Before conversion, each imported world is limited to 64 levels, 2,000,000 total
 IntGrid cells and 20,000 total entities across all layers. A level may contain at

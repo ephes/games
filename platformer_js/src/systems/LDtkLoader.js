@@ -6,8 +6,10 @@ export const WORLD_LIMITS = Object.freeze({
   bytes: 16 * 1024 * 1024,
   timeoutMs: 10_000,
   jsonDepth: 64,
-  jsonContainers: 100_000,
-  jsonTokens: 3_000_000,
+  // Sized so 2,000,000 cells and 20,000 LDtk-shaped entities with field
+  // instances fit together, with headroom for level, layer and defs metadata.
+  jsonContainers: 1_000_000,
+  jsonTokens: 6_000_000,
   levels: 64,
   cells: 2_000_000,
   entities: 20_000,
