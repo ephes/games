@@ -440,7 +440,10 @@ game on that error, so a live game does not recover by itself.
 LDtk Platforms layers require positive safe integer grid size, width and height,
 with safe integer pixel extents and at most 1,000,000 cells per layer.
 `intGridCsv` must be an array containing exactly `width * height` cells, including
-zero cells for empty space; value 1 creates collision geometry. A level may omit
+zero cells for empty space. Every cell must be a nonnegative safe integer:
+value 1 creates collision geometry; other positive kinds remain noncollision
+values. Strings, booleans, nulls, fractions, negative/unsafe integers, nonfinite
+values and sparse adapter arrays are refused before constructing geometry. A level may omit
 the Platforms layer entirely when no enemy or boss needs a patrol surface.
 Recognized entities require finite numeric x/y coordinates. Enemy `Speed` must
 be a finite number (zero stays stationary); enemy and boss `PlatformIndex` must

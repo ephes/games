@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refuse malformed IntGrid cell values before building collision geometry;
+  retain zero as empty, one as solid and other nonnegative safe integer kinds
+  as noncollision without coercion or partial world replacement.
+
 - Remove identical duplicate player world-coordinate members from the bundled
   starter export so it passes the existing strict wire admission.
 

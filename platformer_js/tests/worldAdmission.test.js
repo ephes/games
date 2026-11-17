@@ -220,6 +220,56 @@ describe('World transfer admission', () => {
     expect(game.platforms).toHaveLength(1000);
   });
 
+  it.each(['1', true, 0.5, -1, null, Number.MAX_SAFE_INTEGER + 1])(
+    'refuses malformed streamed cell %s without partial world publication',
+    async value => {
+      const valid = { levels: [level()] };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(response(stream(bytes(valid))))
+      );
+      expect(await game.loadLDtkLevels('valid')).toBe(true);
+      const previous = { ...game };
+      const world = game.ldtkLoader.world;
+      const candidate = { levels: [level(), level()] };
+      candidate.levels[1].layerInstances[0] = layer([1, value]);
+      for (const method of ['loadLDtkLevels', 'addLDtkLevels']) {
+        fetch.mockResolvedValue(response(stream(bytes(candidate))));
+        expect(await game[method]('malformed-cell')).toBe(false);
+        for (const key of [
+          'levels',
+          'player',
+          'platforms',
+          'staticWorldIndex',
+          'boss',
+          'portal'
+        ]) {
+          expect(game[key]).toBe(previous[key]);
+        }
+        expect(game.ldtkLoader.world).toBe(world);
+        expect(console.error.mock.calls.at(-1)[1].message).toMatch(
+          /Invalid LDtk IntGrid cell/
+        );
+      }
+    }
+  );
+
+  it('imports empty, solid and alternate positive cell kinds distinctly', async () => {
+    const data = { levels: [level()] };
+    data.levels[0].layerInstances[0] = layer([0, 1, 2]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(response(stream(bytes(data))))
+    );
+    expect(await game.loadLDtkLevels('valid-kinds')).toBe(true);
+    expect(game.levels[0].platforms).toEqual([
+      { x: 64, y: 0, width: 64, height: 64 }
+    ]);
+    expect(
+      game.platforms.map(({ x, y, width, height }) => ({ x, y, width, height }))
+    ).toEqual(game.levels[0].platforms);
+  });
+
   it('accepts exactly the byte ceiling', async () => {
     const content = JSON.stringify({ levels: [level()] });
     const padded = content + ' '.repeat(WORLD_LIMITS.bytes - content.length);

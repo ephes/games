@@ -384,8 +384,10 @@ export class LDtkLoader {
   /**
    * Process a dense IntGrid with positive safe integer dimensions/grid size.
    * At most 1,000,000 cells and safe integer pixel extents are supported.
-   * Validation finishes before scanning cells or replacing geometry.
-   * @throws {Error} If dimensions, cell budget or dense array length are invalid
+   * Cells must be nonnegative safe integers: 0 is empty, 1 is collision terrain,
+   * other positive kinds are noncollision. No coercion is performed.
+   * Validation finishes before constructing or replacing geometry.
+   * @throws {Error} If dimensions, cell budget, dense array length or cell values are invalid
    * @param {Object} platformsLayer - Platforms layer
    * @param {Object} level - Level object to populate
    */
@@ -406,6 +408,14 @@ export class LDtkLoader {
       platformsLayer.intGridCsv.length !== cellCount
     ) {
       throw new Error('Invalid LDtk IntGrid dimensions or cell data');
+    }
+
+    for (const value of platformsLayer.intGridCsv) {
+      if (!Number.isSafeInteger(value) || value < 0) {
+        throw new Error(
+          'Invalid LDtk IntGrid cell: expected nonnegative safe integer'
+        );
+      }
     }
 
     // Convert IntGrid to platforms
