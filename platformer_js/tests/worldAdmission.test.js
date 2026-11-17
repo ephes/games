@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game } from '../src/Game.js';
 import { LDtkLoader, WORLD_LIMITS } from '../src/systems/LDtkLoader.js';
+import starterWorld from '../assets/levels/platformer.ldtk?raw';
 
 const layer = cells => ({
   __identifier: 'Platforms',
@@ -136,6 +137,87 @@ describe('World transfer admission', () => {
     expect(await game.loadLDtkLevels('unicode')).toBe(true);
     expect(game.ldtkLoader.world).toEqual(data);
     expect(game.levels[0].name).toBe('Welt 🌍');
+  });
+
+  it.each([
+    ['object nesting', '{"child":'.repeat(65) + '0' + '}'.repeat(65)],
+    ['array nesting', '['.repeat(65) + '0' + ']'.repeat(65)],
+    ['container count', '[' + '{},'.repeat(100_000) + '{}]'],
+    ['token count', '[' + '0,'.repeat(3_000_000) + '0]']
+  ])(
+    'refuses ignored metadata over the %s envelope before parsing',
+    async (label, metadata) => {
+      const valid = JSON.stringify({ levels: [level()] });
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValue(response(stream(new TextEncoder().encode(valid))))
+      );
+      expect(await game.loadLDtkLevels('valid')).toBe(true);
+      const previous = { ...game };
+      const world = game.ldtkLoader.world;
+      const text = `{"metadata":${metadata},${valid.slice(1)}`;
+      expect(text.length).toBeLessThan(WORLD_LIMITS.bytes);
+      fetch.mockResolvedValue(response(stream(new TextEncoder().encode(text))));
+      const parse = vi.spyOn(JSON, 'parse');
+      expect(await game.loadLDtkLevels('over-envelope')).toBe(false);
+      expect(parse).not.toHaveBeenCalled();
+      expect(game.ldtkLoader.world).toBe(world);
+      for (const key of [
+        'levels',
+        'player',
+        'platforms',
+        'staticWorldIndex',
+        'boss',
+        'portal'
+      ]) {
+        expect(game[key]).toBe(previous[key]);
+      }
+      expect(console.error.mock.calls.at(-1)[1].message).toMatch(
+        /LDtk JSON .* budget/
+      );
+    }
+  );
+
+  it('admits the nesting boundary and bundled export through the wire path', async () => {
+    const loader = new LDtkLoader();
+    // Root object + metadata array + 62 child arrays = 64 containers deep.
+    const text = `{"metadata":${'['.repeat(63)}0${']'.repeat(63)},"levels":[]}`;
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(response(stream(new TextEncoder().encode(text))))
+    );
+    await expect(loader.loadWorld('boundary')).resolves.toEqual(
+      JSON.parse(text)
+    );
+    fetch.mockResolvedValue(
+      response(stream(new TextEncoder().encode(starterWorld)))
+    );
+    await expect(loader.loadWorld('bundled')).resolves.toEqual(
+      JSON.parse(starterWorld)
+    );
+  });
+
+  it('admits two million streamed gameplay cells at the aggregate boundary', async () => {
+    const data = { levels: [level(), level()] };
+    for (const item of data.levels) {
+      item.layerInstances[0] = {
+        __identifier: 'Platforms',
+        __gridSize: 16,
+        __cWid: 1000,
+        __cHei: 1000,
+        intGridCsv: Array(1_000_000).fill(1)
+      };
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(response(stream(bytes(data))))
+    );
+    expect(await game.loadLDtkLevels('cell-boundary')).toBe(true);
+    expect(game.platforms).toHaveLength(1000);
   });
 
   it('accepts exactly the byte ceiling', async () => {

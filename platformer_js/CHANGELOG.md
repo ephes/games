@@ -9,11 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Bound LDtk JSON nesting, containers and tokens before native tree construction,
+  including ignored metadata; rejected imports preserve the current world.
+
 - Upgrade Vite 8, Vitest/UI/coverage 5, JSDoc and lint-staged, and refresh
   transitive dependencies; the lockfile has zero npm audit findings.
 - Require Node 24 LTS or 26+; use Node 24 in CI and keep dev servers local.
 
 ### Fixed
+
+- Remove identical duplicate player world-coordinate members from the bundled
+  starter export so it passes the existing strict wire admission.
 
 - Connect Escape to visible reversible pause: freeze simulation and shots, retire
   held input and clock remainder on pause/resume, and retain one render loop.

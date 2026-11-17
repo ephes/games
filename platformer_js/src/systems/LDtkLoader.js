@@ -5,6 +5,9 @@
 export const WORLD_LIMITS = Object.freeze({
   bytes: 16 * 1024 * 1024,
   timeoutMs: 10_000,
+  jsonDepth: 64,
+  jsonContainers: 100_000,
+  jsonTokens: 3_000_000,
   levels: 64,
   cells: 2_000_000,
   entities: 20_000,
@@ -14,13 +17,40 @@ export const WORLD_LIMITS = Object.freeze({
 });
 
 /**
- * Admit JSON syntax with the native parser, then check member names while the
- * wire still retains duplicates. Quoted tokens consume escaped punctuation;
- * only native-decoded keys in the same object share an identity.
+ * Bound all wire content (including ignored metadata) before native tree
+ * construction, then admit syntax and check member names while the wire retains
+ * duplicates. Depth includes the root; tokens count keys, scalar values and
+ * container openings. These limits also bound the duplicate-member pass.
+ * Quoted tokens consume escaped punctuation; only native-decoded keys in the
+ * same object share an identity.
  * @param {string} text - Decoded world JSON
  * @returns {Object} Unambiguous world data
  */
 function parseWorldJSON(text) {
+  let depth = 0,
+    containers = 0,
+    tokens = 0;
+  // Quoted tokens consume escaped punctuation. Native JSON.parse below remains
+  // responsible for syntax; this pass only bounds expansion, without a tree.
+  for (const [token] of text.matchAll(
+    /"(?:[^"\\]|\\.)*"|[{}[\]]|[^\s,:[\]{}"]+/g
+  )) {
+    if (token === '}' || token === ']') {
+      depth--;
+      continue;
+    }
+    if (++tokens > WORLD_LIMITS.jsonTokens) {
+      throw new Error('LDtk JSON token budget exceeded');
+    }
+    if (token === '{' || token === '[') {
+      if (++depth > WORLD_LIMITS.jsonDepth) {
+        throw new Error('LDtk JSON depth budget exceeded');
+      }
+      if (++containers > WORLD_LIMITS.jsonContainers) {
+        throw new Error('LDtk JSON container budget exceeded');
+      }
+    }
+  }
   const data = JSON.parse(text);
   const objects = [];
   let previous;
