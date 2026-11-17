@@ -72,6 +72,27 @@ function parseWorldJSON(text) {
   return data;
 }
 
+// Fixed runtime rectangles; authored anchors are normalized separately.
+const ENTITY_SIZES = {
+  Player: [30, 30],
+  Enemy: [44, 30],
+  Boss: [64, 96],
+  Coin: [20, 20],
+  Portal: [128, 128]
+};
+
+/** Check normalized origins and far edges before publishing any candidate level. */
+function checkExtent(x, y, width, height) {
+  if (
+    ![x, y, x + width, y + height].every(
+      value =>
+        Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER
+    )
+  ) {
+    throw new Error('Invalid LDtk normalized extent');
+  }
+}
+
 /**
  * LDtk level loader
  */
@@ -221,6 +242,10 @@ export class LDtkLoader {
    * indices must reference the completed collision mesh with at least 44 px
    * patrol width for enemies or 64 px for bosses. Only absent fields
    * use defaults (Speed: 2, PlatformIndex: 0, IsPowerUp: false).
+   * Optional total layer offsets must be signed safe integers (absent: zero).
+   * Add totals exactly once to layer-local coordinates, never instance offsets
+   * or level worldX/worldY. Normalized runtime rectangle edges must stay finite
+   * and within the safe numeric range. Default Player start is level-local.
    * IsPowerUp must be boolean; duplicate singletons/recognized fields fail.
    * Game additionally requires Boss and Portal before accepting an import.
    * @throws {Error} If the level has invalid geometry, entities or fields
@@ -278,12 +303,29 @@ export class LDtkLoader {
   }
 
   /**
+   * Read total layer translation, including LDtk instance and definition offsets.
+   * @param {Object} layer - Recognized layer
+   * @returns {number[]} Signed safe integer X/Y totals, absent axes default to zero
+   * @throws {Error} If a present total is not a safe integer
+   */
+  layerOffset(layer) {
+    return ['__pxTotalOffsetX', '__pxTotalOffsetY'].map(key => {
+      const value = key in layer ? layer[key] : 0;
+      if (!Number.isSafeInteger(value)) {
+        throw new Error('Invalid LDtk layer offset: expected safe integer');
+      }
+      return value;
+    });
+  }
+
+  /**
    * Process and validate recognized entities after the platform mesh is built.
    * @throws {Error} If singleton counts, fields, coordinates or patrol geometry are invalid
    * @param {Object} entitiesLayer - Entities layer
    * @param {Object} level - Level object to populate
    */
   processEntities(entitiesLayer, level) {
+    const [offsetX, offsetY] = this.layerOffset(entitiesLayer);
     const singletons = new Set();
     entitiesLayer.entityInstances.forEach(entity => {
       if (
@@ -299,10 +341,13 @@ export class LDtkLoader {
         }
         singletons.add(entity.__identifier);
       }
-      const [x, y] = entity.px;
-      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      const [px, py] = entity.px;
+      if (!Number.isFinite(px) || !Number.isFinite(py)) {
         throw new Error('Invalid LDtk entity coordinates');
       }
+      const x = px + offsetX,
+        y = py + offsetY;
+      checkExtent(x, y, ...ENTITY_SIZES[entity.__identifier]);
       const patrol =
         entity.__identifier === 'Enemy' || entity.__identifier === 'Boss';
       const platformIndex = patrol
@@ -386,7 +431,8 @@ export class LDtkLoader {
    * At most 1,000,000 cells and safe integer pixel extents are supported.
    * Cells must be nonnegative safe integers: 0 is empty, 1 is collision terrain,
    * other positive kinds are noncollision. No coercion is performed.
-   * Validation finishes before constructing or replacing geometry.
+   * Apply admitted total layer offsets once; validate the full translated grid
+   * extent even if empty. Validation finishes before constructing geometry.
    * @throws {Error} If dimensions, cell budget, dense array length or cell values are invalid
    * @param {Object} platformsLayer - Platforms layer
    * @param {Object} level - Level object to populate
@@ -410,6 +456,8 @@ export class LDtkLoader {
       throw new Error('Invalid LDtk IntGrid dimensions or cell data');
     }
 
+    const [offsetX, offsetY] = this.layerOffset(platformsLayer);
+    checkExtent(offsetX, offsetY, width * gridSize, height * gridSize);
     for (const value of platformsLayer.intGridCsv) {
       if (!Number.isSafeInteger(value) || value < 0) {
         throw new Error(
@@ -453,8 +501,8 @@ export class LDtkLoader {
           throw new Error('LDtk active platform budget exceeded');
         }
         platforms.push({
-          x: p.startX * gridSize,
-          y: p.y * gridSize,
+          x: p.startX * gridSize + offsetX,
+          y: p.y * gridSize + offsetY,
           width: (p.endX - p.startX + 1) * gridSize,
           height: gridSize
         });

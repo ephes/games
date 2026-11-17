@@ -445,6 +445,17 @@ value 1 creates collision geometry; other positive kinds remain noncollision
 values. Strings, booleans, nulls, fractions, negative/unsafe integers, nonfinite
 values and sparse adapter arrays are refused before constructing geometry. A level may omit
 the Platforms layer entirely when no enemy or boss needs a patrol surface.
+Recognized Platforms/Entities layers apply `__pxTotalOffsetX/Y` exactly once to
+grid/entity positions. Each optional axis defaults to zero only when absent;
+present totals must be signed safe integers. Totals already include definition
+and instance offsets, so `pxOffsetX/Y` are not added again. Level `worldX/Y` and
+entity `__worldX/Y` are not part of this level-local import. Different layer
+totals remain independent, including negative origins. Normalized grid extents
+(including empty grids) and entity runtime rectangle edges must be finite and
+within ±`Number.MAX_SAFE_INTEGER`; invalid future levels refuse the entire
+replacement or append before publication. The default omitted-Player start
+stays at level coordinates (50, 200). See the [LDtk JSON schema](https://ldtk.io/files/JSON_SCHEMA.json).
+
 Recognized entities require finite numeric x/y coordinates. Enemy `Speed` must
 be a finite number (zero stays stationary); enemy and boss `PlatformIndex` must
 be an integer in the final merged platform array. Missing fields default to speed
