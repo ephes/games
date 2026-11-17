@@ -139,6 +139,145 @@ describe('LDtk total layer offsets', () => {
   });
 });
 
+const sizes = {
+  Player: [30, 30],
+  Enemy: [44, 30],
+  Boss: [64, 96],
+  Coin: [20, 20],
+  Portal: [128, 128]
+};
+const convertedEntity = (level, kind) =>
+  ({
+    Player: level.playerStart,
+    Enemy: level.enemies[0],
+    Boss: level.boss,
+    Coin: level.coins[0],
+    Portal: level.portal
+  })[kind];
+
+describe('LDtk authored entity anchors', () => {
+  it.each(
+    Object.entries(sizes).flatMap(([kind, [width, height]]) => [
+      [kind, width, height, [0, 0], 90, 140],
+      [kind, width, height, [0.5, 0.5], 90 - width / 2, 140 - height / 2],
+      [kind, width, height, [0.5, 1], 90 - width / 2, 140 - height]
+    ])
+  )('normalizes %s %sx%s pivot %j', (kind, width, height, pivot, x, y) => {
+    const source = sourceLevel();
+    source.layerInstances[1].entityInstances = [
+      { ...entity(kind, [100, 100]), width, height, __pivot: pivot }
+    ];
+    const level = new LDtkLoader().convertLevel(source);
+    expect(convertedEntity(level, kind)).toMatchObject({ x, y });
+  });
+
+  it('normalizes the 44x30 bottom-centered enemy to (78,70) before offsets', () => {
+    const source = sourceLevel();
+    source.layerInstances[1].__pxTotalOffsetX = 0;
+    source.layerInstances[1].__pxTotalOffsetY = 0;
+    source.layerInstances[1].entityInstances = [
+      {
+        ...entity('Enemy', [100, 100]),
+        width: 44,
+        height: 30,
+        __pivot: [0.5, 1]
+      }
+    ];
+    expect(new LDtkLoader().convertLevel(source).enemies[0]).toMatchObject({
+      x: 78,
+      y: 70
+    });
+  });
+
+  it('uses authored dimensions for anchors even when the runtime size differs', () => {
+    const source = sourceLevel();
+    source.layerInstances[1].entityInstances = [
+      {
+        ...entity('Enemy', [100, 100]),
+        width: 88,
+        height: 60,
+        __pivot: [0.5, 1]
+      }
+    ];
+    expect(new LDtkLoader().convertLevel(source).enemies[0]).toEqual({
+      x: 46,
+      y: 80,
+      speed: 2,
+      platformIndex: 0
+    });
+  });
+
+  it.each([
+    null,
+    undefined,
+    '0,0',
+    [],
+    [0],
+    [0, 0, 0],
+    [null, 0],
+    ['0', 0],
+    [true, 0],
+    [-0.1, 0],
+    [0, 1.1],
+    [NaN, 0],
+    [0, Infinity]
+  ])('refuses malformed present pivot %j', pivot => {
+    const source = sourceLevel();
+    Object.assign(source.layerInstances[1].entityInstances[0], {
+      width: 30,
+      height: 30,
+      __pivot: pivot
+    });
+    expect(() => new LDtkLoader().convertLevel(source)).toThrow(
+      /LDtk entity pivot/
+    );
+  });
+
+  it.each([
+    { width: 30 },
+    { height: 30 },
+    { width: null, height: 30 },
+    { width: '30', height: 30 },
+    { width: 0, height: 30 },
+    { width: 30, height: -1 },
+    { width: 0.5, height: 30 },
+    { width: 30, height: NaN },
+    { width: Infinity, height: 30 },
+    { width: Number.MAX_SAFE_INTEGER + 1, height: 30 },
+    { __pivot: [0.5, 1] }
+  ])('refuses unsupported authored geometry %j', geometry => {
+    const source = sourceLevel();
+    Object.assign(source.layerInstances[1].entityInstances[0], geometry);
+    expect(() => new LDtkLoader().convertLevel(source)).toThrow(
+      /LDtk entity dimensions/
+    );
+  });
+
+  it.each([{}, { __pivot: [0, 0] }])(
+    'supports legacy top-left records without authored dimensions %j',
+    geometry => {
+      const source = sourceLevel();
+      Object.assign(source.layerInstances[1].entityInstances[0], geometry);
+      expect(new LDtkLoader().convertLevel(source).playerStart).toEqual({
+        x: 48,
+        y: 130
+      });
+    }
+  );
+
+  it('refuses unsafe authored far edges even when the runtime rectangle fits', () => {
+    const source = sourceLevel();
+    Object.assign(source.layerInstances[1].entityInstances[0], {
+      width: Number.MAX_SAFE_INTEGER,
+      height: 30,
+      __pivot: [0, 0]
+    });
+    expect(() => new LDtkLoader().convertLevel(source)).toThrow(
+      /LDtk .*extent/
+    );
+  });
+});
+
 describe('LDtk coordinate publication in Game', () => {
   let game, fromURL;
   beforeEach(async () => {
@@ -190,6 +329,107 @@ describe('LDtk coordinate publication in Game', () => {
     expect(game.ctx.fillRect).toHaveBeenCalledWith(32, 160, 256, 16);
     expect(game.ctx.arc).toHaveBeenCalledWith(90, 120, 10, 0, Math.PI * 2);
   });
+
+  it.each([
+    [0, 0],
+    [0.5, 0.5],
+    [0.5, 1]
+  ])(
+    'keeps pivot (%s,%s) spawn, patrol, collider and render coordinates coherent',
+    async (pivotX, pivotY) => {
+      const candidate = sourceLevel();
+      for (const entity of candidate.layerInstances[1].entityInstances) {
+        const [width, height] = sizes[entity.__identifier];
+        Object.assign(entity, {
+          width,
+          height,
+          __pivot: [pivotX, pivotY],
+          px: [entity.px[0] + pivotX * width, entity.px[1] + pivotY * height]
+        });
+      }
+      fromURL.mockResolvedValue({ levels: [candidate] });
+      expect(await game.loadLDtkLevels('anchored')).toBe(true);
+      expect([
+        game.player.x,
+        game.player.y,
+        game.player.width,
+        game.player.height
+      ]).toEqual([48, 130, 30, 30]);
+      expect(game.enemies[0].getBounds()).toEqual({
+        x: 100,
+        y: 130,
+        width: 44,
+        height: 30
+      });
+      expect(game.boss.getBounds()).toEqual({
+        x: 176,
+        y: 64,
+        width: 64,
+        height: 96
+      });
+      expect(game.coins[0].getBounds()).toEqual({
+        x: 80,
+        y: 110,
+        width: 20,
+        height: 20
+      });
+      expect(game.portal.getBounds()).toEqual({
+        x: 300,
+        y: 40,
+        width: 128,
+        height: 128
+      });
+      game.boss.canShoot = false;
+      game.update(1000 / 60);
+      expect(game.player.y).toBe(130);
+      expect(game.player.isJumping).toBe(false);
+      expect(game.enemies[0].x).toBe(102);
+      game.render();
+      expect(game.ctx.fillRect).toHaveBeenCalledWith(32, 160, 256, 16);
+      expect(game.ctx.arc).toHaveBeenCalledWith(90, 120, 10, 0, Math.PI * 2);
+    }
+  );
+
+  it('keeps the runtime enemy collider fixed with different authored anchor dimensions', async () => {
+    const candidate = sourceLevel();
+    Object.assign(candidate.layerInstances[1].entityInstances[1], {
+      width: 88,
+      height: 60,
+      __pivot: [0.5, 1],
+      px: [154, 150]
+    });
+    fromURL.mockResolvedValue({ levels: [candidate] });
+    expect(await game.loadLDtkLevels('anchor-only-size')).toBe(true);
+    expect(game.enemies[0].getBounds()).toEqual({
+      x: 100,
+      y: 130,
+      width: 44,
+      height: 30
+    });
+  });
+
+  it.each(
+    ['loadLDtkLevels', 'addLDtkLevels'].flatMap(method => [
+      [method, { __pivot: [0.5, 1] }],
+      [method, { __pivot: [0, null], width: 30, height: 30 }],
+      [method, { __pivot: [0, 0], width: Number.MAX_SAFE_INTEGER, height: 30 }]
+    ])
+  )(
+    'preserves play on %s with invalid future authored anchors %j',
+    async (method, geometry) => {
+      fromURL.mockResolvedValue({ levels: [sourceLevel()] });
+      expect(await game.loadLDtkLevels('valid')).toBe(true);
+      const before = snapshot();
+      const invalid = sourceLevel();
+      Object.assign(invalid.layerInstances[1].entityInstances[0], geometry);
+      fromURL.mockResolvedValue({ levels: [sourceLevel(), invalid] });
+      expect(await game[method]('invalid-future-anchor')).toBe(false);
+      for (const key of Object.keys(before)) {
+        expect(snapshot()[key]).toBe(before[key]);
+      }
+      expect(game.player.disposed).toBe(false);
+    }
+  );
 
   it.each(
     ['loadLDtkLevels', 'addLDtkLevels'].flatMap(method =>

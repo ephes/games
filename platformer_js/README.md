@@ -456,7 +456,25 @@ within ±`Number.MAX_SAFE_INTEGER`; invalid future levels refuse the entire
 replacement or append before publication. The default omitted-Player start
 stays at level coordinates (50, 200). See the [LDtk JSON schema](https://ldtk.io/files/JSON_SCHEMA.json).
 
-Recognized entities require finite numeric x/y coordinates. Enemy `Speed` must
+Recognized entities require finite numeric x/y coordinates. Entity `px` is an
+anchor: the importer produces top-left coordinates as
+`px - __pivot * authoredSize + totalLayerOffset` on each axis. A missing
+`__pivot` defaults to `[0,0]`; a present pivot must contain exactly two finite
+numbers in `[0,1]`. If either authored `width` or `height` is present, both must
+be positive safe integers. A nonzero pivot requires both authored dimensions;
+legacy records with neither dimension remain supported only with a zero/absent
+pivot. Malformed present metadata is refused, including for zero pivots.
+Both the authored rectangle and runtime rectangle must fit the numeric extent
+contract above. For example, a 44×30 enemy anchored at (100,100) with pivot
+(0.5,1) becomes (78,70), before layer translation.
+
+Authored dimensions describe anchor geometry; they do not scale runtime sprites
+or colliders. Fixed runtime sizes are Player 30×30, Enemy 44×30, Boss 64×96,
+Coin 20×20 and Portal 128×128. Differing authored dimensions are supported for
+anchor normalization, while the runtime rectangle begins at the resulting
+top-left. Runtime sizes never substitute for missing authored anchor dimensions.
+
+Enemy `Speed` must
 be a finite number (zero stays stationary); enemy and boss `PlatformIndex` must
 be an integer in the final merged platform array. Missing fields default to speed
 2 and platform index 0; present strings, nulls or nonfinite values are rejected.

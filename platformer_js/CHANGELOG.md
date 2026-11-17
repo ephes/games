@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Normalize LDtk entity pivots with admitted authored dimensions before layer
+  translation; document fixed runtime collider/sprite sizes and legacy top-left
+  records. Refuse malformed pivots, incomplete sizes and unsafe authored extents
+  without replacing the current world, including invalid future levels.
+
 - Preserve independent total LDtk layer offsets exactly once for collision and
   entity coordinates; reject invalid totals and unsafe normalized extents before
   publishing replacement or appended levels.

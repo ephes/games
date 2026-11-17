@@ -245,7 +245,9 @@ export class LDtkLoader {
    * Optional total layer offsets must be signed safe integers (absent: zero).
    * Add totals exactly once to layer-local coordinates, never instance offsets
    * or level worldX/worldY. Normalized runtime rectangle edges must stay finite
-   * and within the safe numeric range. Default Player start is level-local.
+   * and within the safe numeric range. entityPosition admits authored pivots
+   * and dimensions separately from fixed runtime sizes. Default Player start
+   * is level-local.
    * IsPowerUp must be boolean; duplicate singletons/recognized fields fail.
    * Game additionally requires Boss and Portal before accepting an import.
    * @throws {Error} If the level has invalid geometry, entities or fields
@@ -319,6 +321,61 @@ export class LDtkLoader {
   }
 
   /**
+   * Normalize an authored anchor to runtime top-left, then add layer totals once.
+   * Pivot defaults to [0,0] only when absent; present pivots must have two finite
+   * components in [0,1]. Authored width/height, if either is present, must both
+   * be positive safe integers. Nonzero pivots require authored dimensions.
+   * Dimensions describe anchor geometry only: runtime sizes remain Player 30x30,
+   * Enemy 44x30, Boss 64x96, Coin 20x20 and Portal 128x128. They never substitute
+   * for missing authored anchor dimensions or resize colliders/sprites.
+   * @param {Object} entity - Recognized LDtk entity
+   * @param {number} offsetX - Admitted total layer X offset
+   * @param {number} offsetY - Admitted total layer Y offset
+   * @returns {Object} Level-local top-left x/y
+   * @throws {Error} If coordinates, pivot, authored sizes or extents are invalid
+   */
+  entityPosition(entity, offsetX, offsetY) {
+    const [px, py] = entity.px;
+    if (!Number.isFinite(px) || !Number.isFinite(py)) {
+      throw new Error('Invalid LDtk entity coordinates');
+    }
+    const pivot = '__pivot' in entity ? entity.__pivot : [0, 0];
+    if (
+      !Array.isArray(pivot) ||
+      pivot.length !== 2 ||
+      ![pivot[0], pivot[1]].every(
+        value => Number.isFinite(value) && value >= 0 && value <= 1
+      )
+    ) {
+      throw new Error(
+        'Invalid LDtk entity pivot: expected two numbers in [0,1]'
+      );
+    }
+    const hasDimensions = 'width' in entity || 'height' in entity;
+    if (
+      (hasDimensions &&
+        ![entity.width, entity.height].every(
+          value => Number.isSafeInteger(value) && value > 0
+        )) ||
+      (!hasDimensions && (pivot[0] !== 0 || pivot[1] !== 0))
+    ) {
+      throw new Error(
+        'Invalid LDtk entity dimensions: authored width/height required'
+      );
+    }
+    // Legacy top-left fixtures need no authored anchor geometry.
+    const width = hasDimensions ? entity.width : 0;
+    const height = hasDimensions ? entity.height : 0;
+    const x = px - pivot[0] * width + offsetX;
+    const y = py - pivot[1] * height + offsetY;
+    if (hasDimensions) {
+      checkExtent(x, y, width, height);
+    }
+    checkExtent(x, y, ...ENTITY_SIZES[entity.__identifier]);
+    return { x, y };
+  }
+
+  /**
    * Process and validate recognized entities after the platform mesh is built.
    * @throws {Error} If singleton counts, fields, coordinates or patrol geometry are invalid
    * @param {Object} entitiesLayer - Entities layer
@@ -341,13 +398,7 @@ export class LDtkLoader {
         }
         singletons.add(entity.__identifier);
       }
-      const [px, py] = entity.px;
-      if (!Number.isFinite(px) || !Number.isFinite(py)) {
-        throw new Error('Invalid LDtk entity coordinates');
-      }
-      const x = px + offsetX,
-        y = py + offsetY;
-      checkExtent(x, y, ...ENTITY_SIZES[entity.__identifier]);
+      const { x, y } = this.entityPosition(entity, offsetX, offsetY);
       const patrol =
         entity.__identifier === 'Enemy' || entity.__identifier === 'Boss';
       const platformIndex = patrol
