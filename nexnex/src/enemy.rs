@@ -187,9 +187,10 @@ pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
             } else {
                 patrol.index -= 1;
             }
-            let delta = patrol.points[patrol.index] - position;
+            let target = patrol.points[patrol.index];
+            let delta = target - position;
             if let Some(direction) = delta.try_normalize() {
-                let distance = delta.length();
+                let distance = patrol_leg_distance(position, target);
                 if remaining + WAYPOINT_EPSILON < distance {
                     position += direction * remaining;
                     velocity.linvel = direction * 75.;
@@ -295,35 +296,38 @@ mod tests {
 
     #[test]
     fn unchanged_authored_routes_reuse_cycle_metrics() {
+        use bevy::ecs::system::RunSystemOnce;
+        const TICKS: usize = 20;
+        let mut evaluations = Vec::new();
         for count in [100, 1000] {
             let route = authored_route(
                 &authored_layer(),
                 (1..count).map(|x| IVec2::new(x, 0)).collect(),
                 0,
             );
-            let mut app = App::new();
-            app.add_systems(Update, patrol);
-            let id = app
-                .world_mut()
+            let mut world = World::new();
+            let id = world
                 .spawn((Transform::default(), Velocity::zero(), route))
                 .id();
             DISTANCE_EVALUATIONS.with(|count| count.set(0));
-            for _ in 0..20 {
-                let route = app.world().get::<Patrol>(id).unwrap();
+            for _ in 0..TICKS {
+                let route = world.get::<Patrol>(id).unwrap();
                 let target = route.points[route.index];
-                app.world_mut()
-                    .get_mut::<Transform>(id)
-                    .unwrap()
-                    .translation = target.extend(0.);
-                app.world_mut().get_mut::<Velocity>(id).unwrap().linvel = Vec2::ZERO;
-                app.update();
+                world.get_mut::<Transform>(id).unwrap().translation = target.extend(0.);
+                world.get_mut::<Velocity>(id).unwrap().linvel = Vec2::ZERO;
+                // Runs on this thread, so the thread-local counter observes
+                // every leg evaluation made by the system itself.
+                world.run_system_once(patrol).unwrap();
             }
-            assert_eq!(
-                DISTANCE_EVALUATIONS.with(|count| count.get()),
-                0,
-                "unchanged route of {count} points rescanned"
-            );
+            evaluations.push(DISTANCE_EVALUATIONS.with(|count| count.get()));
         }
+        // Each arrival crosses exactly one unit leg: work is proportional to the
+        // crossed legs and independent of route length (no whole-route rescan).
+        assert_eq!(
+            evaluations,
+            [TICKS, TICKS],
+            "route length changed per-tick work"
+        );
     }
 
     #[test]
