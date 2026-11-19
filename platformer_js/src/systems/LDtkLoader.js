@@ -623,9 +623,12 @@ export class LDtkLoader {
   }
 
   /**
-   * Convert a candidate world or the currently published world.
+   * Convert a candidate world or the currently published world in level order.
+   * Return the batch only after all levels pass the converted platform budget.
    * @param {World|null} world - Candidate (defaults to the published world)
    * @returns {Array} Array of converted levels
+   * @throws {Error} If preflight or conversion fails, or a level exceeds the
+   * cumulative platform budget
    */
   getAllLevels(world = this.world) {
     if (!world) {
@@ -634,12 +637,15 @@ export class LDtkLoader {
 
     const data = world.data ?? world;
     this.preflightWorld(data);
-    const levels = data.levels.map(ldtkLevel => this.convertLevel(ldtkLevel));
-    if (
-      levels.reduce((count, level) => count + level.platforms.length, 0) >
-      WORLD_LIMITS.platforms
-    ) {
-      throw new Error('LDtk world platform budget exceeded');
+    const levels = [];
+    let platforms = 0;
+    for (const ldtkLevel of data.levels) {
+      const level = this.convertLevel(ldtkLevel);
+      platforms += level.platforms.length;
+      if (platforms > WORLD_LIMITS.platforms) {
+        throw new Error('LDtk world platform budget exceeded');
+      }
+      levels.push(level);
     }
     return levels;
   }

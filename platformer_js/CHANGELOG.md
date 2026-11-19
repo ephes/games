@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Stop LDtk conversion at the first level that takes the candidate world over
+  the aggregate platform cap, preserving the published world and level table.
+
 - Read individual LDtk levels from raw or wrapped worlds and return `null` for
   invalid indices. Conversion errors for selected levels remain visible.
 

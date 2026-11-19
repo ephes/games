@@ -423,7 +423,9 @@ most 1,024 source entities and 4,096 horizontal collision runs/platforms, boundi
 active collision/render scans. These limits include unknown entities/layers in
 source totals. Append also caps the combined table at 64 levels and 20,000
 recognized entities. Both replacement and append also cap total converted
-platform geometry at 20,000 platforms, including the existing table on append.
+platform geometry at 20,000 platforms. Candidate levels are converted in order,
+and conversion stops at the first level that takes the candidate over the cap.
+Append also checks the combined platform count including the existing table.
 `addLDtkLevels(url)` returns true on publication and false on refusal, empty input,
 supersession or disposal. Over-budget imports report the exceeded budget and retain
 the current playable world.
