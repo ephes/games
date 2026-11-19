@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Read individual LDtk levels from raw or wrapped worlds and return `null` for
+  invalid indices. Conversion errors for selected levels remain visible.
+
 - Normalize LDtk entity pivots with admitted authored dimensions before layer
   translation; document fixed runtime collider/sprite sizes and legacy top-left
   records. Refuse malformed pivots, incomplete sizes and unsafe authored extents

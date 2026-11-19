@@ -412,6 +412,11 @@ pass checks decoded key identities per object before conversion or
 publication. Wire refusal keeps the current playable world. Legal Unicode and
 names repeated in separate objects remain supported. The loader uses raw LDtk records, including modern `intGridCsv`.
 
+`ldtkLoader.getLevel(index)` accepts a published world with `levels` directly
+or under `data`. It returns `null` when no world is loaded or the index is
+outside the range of zero-based integer indices. Errors converting a selected
+level propagate to the caller.
+
 Before conversion, each imported world is limited to 64 levels, 2,000,000 total
 IntGrid cells and 20,000 total entities across all layers. A level may contain at
 most 1,024 source entities and 4,096 horizontal collision runs/platforms, bounding

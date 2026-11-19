@@ -94,6 +94,38 @@ describe('LDtk world conversion', () => {
     expect(fromURL).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])(
+    'converts only valid level indices (wrapped: %s)',
+    wrapped => {
+      const source = {
+        identifier: 'Selected',
+        fieldInstances: [],
+        layerInstances: []
+      };
+      const world = { levels: [source] };
+      loader.world = wrapped ? { data: world } : world;
+      const convert = vi.spyOn(loader, 'convertLevel');
+
+      expect(loader.getLevel(0)).toEqual(emptyLevel('Selected'));
+      for (const index of [-1, 0.5, NaN, Infinity, 1, '0', undefined]) {
+        expect(loader.getLevel(index)).toBeNull();
+      }
+      expect(convert).toHaveBeenCalledExactlyOnceWith(source);
+    }
+  );
+
+  it('propagates conversion errors for a selected level', () => {
+    const source = {
+      identifier: 'Invalid',
+      fieldInstances: [],
+      layerInstances: [],
+      pxWid: 0,
+      pxHei: 1
+    };
+    loader.world = { data: { levels: [source] } };
+    expect(() => loader.getLevel(0)).toThrow('Invalid LDtk level dimensions');
+  });
+
   it('propagates a load failure without creating a world', async () => {
     const failure = new Error('Synthetic world failure');
     fromURL.mockRejectedValue(failure);

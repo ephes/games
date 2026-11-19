@@ -645,15 +645,22 @@ export class LDtkLoader {
   }
 
   /**
-   * Get level by index
-   * @param {number} index - Level index
-   * @returns {Object|null} Converted level or null
+   * Get a level from raw world data or a compatibility wrapper with a data property.
+   * @param {number} index - Zero-based integer level index
+   * @returns {Object|null} Converted level, or null if no world or index is available
+   * @throws {Error} If conversion of the selected level fails
    */
   getLevel(index) {
-    if (!this.world || index >= this.world.levels.length) {
+    const levels = (this.world?.data ?? this.world)?.levels;
+    if (
+      !levels ||
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= levels.length
+    ) {
       return null;
     }
 
-    return this.convertLevel((this.world.data ?? this.world).levels[index]);
+    return this.convertLevel(levels[index]);
   }
 }
