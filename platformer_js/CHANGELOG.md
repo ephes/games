@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Release pending sprite image sources on timeout or cancellation while
+  preserving completed images.
+
 - Reject a superseded sprite batch before Game startup can activate with an
   incomplete sprite cache.
 

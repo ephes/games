@@ -51,7 +51,7 @@ export class SpriteLoader {
       }
       const img = new Image();
       let settled = false;
-      const finish = error => {
+      const finish = (error, releaseSource = false) => {
         if (settled) {
           return;
         }
@@ -60,6 +60,9 @@ export class SpriteLoader {
         signal?.removeEventListener('abort', abort);
         img.onload = null;
         img.onerror = null;
+        if (releaseSource) {
+          img.removeAttribute?.('src');
+        }
         if (error) {
           reject(error);
         } else {
@@ -67,9 +70,9 @@ export class SpriteLoader {
         }
       };
       const abort = () =>
-        finish(new DOMException('Sprite load aborted', 'AbortError'));
+        finish(new DOMException('Sprite load aborted', 'AbortError'), true);
       const timer = setTimeout(
-        () => finish(new Error(`Sprite load timed out: ${path}`)),
+        () => finish(new Error(`Sprite load timed out: ${path}`), true),
         timeoutMs
       );
       img.onload = () => finish();
