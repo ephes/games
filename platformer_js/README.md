@@ -91,12 +91,14 @@ tests use explicitly triggered Image load/error events to check cache identity,
 out-of-order completion, fake deadlines and failed startup without network requests.
 SpriteLoader batches can be retried after failure. Each batch starts incomplete;
 only the newest complete batch publishes its images together and sets `loaded`.
-`loadAll()` resolves only after its own batch publishes. A batch superseded
-before publication rejects with an `AbortError`, so Game initialization fails
-before creating a renderer, level or input handlers.
-Failed or superseded batches retain the complete previous cache, including when
-retired images finish late. Direct `loadSprite` requests retain per-key ownership;
-a direct request superseding one batch key prevents that entire batch publishing.
+`loadAll()` resolves only after its own batch publishes. Cancellation or
+supersession before publication rejects with an `AbortError`, even if every
+image has finished loading. Game initialization then fails before creating a
+renderer, level or input handlers.
+Failed, cancelled or superseded batches retain the complete previous cache,
+including when retired images finish late. Direct `loadSprite` requests retain
+per-key ownership. Superseding one batch key prevents the entire batch from
+publishing.
 Each sprite key belongs to its latest request: retired completions cannot replace the cache, and failed
 replacements retain the last valid image. Game initialization remains terminal
 on failure as described below; retry the loader directly or create a fresh Game.
@@ -288,18 +290,18 @@ game. Visibility/focus boundaries discard partial and missed simulation time.
 Duplicate restore events do not start extra games or retry failed startup;
 after failure, another hide/restore cycle can try a fresh Game. The entry point
 releases the failed game's slot before cleanup and reports the original startup
-error even if cleanup also fails. Retired startup
-completions cannot start or replace the current game. Vite hot replacement calls
+error even if cleanup also fails. Retired startup completions cannot start or
+replace the current game. Vite hot replacement calls
 `disposePage()` before reinitializing; embedders removing the entry point can call
 that same terminal cleanup to release its DOM/page listeners and Game.
 
 Concurrent and later `init()` calls share one initialization and register controls
 once. Failed initialization disposes input; every later `init()` call rejects
 with the same startup error. Create a fresh Game to retry. Disposal during sprite
-loading prevents later activation: while image requests are still pending it
-aborts them and `init()` rejects with an `AbortError` (callers that dispose on
-purpose can ignore that error); after the sprites have loaded, `init()` resolves
-without activating the game. Update/render failures also dispose the game
+loading prevents later activation: before the sprite batch publishes,
+`init()` rejects with an `AbortError` (callers that dispose on purpose can ignore
+that error). If disposal follows publication but precedes activation, `init()`
+resolves without activating the game. Update/render failures also dispose the game
 and rethrow the original error: synchronous startup errors reach the caller of
 `start()`, and scheduled-frame errors reach the browser error surface.
 
