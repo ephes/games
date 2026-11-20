@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject a superseded sprite batch before Game startup can activate with an
+  incomplete sprite cache.
+
 - Stop LDtk conversion at the first level that takes the candidate world over
   the aggregate platform cap, preserving the published world and level table.
 

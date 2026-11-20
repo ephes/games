@@ -91,6 +91,9 @@ tests use explicitly triggered Image load/error events to check cache identity,
 out-of-order completion, fake deadlines and failed startup without network requests.
 SpriteLoader batches can be retried after failure. Each batch starts incomplete;
 only the newest complete batch publishes its images together and sets `loaded`.
+`loadAll()` resolves only after its own batch publishes. A batch superseded
+before publication rejects with an `AbortError`, so Game initialization fails
+before creating a renderer, level or input handlers.
 Failed or superseded batches retain the complete previous cache, including when
 retired images finish late. Direct `loadSprite` requests retain per-key ownership;
 a direct request superseding one batch key prevents that entire batch publishing.

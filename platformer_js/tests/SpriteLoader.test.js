@@ -174,10 +174,14 @@ describe('Real sprite loading', () => {
   );
 
   it('keeps a direct request authoritative over an overlapping batch', async () => {
-    const batch = loader.loadAll();
+    const batch = loader.loadAll().catch(error => error);
     const direct = loader.loadSprite('player.idle', 'direct.png');
     images.forEach(image => image.onload?.());
-    await Promise.all([batch, direct]);
+    await direct;
+    expect(await batch).toMatchObject({
+      name: 'AbortError',
+      message: 'Sprite batch superseded'
+    });
     expect(loader.getSprite('player.idle')).toBe(images[10]);
     expect(loader.getSprite('player.run')).toBeNull();
     expect(loader.loaded).toBe(false);
