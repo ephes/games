@@ -160,6 +160,11 @@ the pair both within one frame and across physics steps. It checks handle and
 entity ownership, one sensor attached to the surviving body, stale-contact
 rejection and grounding from new real overlaps.
 
+When a supporting platform's collider is removed and reinserted within one
+update, its old foot contacts and queued starts are discarded before movement.
+Other supports remain valid, and a later physics step can report fresh contact
+with the replacement.
+
 Parry 0.25.3 leaves orphaned BVH nodes when multiple removals reduce the tree to
 one leaf. Its optimizer can corrupt that partial root, causing `key not present`
 on the next insertion. NexNex uses a local backport of the upstream partial-root

@@ -131,16 +131,22 @@ pub fn spawn_ground_sensor(
 pub fn ground_detection(
     mut ground_sensors: Query<&mut GroundSensor>,
     mut collisions: MessageReader<CollisionEvent>,
+    mut removed_colliders: RemovedComponents<Collider>,
     collidables: Query<Entity, (With<Collider>, Without<Sensor>)>,
 ) {
+    // Collision messages identify entities, so a reinserted collider can
+    // otherwise inherit queued starts and contacts from its old component.
+    let retired: HashSet<_> = removed_colliders.read().collect();
+    let is_live = |entity| collidables.contains(entity) && !retired.contains(&entity);
+
     for collision_event in collisions.read() {
         match collision_event.to_owned() {
             CollisionEvent::Started(e1, e2, _) => {
-                if collidables.contains(e1) {
+                if is_live(e1) {
                     if let Ok(mut sensor) = ground_sensors.get_mut(e2) {
                         sensor.intersecting_ground_entities.insert(e1);
                     }
-                } else if collidables.contains(e2) {
+                } else if is_live(e2) {
                     if let Ok(mut sensor) = ground_sensors.get_mut(e1) {
                         sensor.intersecting_ground_entities.insert(e2);
                     }
@@ -159,7 +165,7 @@ pub fn ground_detection(
     for mut sensor in &mut ground_sensors {
         sensor
             .intersecting_ground_entities
-            .retain(|entity| collidables.contains(*entity));
+            .retain(|entity| is_live(*entity));
     }
 }
 
@@ -282,6 +288,91 @@ mod tests {
             }
             assert_eq!(seen.len(), count);
         }
+    }
+
+    #[test]
+    fn replaced_floor_collider_retires_contacts_until_a_new_start() {
+        let mut app = App::new();
+        app.add_message::<CollisionEvent>()
+            .add_plugins(GroundDetectionPlugin);
+        let owner = app
+            .world_mut()
+            .spawn((Collider::cuboid(6., 14.), GroundDetection::default()))
+            .id();
+        let floor = app.world_mut().spawn(Collider::cuboid(20., 2.)).id();
+        let other_floor = app.world_mut().spawn(Collider::cuboid(20., 2.)).id();
+        app.update();
+        let sensor = app
+            .world_mut()
+            .query_filtered::<Entity, With<GroundSensor>>()
+            .single(app.world())
+            .unwrap();
+
+        for retired_start in [false, true] {
+            app.world_mut().write_message(CollisionEvent::Started(
+                sensor,
+                floor,
+                CollisionEventFlags::empty(),
+            ));
+            app.update();
+            assert!(app.world().get::<GroundDetection>(owner).unwrap().on_ground);
+
+            app.world_mut()
+                .entity_mut(floor)
+                .remove::<Collider>()
+                .insert(Collider::cuboid(20., 1.));
+            if retired_start {
+                app.world_mut().write_message(CollisionEvent::Started(
+                    floor,
+                    sensor,
+                    CollisionEventFlags::empty(),
+                ));
+                app.world_mut().write_message(CollisionEvent::Started(
+                    sensor,
+                    other_floor,
+                    CollisionEventFlags::empty(),
+                ));
+            }
+            app.update();
+
+            let contacts = &app
+                .world()
+                .get::<GroundSensor>(sensor)
+                .unwrap()
+                .intersecting_ground_entities;
+            if retired_start {
+                assert_eq!(*contacts, HashSet::from([other_floor]));
+            } else {
+                assert!(
+                    contacts.is_empty(),
+                    "the replaced floor kept its old contact"
+                );
+            }
+            assert_eq!(
+                app.world().get::<GroundDetection>(owner).unwrap().on_ground,
+                retired_start,
+            );
+        }
+
+        // A later physics step can report contact with the replacement.
+        app.world_mut().write_message(CollisionEvent::Stopped(
+            sensor,
+            other_floor,
+            CollisionEventFlags::empty(),
+        ));
+        app.world_mut().write_message(CollisionEvent::Started(
+            sensor,
+            floor,
+            CollisionEventFlags::empty(),
+        ));
+        app.update();
+        let contacts = &app
+            .world()
+            .get::<GroundSensor>(sensor)
+            .unwrap()
+            .intersecting_ground_entities;
+        assert_eq!(*contacts, HashSet::from([floor]));
+        assert!(app.world().get::<GroundDetection>(owner).unwrap().on_ground);
     }
 
     #[test]

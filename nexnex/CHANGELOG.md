@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Clear stale ground contacts and ignore queued starts when a supporting
+  collider is removed and reinserted within one update. Accept fresh starts
+  from later physics steps.
+
 - Find the restart spawn in one authored-order pass and refuse a second Player
   immediately. Reuse the first spawn's level and layer for its coordinates.
 - Size ladder sensors from their authored LDtk layer grid rather than assuming
