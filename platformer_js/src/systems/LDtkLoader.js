@@ -623,9 +623,12 @@ export class LDtkLoader {
   }
 
   /**
-   * Convert a candidate world or the currently published world.
+   * Convert a candidate world or the currently published world in level order.
+   * Return the batch only after all levels pass the converted platform budget.
    * @param {World|null} world - Candidate (defaults to the published world)
    * @returns {Array} Array of converted levels
+   * @throws {Error} If preflight or conversion fails, or a level exceeds the
+   * cumulative platform budget
    */
   getAllLevels(world = this.world) {
     if (!world) {
@@ -634,26 +637,36 @@ export class LDtkLoader {
 
     const data = world.data ?? world;
     this.preflightWorld(data);
-    const levels = data.levels.map(ldtkLevel => this.convertLevel(ldtkLevel));
-    if (
-      levels.reduce((count, level) => count + level.platforms.length, 0) >
-      WORLD_LIMITS.platforms
-    ) {
-      throw new Error('LDtk world platform budget exceeded');
+    const levels = [];
+    let platforms = 0;
+    for (const ldtkLevel of data.levels) {
+      const level = this.convertLevel(ldtkLevel);
+      platforms += level.platforms.length;
+      if (platforms > WORLD_LIMITS.platforms) {
+        throw new Error('LDtk world platform budget exceeded');
+      }
+      levels.push(level);
     }
     return levels;
   }
 
   /**
-   * Get level by index
-   * @param {number} index - Level index
-   * @returns {Object|null} Converted level or null
+   * Get a level from raw world data or a compatibility wrapper with a data property.
+   * @param {number} index - Zero-based integer level index
+   * @returns {Object|null} Converted level, or null if no world or index is available
+   * @throws {Error} If conversion of the selected level fails
    */
   getLevel(index) {
-    if (!this.world || index >= this.world.levels.length) {
+    const levels = (this.world?.data ?? this.world)?.levels;
+    if (
+      !levels ||
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= levels.length
+    ) {
       return null;
     }
 
-    return this.convertLevel((this.world.data ?? this.world).levels[index]);
+    return this.convertLevel(levels[index]);
   }
 }

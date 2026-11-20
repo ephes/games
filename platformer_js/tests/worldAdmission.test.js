@@ -365,6 +365,54 @@ describe('World transfer admission', () => {
     expect(game.ldtkLoader.world).toBeNull();
   });
 
+  it.each(['loadLDtkLevels', 'addLDtkLevels'])(
+    'stops %s conversion on the first aggregate platform overflow',
+    async method => {
+      const fetch = vi
+        .fn()
+        .mockResolvedValue(response(stream(bytes({ levels: [level()] }))));
+      vi.stubGlobal('fetch', fetch);
+      expect(await game.loadLDtkLevels('valid')).toBe(true);
+      const { levels, player, platforms, currentLevel, totalLevels } = game;
+      const previousWorld = game.ldtkLoader.world;
+
+      const fullLevels = Math.floor(
+        WORLD_LIMITS.platforms / WORLD_LIMITS.activePlatforms
+      );
+      const platformCounts = [
+        ...Array(fullLevels).fill(WORLD_LIMITS.activePlatforms),
+        WORLD_LIMITS.platforms % WORLD_LIMITS.activePlatforms,
+        1,
+        1
+      ];
+      const candidate = {
+        levels: platformCounts.map((_, index) => ({
+          ...level(),
+          identifier: `Candidate_${index}`
+        }))
+      };
+      const convert = vi.spyOn(game.ldtkLoader, 'convertLevel');
+      for (const count of platformCounts) {
+        convert.mockReturnValueOnce({ platforms: Array(count) });
+      }
+      fetch.mockResolvedValue(response(stream(bytes(candidate))));
+
+      expect(await game[method]('over-platform-budget')).toBe(false);
+      expect(convert.mock.calls).toEqual(
+        candidate.levels.slice(0, -1).map(source => [source])
+      );
+      expect(console.error.mock.calls.at(-1)[1].message).toBe(
+        'LDtk world platform budget exceeded'
+      );
+      expect(game.ldtkLoader.world).toBe(previousWorld);
+      expect(game.levels).toBe(levels);
+      expect(game.player).toBe(player);
+      expect(game.platforms).toBe(platforms);
+      expect(game.currentLevel).toBe(currentLevel);
+      expect(game.totalLevels).toBe(totalLevels);
+    }
+  );
+
   it.each(['declared', 'understated', 'absent'])(
     'rejects %s oversized bodies before JSON parsing and retains play',
     async kind => {
