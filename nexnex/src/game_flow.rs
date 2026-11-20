@@ -95,16 +95,10 @@ pub fn update_level_selection(
     }
 }
 
-fn player_spawn(level: &ldtk::Level) -> Option<(&LayerInstance, &EntityInstance)> {
-    let mut spawns = level.layer_instances.as_ref()?.iter().flat_map(|layer| {
-        layer
-            .entity_instances
-            .iter()
-            .filter(|entity| entity.identifier == "Player")
-            .map(move |entity| (layer, entity))
-    });
-    let spawn = spawns.next()?;
-    spawns.next().is_none().then_some(spawn)
+#[cfg(test)]
+#[derive(Resource, Default)]
+pub(crate) struct RestartWork {
+    pub entity_visits: usize,
 }
 
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
@@ -130,6 +124,7 @@ pub fn restart_level(
         With<Player>,
     >,
     mut sensors: Query<&mut GroundSensor>,
+    #[cfg(test)] mut work: Option<ResMut<RestartWork>>,
 ) {
     if !input.just_pressed(KeyCode::KeyR) {
         return;
@@ -142,30 +137,29 @@ pub fn restart_level(
     };
     // Worldly deduplicates by authored entity identity, so this single-player
     // game supports exactly one authored Player in the project.
-    let spawn_count = project
+    let mut spawns = project
         .iter_raw_levels()
-        .flat_map(|level| level.layer_instances.iter().flatten())
-        .flat_map(|layer| &layer.entity_instances)
-        .filter(|entity| entity.identifier == "Player")
-        .count();
-    if spawn_count != 1 {
-        warn!("Restart requires exactly one authored Player spawn");
-        return;
-    }
-    let selected = project.find_raw_level_by_level_selection(&selection);
-    // Neighboring levels need not contain a Player spawn: return to the first
-    // authored spawn level, in project order, in that case.
-    let Some(level) = selected
-        .filter(|level| player_spawn(level).is_some())
-        .or_else(|| {
-            project
-                .iter_raw_levels()
-                .find(|level| player_spawn(level).is_some())
+        .flat_map(|level| {
+            level
+                .layer_instances
+                .iter()
+                .flatten()
+                .flat_map(move |layer| {
+                    layer
+                        .entity_instances
+                        .iter()
+                        .map(move |entity| (level, layer, entity))
+                })
         })
-    else {
-        return;
-    };
-    let Some((layer, spawn)) = player_spawn(level) else {
+        .filter(|(_, _, entity)| {
+            #[cfg(test)]
+            if let Some(work) = work.as_mut() {
+                work.entity_visits += 1;
+            }
+            entity.identifier == "Player"
+        });
+    let (Some((level, layer, spawn)), None) = (spawns.next(), spawns.next()) else {
+        warn!("Restart requires exactly one authored Player spawn");
         return;
     };
     let definitions =

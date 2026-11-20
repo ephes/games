@@ -1021,6 +1021,95 @@ fn malformed_authored_patrols_are_stationary_and_do_not_block_siblings() {
 }
 
 #[test]
+fn restart_scans_authored_entities_once_and_stops_on_duplicate() {
+    for duplicate in [true, false] {
+        let mut json = synthetic_project();
+        json.levels.swap(0, 1);
+        let decoration = EntityInstance {
+            identifier: "Decoration".into(),
+            ..default()
+        };
+        json.levels[0].layer_instances = Some(vec![LayerInstance {
+            entity_instances: vec![decoration.clone(); 2],
+            ..default()
+        }]);
+        let layers = json.levels[1].layer_instances.as_mut().unwrap();
+        let spawn = layers[0].entity_instances[0].clone();
+        layers[0].px_total_offset_x = 5;
+        layers.insert(
+            0,
+            LayerInstance {
+                entity_instances: vec![decoration.clone()],
+                ..default()
+            },
+        );
+        json.levels.push(ldtk::Level {
+            iid: "tail-level".into(),
+            uid: 3,
+            layer_instances: Some(vec![LayerInstance {
+                entity_instances: vec![
+                    if duplicate { spawn } else { decoration.clone() },
+                    decoration,
+                ],
+                ..default()
+            }]),
+            ..testing::level()
+        });
+
+        let (mut app, project) = testing::project_data_app(json);
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<LdtkSettings>()
+            .init_resource::<game_flow::RestartWork>()
+            .insert_resource(LevelSelection::Uid(2))
+            .add_systems(Update, game_flow::restart_level);
+        app.world_mut().spawn(LdtkProjectHandle::from(project));
+        let level = app
+            .world_mut()
+            .spawn((LevelIid::new("synthetic-level"), GlobalTransform::default()))
+            .id();
+        let player = app
+            .world_mut()
+            .spawn((
+                Player,
+                Transform::default(),
+                Velocity::linear(Vec2::ONE),
+                Climber::default(),
+                GroundDetection::default(),
+                GravityScale(1.),
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyR);
+        app.update();
+
+        let world = app.world();
+        let visits = world.resource::<game_flow::RestartWork>().entity_visits;
+        let position = world
+            .get::<Transform>(player)
+            .unwrap()
+            .translation
+            .truncate();
+        if duplicate {
+            assert_eq!(visits, 5, "stop before the entity after the second Player");
+            assert_eq!(position, Vec2::ZERO);
+            assert_eq!(world.get::<Velocity>(player).unwrap().linvel, Vec2::ONE);
+            assert_eq!(*world.resource::<LevelSelection>(), LevelSelection::Uid(2));
+            assert!(world.get::<Respawn>(level).is_none());
+        } else {
+            assert_eq!(visits, 6, "visit every authored entity exactly once");
+            assert_eq!(position, Vec2::new(29., 96.));
+            assert_eq!(world.get::<Velocity>(player).unwrap().linvel, Vec2::ZERO);
+            assert_eq!(
+                *world.resource::<LevelSelection>(),
+                LevelSelection::iid("synthetic-level")
+            );
+            assert!(world.get::<Respawn>(level).is_some());
+        }
+    }
+}
+
+#[test]
 fn restart_refuses_overflowing_unloaded_geometry_without_partial_reset() {
     for case in 0..6 {
         let mut json = synthetic_project();

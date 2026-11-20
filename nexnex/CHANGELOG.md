@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Find the restart spawn in one authored-order pass and refuse a second Player
+  immediately. Reuse the first spawn's level and layer for its coordinates.
 - Size ladder sensors from their authored LDtk layer grid rather than assuming
   16 pixels, preserving real climb coverage without reaching adjacent cells.
 - Cache validated patrol cycle lengths with immutable route points at construction
