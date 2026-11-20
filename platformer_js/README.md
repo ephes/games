@@ -286,7 +286,9 @@ starts a fresh game at level zero with initial score/lives; progress is not rest
 Ordinary tab hiding releases held input, suspends simulation and keeps the current
 game. Visibility/focus boundaries discard partial and missed simulation time.
 Duplicate restore events do not start extra games or retry failed startup;
-after failure, another hide/restore cycle can try a fresh Game. Retired startup
+after failure, another hide/restore cycle can try a fresh Game. The entry point
+releases the failed game's slot before cleanup and reports the original startup
+error even if cleanup also fails. Retired startup
 completions cannot start or replace the current game. Vite hot replacement calls
 `disposePage()` before reinitializing; embedders removing the entry point can call
 that same terminal cleanup to release its DOM/page listeners and Game.

@@ -29,8 +29,15 @@ async function init() {
     if (candidate && game !== candidate) {
       return;
     }
-    candidate?.dispose();
     game = null;
+    try {
+      candidate?.dispose();
+    } catch (cleanupError) {
+      console.error(
+        'Failed to dispose game after startup failure:',
+        cleanupError
+      );
+    }
     console.error('Failed to initialize game:', error);
   }
 }

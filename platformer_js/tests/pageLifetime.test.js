@@ -158,6 +158,41 @@ describe('Entry-point page lifetime', () => {
     expectOwners(1);
   });
 
+  it('releases the failed startup slot even when disposal throws', async () => {
+    readyState.mockReturnValue('loading');
+    await enter();
+    const startupFailure = new Error('synthetic startup failure');
+    const cleanupFailure = new Error('synthetic disposal failure');
+    const dispose = vi.fn(() => {
+      throw cleanupFailure;
+    });
+    vi.mocked(Game.prototype.init).mockImplementationOnce(function () {
+      instances.push(this);
+      this.dispose = dispose;
+      return Promise.reject(startupFailure);
+    });
+    const [, start] = domEvents.mock.calls.find(
+      ([type]) => type === 'DOMContentLoaded'
+    );
+    readyState.mockReturnValue('complete');
+    try {
+      await expect(start()).resolves.toBeUndefined();
+      expect(errors).toHaveBeenCalledWith(
+        'Failed to initialize game:',
+        startupFailure
+      );
+      transition('pagehide');
+      expect(dispose).toHaveBeenCalledTimes(1);
+    } finally {
+      delete instances[0].dispose;
+      instances[0].dispose();
+    }
+    transition('pageshow');
+    await settle();
+    expect(instances).toHaveLength(2);
+    expectOwners(1);
+  });
+
   it('waits for DOM readiness, even after a hide/restore before DOMContentLoaded', async () => {
     readyState.mockReturnValue('loading');
     await enter();

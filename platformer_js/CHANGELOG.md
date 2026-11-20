@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Release a failed page startup's game slot before cleanup and report the startup
+  error even if cleanup throws.
+
 - Release pending sprite image sources on timeout or cancellation while
   preserving completed images.
 
