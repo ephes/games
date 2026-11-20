@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Restrict level fitting to the platformer camera so additional cameras keep
+  their own projections and transforms.
+
 - Clear stale ground contacts and ignore queued starts when a supporting
   collider is removed and reinserted within one update. Accept fresh starts
   from later physics steps.

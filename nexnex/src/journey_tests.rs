@@ -233,6 +233,7 @@ fn project_unavailability_preserves_camera_and_recovers_selection() {
     let camera = app
         .world_mut()
         .spawn((
+            camera::PlatformerCamera,
             Projection::Orthographic(OrthographicProjection::default_2d()),
             Transform::from_xyz(0., 0., 99.),
         ))
@@ -407,11 +408,14 @@ fn authored_world_hierarchy_selection_camera_and_restart_share_coordinates() {
     let camera = app
         .world_mut()
         .spawn((
+            camera::PlatformerCamera,
             Projection::Orthographic(OrthographicProjection::default_2d()),
             Transform::from_xyz(0., 0., 99.),
             ChildOf(camera_parent),
         ))
         .id();
+    let companion_pose = Transform::from_xyz(23., 45., 67.);
+    let companion = app.world_mut().spawn((Camera2d, companion_pose)).id();
     for _ in 0..4 {
         app.update();
     }
@@ -471,6 +475,23 @@ fn authored_world_hierarchy_selection_camera_and_restart_share_coordinates() {
         LevelSelection::iid("synthetic-level")
     );
     assert_camera_bounds(&app, camera, Vec2::new(1200., 300.), Vec2::new(1024., 384.));
+    assert_eq!(
+        *app.world().get::<Transform>(companion).unwrap(),
+        companion_pose
+    );
+    assert_eq!(
+        *app.world().get::<GlobalTransform>(companion).unwrap(),
+        GlobalTransform::from(companion_pose),
+    );
+    let Projection::Orthographic(projection) = app.world().get::<Projection>(companion).unwrap()
+    else {
+        panic!("orthographic companion camera required");
+    };
+    assert_eq!(projection.viewport_origin, Vec2::splat(0.5));
+    assert!(matches!(
+        projection.scaling_mode,
+        bevy::camera::ScalingMode::WindowSize
+    ));
 }
 
 fn assert_camera_bounds(app: &App, camera: Entity, min: Vec2, extent: Vec2) {

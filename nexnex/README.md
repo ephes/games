@@ -52,7 +52,9 @@ turnaround times. A 0.0001 world-unit arrival tolerance absorbs f32 drift at
 waypoints so the outgoing direction agrees at turnaround times.
 The camera uses a rounded 16:9 viewport of at least 16 by 9 world units. When
 rounding makes the viewport larger than a level, that axis stays at the level
-origin. Scroll extents never become negative.
+origin. Scroll extents never become negative. Level fitting applies only to the
+camera created by game setup. Additional cameras keep their own projections and
+transforms while the platformer camera follows level changes.
 
 Level selection keeps the current level while the player remains inside it.
 Otherwise, overlapping candidates use authored project order, independent of ECS

@@ -1,4 +1,5 @@
 use crate::{
+    camera::PlatformerCamera,
     climbing::Climber,
     ground_detection::{GroundDetection, GroundSensor},
     player::Player,
@@ -13,7 +14,7 @@ pub fn setup(
     asset_server: Res<AssetServer>,
     mut rapier_config: Query<&mut RapierConfiguration>,
 ) {
-    commands.spawn(Camera2d);
+    commands.spawn((Camera2d, PlatformerCamera));
 
     if let Ok(mut config) = rapier_config.single_mut() {
         config.gravity = Vec2::new(0.0, -2000.0);
