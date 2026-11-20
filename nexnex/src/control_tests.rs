@@ -20,6 +20,68 @@ fn app() -> App {
 }
 
 #[test]
+fn climb_contacts_only_mark_changes_when_membership_changes() {
+    #[derive(Resource, Default)]
+    struct ChangedClimbers(Vec<Entity>);
+
+    let mut app = App::new();
+    app.add_message::<CollisionEvent>()
+        .init_resource::<ChangedClimbers>()
+        .add_systems(
+            Update,
+            (
+                climbing::detect_climb_range,
+                |changed: Query<Entity, Changed<Climber>>,
+                 mut observed: ResMut<ChangedClimbers>| {
+                    observed.0 = changed.iter().collect();
+                },
+            )
+                .chain(),
+        );
+    let climber = app.world_mut().spawn(Climber::default()).id();
+    let ladder = app.world_mut().spawn(Climbable).id();
+    let other = app.world_mut().spawn(Climbable).id();
+    let flags = CollisionEventFlags::empty();
+    let check = |app: &mut App, changed, contacts: &[Entity]| {
+        app.update();
+        let expected_changes = if changed { &[climber][..] } else { &[] };
+        assert_eq!(
+            app.world().resource::<ChangedClimbers>().0,
+            expected_changes
+        );
+        assert_eq!(
+            app.world()
+                .get::<Climber>(climber)
+                .unwrap()
+                .intersecting_climbables,
+            contacts.iter().copied().collect(),
+        );
+    };
+
+    check(&mut app, true, &[]);
+    check(&mut app, false, &[]);
+    app.world_mut()
+        .write_message(CollisionEvent::Started(climber, ladder, flags));
+    check(&mut app, true, &[ladder]);
+    check(&mut app, false, &[ladder]);
+
+    app.world_mut()
+        .write_message(CollisionEvent::Started(ladder, climber, flags));
+    app.world_mut()
+        .write_message(CollisionEvent::Stopped(climber, other, flags));
+    check(&mut app, false, &[ladder]);
+    app.world_mut()
+        .write_message(CollisionEvent::Started(other, climber, flags));
+    check(&mut app, true, &[ladder, other]);
+    app.world_mut().despawn(ladder);
+    check(&mut app, true, &[other]);
+    app.world_mut()
+        .write_message(CollisionEvent::Stopped(other, climber, flags));
+    check(&mut app, true, &[]);
+    check(&mut app, false, &[]);
+}
+
+#[test]
 fn removed_contacts_clear_ground_climbing_and_gravity() {
     for stopped in [false, true] {
         let mut app = app();
