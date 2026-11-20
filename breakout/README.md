@@ -78,8 +78,10 @@ corner misses and contact-budget exhaustion.
 
 ## Stepping UI and fixed-tick effects
 
-Press backquote to toggle stepping, S to step a system and Space to continue the
-frame. UI initialization waits until all selected schedules are initialized.
+Press backquote to toggle stepping. S runs one system at the stepping cursor.
+Space continues the frame from that cursor, including the whole frame if the
+cursor is at the start. Both actions leave stepping enabled. UI initialization
+waits until all selected schedules are initialized.
 Incomplete attempts publish no mappings or ready state and can retry; even an
 empty selection creates one UI. UI construction and updates run in an ordered
 chain so deferred entity creation is visible to the updater.
