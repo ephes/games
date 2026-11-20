@@ -192,7 +192,7 @@ fn build_ui(
 fn build_help(mut commands: Commands, asset_server: Res<AssetServer>) {
     // stepping description box
     commands.spawn((TextBundle::from_sections([TextSection::new(
-        "Press ` to toggle stepping mode (S: step system, Space: step frame)",
+        "Press ` to toggle stepping mode (S: step system, Space: continue frame)",
         TextStyle {
             font: asset_server.load(FONT_MEDIUM),
             font_size: 18.0,
@@ -211,7 +211,7 @@ fn handle_input(keyboard_input: Res<ButtonInput<KeyCode>>, mut stepping: ResMut<
     if keyboard_input.just_pressed(KeyCode::Slash) {
         info!("{:#?}", stepping);
     }
-    // grave key to toggle stepping mode for the FixedUpdate schedule
+    // Backquote toggles stepping for the configured schedules.
     if keyboard_input.just_pressed(KeyCode::Backquote) {
         if stepping.is_enabled() {
             stepping.disable();
@@ -231,7 +231,8 @@ fn handle_input(keyboard_input: Res<ButtonInput<KeyCode>>, mut stepping: ResMut<
         debug!("continue");
         stepping.continue_frame();
     } else if keyboard_input.just_pressed(KeyCode::KeyS) {
-        debug!("stepping frame");
+        debug!("stepping one system");
+        // Bevy 0.13 calls its single-system operation step_frame.
         stepping.step_frame();
     }
 }
@@ -330,6 +331,49 @@ mod tests {
             .query_filtered::<Entity, With<SteppingUi>>()
             .iter(&app.world)
             .count()
+    }
+
+    #[test]
+    fn stepping_keys_run_one_system_or_finish_the_frame() {
+        #[derive(Resource, Default)]
+        struct Runs(Vec<u8>);
+
+        let mut app = headless_app(SteppingPlugin::default().add_schedule(Update));
+        app.init_resource::<Runs>().add_systems(
+            Update,
+            (
+                |mut runs: ResMut<Runs>| runs.0.push(1),
+                |mut runs: ResMut<Runs>| runs.0.push(2),
+            )
+                .chain(),
+        );
+
+        let press = |app: &mut App, key| {
+            app.world.resource_mut::<ButtonInput<KeyCode>>().press(key);
+            app.update();
+            app.world.resource_mut::<ButtonInput<KeyCode>>().reset_all();
+            app.update();
+        };
+
+        press(&mut app, KeyCode::Backquote);
+        assert!(app.world.resource::<Stepping>().is_enabled());
+        assert_eq!(app.world.resource::<Runs>().0, [1, 2]);
+
+        press(&mut app, KeyCode::KeyS);
+        assert_eq!(app.world.resource::<Runs>().0, [1, 2, 1]);
+        press(&mut app, KeyCode::Space);
+        assert_eq!(app.world.resource::<Runs>().0, [1, 2, 1, 2]);
+        press(&mut app, KeyCode::Space);
+        assert_eq!(app.world.resource::<Runs>().0, [1, 2, 1, 2, 1, 2]);
+
+        press(&mut app, KeyCode::Backquote);
+        assert!(!app.world.resource::<Stepping>().is_enabled());
+        assert_eq!(app.world.resource::<Runs>().0, [1, 2, 1, 2, 1, 2, 1, 2]);
+
+        let mut help = app.world.query_filtered::<&Text, Without<SteppingUi>>();
+        assert!(help.single(&app.world).sections[0]
+            .value
+            .contains("S: step system, Space: continue frame"));
     }
 
     #[test]

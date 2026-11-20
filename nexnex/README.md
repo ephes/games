@@ -94,17 +94,16 @@ on average while ordered row vectors preserve deterministic rectangle assembly.
 Tests count cell probes and plate identity/hash operations instead of elapsed
 time and check exact non-overlapping coverage for every 3 by 3 grid.
 
-R resets the surviving Worldly player to the selected level's authored Player
+R resets the surviving Worldly player to the project's sole authored Player
 spawn and respawns the loaded levels. Velocity, ground contacts, climb contacts,
-and climbing gravity are cleared. If the selected level has no unique Player
-spawn, restart uses the first level with a unique Player spawn in project order
-(the shipped neighboring levels have no Player spawn). The player is retained;
-LDtk's Worldly identity prevents a second player during level respawn. Restart
-supports exactly one authored Player per project, as in the shipped game;
-missing project data or missing/ambiguous spawn evidence leaves restart
-unavailable until valid data returns. Restart preflights positive level/entity/
-definition dimensions, checked signed 32-bit coordinate conversion and the full
-finite spawn transform (including scale and parent conversion). Invalid geometry
+and climbing gravity are cleared. The spawn's level becomes selected, including
+when the player restarts from a neighboring level. LDtk's Worldly identity
+prevents a second player during level respawn. Restart scans authored entities
+in project order once and stops at the second Player. Missing project data or a
+missing or duplicate Player spawn leaves restart unavailable until valid data
+returns. Restart checks that level, entity and definition dimensions are positive,
+that signed 32-bit coordinate conversions fit and that the full spawn transform
+is finite, including scale and parent conversion. Invalid geometry
 emits one authoring warning per restart attempt and leaves the player's pose,
 physics, contacts, selection and level respawn markers unchanged. Coordinates
 that would overflow LDtk conversion or the unloaded-level world offset are
