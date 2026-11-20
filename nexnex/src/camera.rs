@@ -6,6 +6,9 @@ use crate::player::Player;
 
 const ASPECT_RATIO: f32 = 16. / 9.;
 
+#[derive(Component)]
+pub(crate) struct PlatformerCamera;
+
 #[allow(clippy::type_complexity)]
 pub fn camera_fit_inside_current_level(
     mut camera_query: Query<
@@ -15,7 +18,7 @@ pub fn camera_fit_inside_current_level(
             &mut GlobalTransform,
             Option<&ChildOf>,
         ),
-        Without<Player>,
+        (With<PlatformerCamera>, Without<Player>),
     >,
     player_query: Query<&GlobalTransform, (With<Player>, Without<Projection>)>,
     level_query: Query<(&GlobalTransform, &LevelIid), (Without<Projection>, Without<Player>)>,

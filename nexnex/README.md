@@ -52,7 +52,9 @@ turnaround times. A 0.0001 world-unit arrival tolerance absorbs f32 drift at
 waypoints so the outgoing direction agrees at turnaround times.
 The camera uses a rounded 16:9 viewport of at least 16 by 9 world units. When
 rounding makes the viewport larger than a level, that axis stays at the level
-origin. Scroll extents never become negative.
+origin. Scroll extents never become negative. Level fitting applies only to the
+camera created by game setup. Additional cameras keep their own projections and
+transforms while the platformer camera follows level changes.
 
 Level selection keeps the current level while the player remains inside it.
 Otherwise, overlapping candidates use authored project order, independent of ECS
@@ -159,6 +161,11 @@ handle while the sensor gets a fresh identity. A three-collider Rapier regressio
 the pair both within one frame and across physics steps. It checks handle and
 entity ownership, one sensor attached to the surviving body, stale-contact
 rejection and grounding from new real overlaps.
+
+When a supporting platform's collider is removed and reinserted within one
+update, its old foot contacts and queued starts are discarded before movement.
+Other supports remain valid, and a later physics step can report fresh contact
+with the replacement.
 
 Parry 0.25.3 leaves orphaned BVH nodes when multiple removals reduce the tree to
 one leaf. Its optimizer can corrupt that partial root, causing `key not present`
