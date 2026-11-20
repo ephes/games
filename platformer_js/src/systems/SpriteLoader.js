@@ -93,7 +93,7 @@ export class SpriteLoader {
   /**
    * Load all game sprites
    * @param {Object} [options] - Optional signal and per-image timeoutMs (default 10000)
-   * @returns {Promise<void>} Resolves when this batch publishes. Rejects if superseded.
+   * @returns {Promise<void>} Resolves when this batch publishes. Rejects on load failure, cancellation or supersession.
    */
   async loadAll({ signal, timeoutMs = 10_000 } = {}) {
     this.batchController?.abort();
@@ -151,6 +151,7 @@ export class SpriteLoader {
       ) {
         throw new DOMException('Sprite batch superseded', 'AbortError');
       }
+      controller.signal.throwIfAborted();
       for (const [name, img] of staged) {
         this.sprites.set(name, img);
       }

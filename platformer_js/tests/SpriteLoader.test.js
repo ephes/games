@@ -113,6 +113,22 @@ describe('Real sprite loading', () => {
     expect(loader.loaded).toBe(false);
   });
 
+  it('retains the published sprites when aborted after all replacement images load', async () => {
+    const initial = loader.loadAll();
+    images.forEach(image => image.onload());
+    await initial;
+    const controller = new AbortController();
+    const replacement = loader.loadAll({ signal: controller.signal });
+    images.slice(requestedSprites.length).forEach(image => image.onload());
+    controller.abort();
+
+    await expect(replacement).rejects.toMatchObject({ name: 'AbortError' });
+    expect(loader.loaded).toBe(false);
+    requestedSprites.forEach(([name], index) => {
+      expect(loader.getSprite(name)).toBe(images[index]);
+    });
+  });
+
   it.each([true, false])(
     'publishes only the latest complete batch (old first: %s)',
     async oldFirst => {
