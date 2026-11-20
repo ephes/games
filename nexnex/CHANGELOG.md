@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Avoid publishing identical climbing gravity values during contact changes or
+  when restoring an already-zero base gravity.
+
 - Mark ladder contact sets changed only when adding or removing a contact,
   including cleanup of despawned ladders.
 

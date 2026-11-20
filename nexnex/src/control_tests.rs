@@ -684,6 +684,57 @@ fn assert_sensor(app: &mut App, player: Entity, half_extents: Vec2, y: f32) -> E
 }
 
 #[test]
+fn contact_changes_do_not_republish_climbing_gravity() {
+    for base in [2.5, 0.] {
+        let mut app = app();
+        let ladder = app.world_mut().spawn(Climbable).id();
+        let other = app.world_mut().spawn(Climbable).id();
+        let body = app
+            .world_mut()
+            .spawn((
+                Climber {
+                    climbing: true,
+                    intersecting_climbables: HashSet::from([ladder]),
+                },
+                GravityScale(base),
+            ))
+            .id();
+        let gravity_state = |app: &App| {
+            let entity = app.world().entity(body);
+            let gravity = entity.get_ref::<GravityScale>().unwrap();
+            (gravity.0, gravity.last_changed())
+        };
+
+        app.update();
+        let suppressed = gravity_state(&app);
+        assert_eq!(suppressed.0, 0.);
+        let flags = CollisionEventFlags::empty();
+        for (event, expected_contact) in [
+            (CollisionEvent::Started(body, other, flags), true),
+            (CollisionEvent::Stopped(body, other, flags), false),
+        ] {
+            app.world_mut().write_message(event);
+            app.update();
+            assert_eq!(
+                app.world()
+                    .get::<Climber>(body)
+                    .unwrap()
+                    .intersecting_climbables
+                    .contains(&other),
+                expected_contact
+            );
+            assert_eq!(gravity_state(&app), suppressed);
+        }
+
+        app.world_mut().get_mut::<Climber>(body).unwrap().climbing = false;
+        app.update();
+        let restored = gravity_state(&app);
+        assert_eq!(restored.0, base);
+        assert_eq!(restored.1 != suppressed.1, base != 0.);
+    }
+}
+
+#[test]
 fn removing_climber_restores_owned_gravity_before_rapier_step() {
     let mut app = App::new();
     app.add_plugins((

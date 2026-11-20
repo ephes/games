@@ -109,7 +109,7 @@ pub fn ignore_gravity_if_climbing(
         if let Some(previous) = owned_gravity.remove(&entity) {
             if let Ok((mut gravity, _)) = bodies.get_mut(entity) {
                 if gravity.0 == 0. {
-                    gravity.0 = previous;
+                    gravity.set_if_neq(GravityScale(previous));
                 }
             }
         }
@@ -120,10 +120,10 @@ pub fn ignore_gravity_if_climbing(
         };
         if climber.climbing {
             owned_gravity.entry(entity).or_insert(gravity.0);
-            gravity.0 = 0.;
+            gravity.set_if_neq(GravityScale(0.));
         } else if let Some(previous) = owned_gravity.remove(&entity) {
             if gravity.0 == 0. {
-                gravity.0 = previous;
+                gravity.set_if_neq(GravityScale(previous));
             }
         }
     }
