@@ -51,7 +51,7 @@ export class SpriteLoader {
       }
       const img = new Image();
       let settled = false;
-      const finish = error => {
+      const finish = (error, releaseSource = false) => {
         if (settled) {
           return;
         }
@@ -60,6 +60,9 @@ export class SpriteLoader {
         signal?.removeEventListener('abort', abort);
         img.onload = null;
         img.onerror = null;
+        if (releaseSource) {
+          img.removeAttribute?.('src');
+        }
         if (error) {
           reject(error);
         } else {
@@ -67,9 +70,9 @@ export class SpriteLoader {
         }
       };
       const abort = () =>
-        finish(new DOMException('Sprite load aborted', 'AbortError'));
+        finish(new DOMException('Sprite load aborted', 'AbortError'), true);
       const timer = setTimeout(
-        () => finish(new Error(`Sprite load timed out: ${path}`)),
+        () => finish(new Error(`Sprite load timed out: ${path}`), true),
         timeoutMs
       );
       img.onload = () => finish();
@@ -90,7 +93,7 @@ export class SpriteLoader {
   /**
    * Load all game sprites
    * @param {Object} [options] - Optional signal and per-image timeoutMs (default 10000)
-   * @returns {Promise} Promise that resolves when all sprites are loaded
+   * @returns {Promise<void>} Resolves when this batch publishes. Rejects if superseded.
    */
   async loadAll({ signal, timeoutMs = 10_000 } = {}) {
     this.batchController?.abort();
@@ -141,16 +144,17 @@ export class SpriteLoader {
     try {
       await Promise.all(promises);
       if (
-        this.batch === batch &&
-        [...requests].every(
-          ([name, request]) => this.requests.get(name) === request
+        this.batch !== batch ||
+        [...requests].some(
+          ([name, request]) => this.requests.get(name) !== request
         )
       ) {
-        for (const [name, img] of staged) {
-          this.sprites.set(name, img);
-        }
-        this.loaded = true;
+        throw new DOMException('Sprite batch superseded', 'AbortError');
       }
+      for (const [name, img] of staged) {
+        this.sprites.set(name, img);
+      }
+      this.loaded = true;
     } finally {
       controller.abort();
       signal?.removeEventListener('abort', abort);

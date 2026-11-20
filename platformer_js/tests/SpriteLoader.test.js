@@ -26,6 +26,10 @@ describe('Real sprite loading', () => {
         constructor() {
           images.push(this);
         }
+
+        removeAttribute(name) {
+          delete this[name];
+        }
       }
     );
     loader = new SpriteLoader();
@@ -115,6 +119,7 @@ describe('Real sprite loading', () => {
       const first = loader.loadAll().catch(error => error);
       const retiredLoads = images.map(image => image.onload);
       const second = loader.loadAll();
+      images.slice(0, 10).forEach(image => expect(image.src).toBeUndefined());
       for (const start of oldFirst ? [0, 10] : [10, 0]) {
         if (start === 0) {
           retiredLoads.forEach(onload => onload());
@@ -146,6 +151,9 @@ describe('Real sprite loading', () => {
           failure = error;
         });
       const lateLoad = images[0].onload;
+      const completed = images.at(-1);
+      const completedSource = completed.src;
+      completed.onload();
       if (reason === 'abort') {
         controller.abort();
       } else {
@@ -163,6 +171,9 @@ describe('Real sprite loading', () => {
       images.forEach(image => {
         expect(image.onload).toBeNull();
         expect(image.onerror).toBeNull();
+        expect(image.src).toBe(
+          image === completed ? completedSource : undefined
+        );
       });
       const retry = loader.loadAll();
       images.slice(10).forEach(image => image.onload?.());
@@ -174,10 +185,14 @@ describe('Real sprite loading', () => {
   );
 
   it('keeps a direct request authoritative over an overlapping batch', async () => {
-    const batch = loader.loadAll();
+    const batch = loader.loadAll().catch(error => error);
     const direct = loader.loadSprite('player.idle', 'direct.png');
     images.forEach(image => image.onload?.());
-    await Promise.all([batch, direct]);
+    await direct;
+    expect(await batch).toMatchObject({
+      name: 'AbortError',
+      message: 'Sprite batch superseded'
+    });
     expect(loader.getSprite('player.idle')).toBe(images[10]);
     expect(loader.getSprite('player.run')).toBeNull();
     expect(loader.loaded).toBe(false);

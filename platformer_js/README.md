@@ -91,6 +91,9 @@ tests use explicitly triggered Image load/error events to check cache identity,
 out-of-order completion, fake deadlines and failed startup without network requests.
 SpriteLoader batches can be retried after failure. Each batch starts incomplete;
 only the newest complete batch publishes its images together and sets `loaded`.
+`loadAll()` resolves only after its own batch publishes. A batch superseded
+before publication rejects with an `AbortError`, so Game initialization fails
+before creating a renderer, level or input handlers.
 Failed or superseded batches retain the complete previous cache, including when
 retired images finish late. Direct `loadSprite` requests retain per-key ownership;
 a direct request superseding one batch key prevents that entire batch publishing.
@@ -103,6 +106,9 @@ accept an optional AbortSignal and a positive finite per-image deadline (default
 callbacks, timers and signal listeners. Failed batches abort their remaining
 images; a new batch aborts its predecessor. Game disposal aborts initialization
 images; startup failure remains terminal for that Game.
+Timeout and abort remove the pending image's `src` attribute. Completed images
+keep their sources. The Chromium suite holds a synthetic image request open
+and checks source removal and cache identity after cancellation.
 Direct Enemy tests advance simulation elapsed milliseconds: running frames 0–9
 cycle at 15 fps and hit frames 0–4 at 20 fps, carrying fractional frame time
 across steps. A hit resets the frame clock and retires its visual after 300 ms

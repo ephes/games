@@ -147,6 +147,37 @@ describe('Owned game lifecycle and simulation clock', () => {
     });
   });
 
+  it('fails startup when a direct sprite request supersedes its batch', async () => {
+    const images = [];
+    vi.stubGlobal(
+      'Image',
+      class {
+        constructor() {
+          images.push(this);
+        }
+      }
+    );
+    const init = game.init();
+    const outcome = init.catch(error => error);
+    const replacement = game.spriteLoader.loadSprite(
+      'player.idle',
+      'direct.png'
+    );
+    images.forEach(image => image.onload());
+    await replacement;
+    expect(await outcome).toMatchObject({
+      name: 'AbortError',
+      message: 'Sprite batch superseded'
+    });
+    expect(game.init()).toBe(init);
+    expect(game.disposed).toBe(true);
+    expect(game.initialized).toBe(false);
+    expect(game.renderer).toBeNull();
+    expect(game.player).toBeNull();
+    game.start();
+    expect(frames.size).toBe(0);
+  });
+
   it('does not resurrect a game disposed during sprite loading', async () => {
     const loading = deferred();
     vi.spyOn(game.spriteLoader, 'loadAll').mockReturnValue(loading.promise);
