@@ -36,6 +36,7 @@ describe('Real sprite loading', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -129,6 +130,40 @@ describe('Real sprite loading', () => {
     });
   });
 
+  it.each(['loadSprite', 'loadAll'])(
+    'rejects pre-aborted %s before allocating or superseding requests',
+    async method => {
+      vi.useFakeTimers();
+      const initial = loader.loadAll();
+      images.forEach(image => image.onload());
+      await initial;
+      const previous = loader.getSprite('player.idle');
+      const controller = new AbortController();
+      controller.abort(new Error('synthetic cancellation'));
+      const load = options =>
+        method === 'loadAll'
+          ? loader.loadAll(options)
+          : loader.loadSprite('player.idle', 'replacement.png', options);
+      const schedule = vi.spyOn(globalThis, 'setTimeout');
+      const abort = () => load({ signal: controller.signal });
+
+      await expect(abort()).rejects.toMatchObject({ name: 'AbortError' });
+      expect(images).toHaveLength(requestedSprites.length);
+      expect(schedule).not.toHaveBeenCalled();
+      expect(loader.loaded).toBe(true);
+      expect(loader.getSprite('player.idle')).toBe(previous);
+
+      const active = load();
+      const replacement = images.slice(requestedSprites.length);
+      schedule.mockClear();
+      await expect(abort()).rejects.toMatchObject({ name: 'AbortError' });
+      expect(schedule).not.toHaveBeenCalled();
+      replacement.forEach(image => image.onload());
+      await active;
+      expect(loader.getSprite('player.idle')).toBe(replacement[0]);
+    }
+  );
+
   it.each([true, false])(
     'publishes only the latest complete batch (old first: %s)',
     async oldFirst => {
@@ -197,6 +232,49 @@ describe('Real sprite loading', () => {
       lateLoad();
       expect(loader.getSprite('player.idle')).toBe(images[10]);
       expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
+  it.each(['abort', 'timeout'])(
+    'settles a sprite on %s even when removing its source throws',
+    async reason => {
+      vi.useFakeTimers();
+      const controller = new AbortController();
+      const settled = vi.fn();
+      loader
+        .loadSprite('single', 'single.png', {
+          signal: controller.signal,
+          timeoutMs: 10
+        })
+        .then(settled, settled);
+      const [image] = images;
+      const lateLoad = image.onload;
+      const removeSource = vi
+        .spyOn(image, 'removeAttribute')
+        .mockImplementation(() => {
+          throw new Error('synthetic source retirement failure');
+        });
+
+      if (reason === 'abort') {
+        controller.abort();
+      }
+      await vi.advanceTimersByTimeAsync(reason === 'abort' ? 0 : 10);
+      expect(settled.mock.calls[0]?.[0]).toMatchObject({
+        name: reason === 'abort' ? 'AbortError' : 'Error',
+        message:
+          reason === 'abort'
+            ? 'Sprite load aborted'
+            : 'Sprite load timed out: single.png'
+      });
+      lateLoad();
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(settled).toHaveBeenCalledTimes(1);
+      expect(removeSource).toHaveBeenCalledExactlyOnceWith('src');
+      expect(image.onload).toBeNull();
+      expect(image.onerror).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(loader.getSprite('single')).toBeNull();
     }
   );
 

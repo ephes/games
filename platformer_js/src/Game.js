@@ -272,7 +272,13 @@ export class Game {
       const elapsed = Math.max(0, timestamp - (this.lastTime ?? timestamp));
       this.lastTime = timestamp;
       // Drop suspension time; ordinary slow frames can catch up at most five steps.
-      if (this.paused || document.hidden || elapsed > 250) {
+      if (
+        this.paused ||
+        this.gameOver ||
+        this.gameWon ||
+        document.hidden ||
+        elapsed > 250
+      ) {
         this.accumulator = 0;
       } else {
         this.accumulator += Math.min(elapsed, step * 5);
@@ -284,6 +290,10 @@ export class Game {
         steps++;
         if (!this.running || this.disposed) {
           return;
+        }
+        if (this.gameOver || this.gameWon) {
+          this.accumulator = 0;
+          break;
         }
       }
       this.render();
@@ -925,15 +935,19 @@ export class Game {
   }
 
   /**
-   * Reset current level
+   * Retry the current level or start a new run after winning.
    */
   resetLevel() {
     if (this.disposed) {
       return false;
     }
-    const index = this.gameWon ? 0 : this.currentLevel;
+    const startsNewRun = this.gameWon;
+    const index = startsNewRun ? 0 : this.currentLevel;
     this.createLevel(this.levels[index]);
     this.currentLevel = index;
+    if (startsNewRun) {
+      this.score = 0;
+    }
     this.restorePlayableLevel();
     this.camera.reset();
     return true;

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Reject already-aborted sprite requests before allocating images or timers.
+
+- Stop fixed simulation steps on win and game-over screens while continuing to
+  render the overlay.
+
 - Skip enemy and boss movement snapshots during player protection when no
   player shots are in flight.
 
@@ -22,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require Node 24 LTS or 26+; use Node 24 in CI and keep dev servers local.
 
 ### Fixed
+
+- Reject sprite loads with the original abort or timeout error when retiring
+  the pending image source fails.
+
+- Start a new run at level zero with a cleared score after winning. Live resets
+  and game-over retries keep the current score.
 
 - Follow the player's final position on the same frame as a respawn or stomp
   bounce.

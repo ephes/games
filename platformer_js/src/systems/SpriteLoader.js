@@ -2,6 +2,10 @@
  * @module systems/SpriteLoader
  */
 
+function spriteAbortError() {
+  return new DOMException('Sprite load aborted', 'AbortError');
+}
+
 /**
  * Manages sprite loading and caching
  */
@@ -23,6 +27,9 @@ export class SpriteLoader {
    * @returns {Promise} Load promise
    */
   async loadSprite(name, path, options = {}) {
+    if (options.signal?.aborted) {
+      throw spriteAbortError();
+    }
     const request = Symbol(name);
     this.requests.set(name, request);
     try {
@@ -40,6 +47,9 @@ export class SpriteLoader {
 
   /** Load one image with a bounded lifetime and a single cleanup path. */
   loadImage(path, { signal, timeoutMs = 10_000 } = {}) {
+    if (signal?.aborted) {
+      return Promise.reject(spriteAbortError());
+    }
     return new Promise((resolve, reject) => {
       if (
         !Number.isFinite(timeoutMs) ||
@@ -61,7 +71,11 @@ export class SpriteLoader {
         img.onload = null;
         img.onerror = null;
         if (releaseSource) {
-          img.removeAttribute?.('src');
+          try {
+            img.removeAttribute?.('src');
+          } catch {
+            // Source cleanup is best effort. Preserve the original failure.
+          }
         }
         if (error) {
           reject(error);
@@ -69,8 +83,7 @@ export class SpriteLoader {
           resolve(img);
         }
       };
-      const abort = () =>
-        finish(new DOMException('Sprite load aborted', 'AbortError'), true);
+      const abort = () => finish(spriteAbortError(), true);
       const timer = setTimeout(
         () => finish(new Error(`Sprite load timed out: ${path}`), true),
         timeoutMs
@@ -96,6 +109,9 @@ export class SpriteLoader {
    * @returns {Promise<void>} Resolves when this batch publishes. Rejects on load failure, cancellation or supersession.
    */
   async loadAll({ signal, timeoutMs = 10_000 } = {}) {
+    if (signal?.aborted) {
+      throw spriteAbortError();
+    }
     this.batchController?.abort();
     const controller = new AbortController();
     this.batchController = controller;

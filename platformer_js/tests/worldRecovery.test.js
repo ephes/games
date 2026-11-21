@@ -110,6 +110,7 @@ describe('Terminal level recovery', () => {
           expect(await game.loadLDtkLevels('synthetic')).toBe(true);
         } else {
           expect(game.resetLevel()).toBe(true);
+          expect(game.currentLevel).toBe(0);
         }
         expect(game.gameOver || game.gameWon).toBe(false);
         expect(game.lives).toBe(GAME_CONFIG.INITIAL_LIVES);
@@ -119,7 +120,7 @@ describe('Terminal level recovery', () => {
         expect(game.boss.projectiles).toEqual([]);
         expect(vi.getTimerCount()).toBe(0);
         expect([game.score, game.canShoot, game.lastShotTime]).toEqual([
-          125,
+          terminal === 'won' && action === 'reset' ? 0 : 125,
           true,
           12
         ]);
@@ -130,6 +131,24 @@ describe('Terminal level recovery', () => {
       }
     }
   );
+  it('preserves score on a live reset and on a failed restart after winning', () => {
+    game.score = 125;
+    expect(game.resetLevel()).toBe(true);
+    expect(game.score).toBe(125);
+
+    game.currentLevel = game.levels.length - 1;
+    game.loadNextLevel();
+    const player = game.player;
+    vi.spyOn(game.spriteLoader, 'getSprite').mockImplementationOnce(() => {
+      throw Error('synthetic');
+    });
+    expect(() => game.resetLevel()).toThrow('synthetic');
+    expect(game.gameWon).toBe(true);
+    expect(game.currentLevel).toBe(game.levels.length);
+    expect(game.player).toBe(player);
+    expect(game.score).toBe(125);
+  });
+
   it('keeps terminal state and objects on construction failure and refuses disposed reset', () => {
     game.gameOver = true;
     game.lives = 0;

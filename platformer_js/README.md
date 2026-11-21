@@ -108,9 +108,12 @@ accept an optional AbortSignal and a positive finite per-image deadline (default
 callbacks, timers and signal listeners. Failed batches abort their remaining
 images; a new batch aborts its predecessor. Game disposal aborts initialization
 images; startup failure remains terminal for that Game.
-Timeout and abort remove the pending image's `src` attribute. Completed images
-keep their sources. The Chromium suite holds a synthetic image request open
-and checks source removal and cache identity after cancellation.
+An already-aborted signal rejects with `AbortError` before either loader
+creates images or timers, leaving existing requests and cached sprites intact.
+Timeout and abort attempt to remove the pending image's `src` attribute.
+The promise rejects with the original failure even if source removal throws.
+Completed images keep their sources. The Chromium suite holds a synthetic
+image request open and checks source removal and cache identity after cancellation.
 Direct Enemy tests advance simulation elapsed milliseconds: running frames 0–9
 cycle at 15 fps and hit frames 0–4 at 20 fps, carrying fractional frame time
 across steps. A hit resets the frame clock and retires its visual after 300 ms
@@ -255,9 +258,13 @@ Shooting requires successful initialization and a playable game. Both direct
 failed initialization without allocating projectiles or consuming cooldown.
 Live level resets/replacements preserve power-up and cooldown behavior.
 A successful reset or replacement after win/death restores initial lives and a
-playable player, preserving score, shooting ability and cooldown. Reset after
-winning restarts level zero; after death it retries the current level. Failed
-construction retains terminal state and objects; a disposed Game cannot reset.
+playable player, preserving shooting ability and cooldown. Reset after winning
+starts a new run at level zero with zero score once construction succeeds.
+Live resets, same-level retries after death and level replacements preserve
+score. Failed construction retains the score, terminal state and objects; a
+disposed Game cannot reset.
+Win and game-over screens keep rendering while simulation is stopped. A
+successful reset starts with a fresh simulation clock.
 Successful resets/replacements clear both sides' projectiles, held input and
 retired player timers. `resetLevel()` returns true on reset, false after disposal;
 construction errors still propagate.
