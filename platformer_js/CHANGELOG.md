@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Continue game cleanup after a retirement failure and preserve the original
+  initialization or frame error.
+
+- Preserve LDtk append and replacement results when console diagnostics fail.
+
 - Reject a cancelled sprite batch before publication even after its images
   finish loading, preserving the previous sprite cache.
 

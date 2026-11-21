@@ -24,6 +24,14 @@ import {
 import { GAME_CONFIG, LEVELS } from './utils/constants.js';
 import { LDtkLoader, WORLD_LIMITS } from './systems/LDtkLoader.js';
 
+function reportDiagnostic(report) {
+  try {
+    report();
+  } catch {
+    // A diagnostic sink can fail independently of the operation it reports.
+  }
+}
+
 /**
  * Main game class that coordinates all game systems
  */
@@ -112,7 +120,7 @@ export class Game {
         this.setupInputHandlers();
         this.initialized = true;
       } catch (error) {
-        this.dispose();
+        this.#disposeAfterFailure();
         throw error;
       }
     })();
@@ -289,7 +297,7 @@ export class Game {
         );
       }
     } catch (error) {
-      this.dispose();
+      this.#disposeAfterFailure();
       throw error;
     }
   };
@@ -732,7 +740,7 @@ export class Game {
   }
 
   /**
-   * Stop animation and release keyboard listeners before replacing the game.
+   * Stop the game and attempt each retirement once before reporting errors.
    */
   dispose() {
     if (this.disposed) {
@@ -742,16 +750,42 @@ export class Game {
     this.running = false;
     this.loopGeneration++;
     this.importGeneration++;
-    this.ldtkLoader.cancelLoad();
-    this.spriteController.abort();
-    cancelAnimationFrame(this.animationFrameId);
-    this.inputManager.dispose();
-    window.removeEventListener('blur', this.onClockBoundary);
-    window.removeEventListener('focus', this.onClockBoundary);
-    this.canvas.removeEventListener('blur', this.onClockBoundary);
-    document.removeEventListener('visibilitychange', this.onClockBoundary);
-    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
-    this.player?.dispose();
+    const errors = [];
+    for (const retire of [
+      () => this.ldtkLoader.cancelLoad(),
+      () => this.spriteController.abort(),
+      () => cancelAnimationFrame(this.animationFrameId),
+      () => this.inputManager.dispose(),
+      () => window.removeEventListener('blur', this.onClockBoundary),
+      () => window.removeEventListener('focus', this.onClockBoundary),
+      () => this.canvas.removeEventListener('blur', this.onClockBoundary),
+      () =>
+        document.removeEventListener('visibilitychange', this.onClockBoundary),
+      () => this.canvas.removeEventListener('pointerdown', this.onPointerDown),
+      () => this.player?.dispose()
+    ]) {
+      try {
+        retire();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, 'Failed to dispose game resources');
+    }
+  }
+
+  #disposeAfterFailure() {
+    try {
+      this.dispose();
+    } catch (error) {
+      reportDiagnostic(() =>
+        console.error('Failed to dispose game after a game error:', error)
+      );
+    }
   }
 
   /**
@@ -807,11 +841,15 @@ export class Game {
         this.restorePlayableLevel();
         this.camera.reset();
 
-        console.log(`Loaded ${ldtkLevels.length} levels from LDtk`);
+        reportDiagnostic(() =>
+          console.log(`Loaded ${ldtkLevels.length} levels from LDtk`)
+        );
         return true;
       }
     } catch (error) {
-      console.error('Failed to load LDtk levels:', error);
+      reportDiagnostic(() =>
+        console.error('Failed to load LDtk levels:', error)
+      );
     }
     return false;
   }
@@ -858,11 +896,15 @@ export class Game {
         this.levels = combined;
         this.totalLevels = this.levels.length;
 
-        console.log(`Added ${ldtkLevels.length} levels from LDtk`);
+        reportDiagnostic(() =>
+          console.log(`Added ${ldtkLevels.length} levels from LDtk`)
+        );
         return true;
       }
     } catch (error) {
-      console.error('Failed to add LDtk levels:', error);
+      reportDiagnostic(() =>
+        console.error('Failed to add LDtk levels:', error)
+      );
     }
     return false;
   }
