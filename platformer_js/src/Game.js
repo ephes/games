@@ -22,15 +22,8 @@ import {
   visibleStaticObjects
 } from './rendering/staticWorld.js';
 import { GAME_CONFIG, LEVELS } from './utils/constants.js';
+import { reportDiagnostic } from './utils/reportDiagnostic.js';
 import { LDtkLoader, WORLD_LIMITS } from './systems/LDtkLoader.js';
-
-function reportDiagnostic(report) {
-  try {
-    report();
-  } catch {
-    // A diagnostic sink can fail independently of the operation it reports.
-  }
-}
 
 /**
  * Main game class that coordinates all game systems
