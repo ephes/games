@@ -358,13 +358,16 @@ export class Game {
     // Update camera
     this.camera.follow(this.player, true);
 
-    // Snapshot target positions before movement for relative projectile sweeps.
-    const previousTargets = new Map(
-      [...this.enemies, this.boss].map(target => [
-        target,
-        { x: target.x, y: target.y }
-      ])
-    );
+    // Protection cannot expire during this synchronous step. Boss shots can
+    // grant protection, but cannot enable a body sweep that was disabled here.
+    let previousTargets;
+    if (this.projectiles.length > 0 || !this.player.isInvulnerable) {
+      previousTargets = new Map();
+      for (const enemy of this.enemies) {
+        previousTargets.set(enemy, { x: enemy.x, y: enemy.y });
+      }
+      previousTargets.set(this.boss, { x: this.boss.x, y: this.boss.y });
+    }
 
     // Update enemies
     this.enemies.forEach(enemy => enemy.update(this.platforms, deltaTime));
@@ -421,7 +424,7 @@ export class Game {
    * @param {number} deltaTime - Time since last update
    * @param {Map} [previousTargets] - Target positions before this step
    */
-  updateProjectiles(deltaTime, previousTargets = new Map()) {
+  updateProjectiles(deltaTime, previousTargets) {
     if (this.projectiles.length === 0) {
       return;
     }
@@ -522,7 +525,7 @@ export class Game {
    */
   checkCollisions(
     previousPlayer,
-    previousTargets = new Map(),
+    previousTargets,
     portalOpenAtStart = !this.portal.isLocked
   ) {
     if (this.gameOver || this.gameWon) {
@@ -552,7 +555,7 @@ export class Game {
             this.player,
             hit.target,
             bodyStart,
-            previousTargets.get(hit.target) ?? hit.target
+            previousTargets?.get(hit.target) ?? hit.target
           )
         : Infinity;
       const coins =
@@ -594,7 +597,7 @@ export class Game {
         this.player,
         target,
         previousPlayer,
-        previousTargets.get(target)
+        previousTargets?.get(target)
       );
       if (collision === 'stomp') {
         const points =
@@ -618,7 +621,7 @@ export class Game {
         boss = null;
       }
       previousPlayer = { x: this.player.x, y: this.player.y };
-      previousTargets = new Map();
+      previousTargets = undefined;
     }
 
     // Portal collision - only allow entry if unlocked

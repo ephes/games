@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Skip enemy and boss movement snapshots during player protection when no
+  player shots are in flight.
+
 ### Security
 
 - Bound LDtk JSON nesting, containers and tokens before native tree construction,
