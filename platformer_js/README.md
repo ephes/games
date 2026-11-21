@@ -424,10 +424,13 @@ shooting ability. Replacement and append imports share latest-request ownership:
 only the most recently requested import can publish its candidate world and
 levels. Superseded replacements return false, even if the newer request fails;
 imports completed after disposal do not publish. Supersession and disposal abort
-pending transfers. Each transfer has a 10-second total deadline and a 16 MiB
-streamed response limit (actual bytes, even without an accurate Content-Length).
-The loader cancels an unread response body when the HTTP response fails or
-arrives after cancellation.
+pending transfers. Each load has a 10-second monotonic deadline covering the
+transfer, UTF-8 decoding, JSON parsing and world preflight. A candidate must
+finish these steps before the deadline to be accepted. The streamed response
+limit is 16 MiB (actual bytes, even without an accurate Content-Length).
+The loader requires HTTP 200 without a `Content-Range` header for a world
+download. It cancels the unread body if the response fails that check or
+arrives after cancellation, preserving the previous world.
 The loader requires valid UTF-8 and refuses duplicate JSON member names in any
 object, including names written with equivalent Unicode escapes. Before
 `JSON.parse` constructs the tree, a quoted-token pass admits at most 64 nested
