@@ -87,7 +87,11 @@ empty selection creates one UI. UI construction and updates run in an ordered
 chain so deferred entity creation is visible to the updater.
 
 Gameplay uses the same chained FixedUpdate systems in the game and its schedule
-test. Brick despawns are applied before later fixed ticks, so each brick awards
+test. During scene teardown or recreation, paddle movement requires exactly
+one paddle, and ball motion and collision scoring require exactly one ball.
+The score display requires a single scoreboard text entity and a score section
+on that entity. Each system resumes when its required entity is available again.
+Brick despawns are applied before later fixed ticks, so each brick awards
 once during catch-up. Walls survive and never score. The sound consumer drains
 all contacts into one audio entity per **fixed tick**, not per rendered frame;
 a quiet following tick cannot replay them. Tests run multiple fixed ticks

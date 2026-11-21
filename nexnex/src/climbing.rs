@@ -119,7 +119,10 @@ pub fn ignore_gravity_if_climbing(
             continue;
         };
         if climber.climbing {
-            owned_gravity.entry(entity).or_insert(gravity.0);
+            let base = owned_gravity.entry(entity).or_insert(gravity.0);
+            if gravity.0 != 0. {
+                *base = gravity.0;
+            }
             gravity.set_if_neq(GravityScale(0.));
         } else if let Some(previous) = owned_gravity.remove(&entity) {
             if gravity.0 == 0. {

@@ -785,6 +785,37 @@ fn contact_changes_do_not_republish_climbing_gravity() {
 }
 
 #[test]
+fn contact_change_preserves_an_intervening_gravity_base() {
+    let mut app = app();
+    let ladder = app.world_mut().spawn(Climbable).id();
+    let body = app
+        .world_mut()
+        .spawn((
+            Climber {
+                climbing: true,
+                ..default()
+            },
+            GravityScale(2.5),
+        ))
+        .id();
+    app.update();
+    assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.);
+
+    app.world_mut().get_mut::<GravityScale>(body).unwrap().0 = 0.75;
+    app.world_mut().write_message(CollisionEvent::Started(
+        body,
+        ladder,
+        CollisionEventFlags::empty(),
+    ));
+    app.update();
+    assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.);
+
+    app.world_mut().get_mut::<Climber>(body).unwrap().climbing = false;
+    app.update();
+    assert_eq!(app.world().get::<GravityScale>(body).unwrap().0, 0.75);
+}
+
+#[test]
 fn removing_climber_restores_owned_gravity_before_rapier_step() {
     let mut app = App::new();
     app.add_plugins((

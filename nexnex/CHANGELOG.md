@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Restore the latest nonzero gravity scale on climbing exit when a ladder
+  contact change reapplies the zero-gravity override.
+
 - Keep the last valid camera fit when an authored level's pixel width or
   height is zero or negative.
 

@@ -317,7 +317,9 @@ fn move_paddle(
     ball_query: Query<&Transform, (With<Ball>, Without<Paddle>)>,
     time: Res<Time>,
 ) {
-    let (mut paddle_transform, mut paddle) = query.single_mut();
+    let Ok((mut paddle_transform, mut paddle)) = query.get_single_mut() else {
+        return;
+    };
     let start = paddle_transform.translation.truncate();
     let mut direction = 0.0;
 
@@ -365,8 +367,12 @@ fn move_paddle(
 }
 
 fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text, With<ScoreboardUi>>) {
-    let mut text = query.single_mut();
-    text.sections[1].value = scoreboard.score.to_string();
+    let Ok(mut text) = query.get_single_mut() else {
+        return;
+    };
+    if let Some(section) = text.sections.get_mut(1) {
+        section.value = scoreboard.score.to_string();
+    }
 }
 
 // The exclusion makes ball/collider transform access disjoint to Bevy's scheduler.
@@ -390,7 +396,9 @@ fn check_for_collisions(
     time: Res<Time>,
     mut collision_events: EventWriter<CollisionEvent>,
 ) {
-    let (mut ball_velocity, mut ball_transform) = ball_query.single_mut();
+    let Ok((mut ball_velocity, mut ball_transform)) = ball_query.get_single_mut() else {
+        return;
+    };
     let duration = time.delta_seconds();
     let obstacles: Vec<_> = collider_query
         .iter()
@@ -498,6 +506,102 @@ mod tests {
         assert!(
             (actual - expected).length() < 0.002,
             "{actual:?} != {expected:?}"
+        );
+    }
+
+    #[test]
+    fn gameplay_tick_recovers_after_entity_teardown() {
+        let position = Vec2::new(-50., 50.);
+        let velocity = Vec2::new(1000., 0.);
+        let (mut app, ball) = motion_app(position, velocity);
+        app.add_systems(Update, update_scoreboard);
+        let paddle = app
+            .world
+            .query_filtered::<Entity, With<Paddle>>()
+            .single(&app.world);
+        let brick = app
+            .world
+            .spawn((
+                Collider,
+                Brick,
+                Transform::from_xyz(0., 50., 0.).with_scale(Vec3::new(2., 100., 1.)),
+            ))
+            .id();
+        let scoreboard = || Text::from_sections([TextSection::default(), TextSection::default()]);
+        let ui = app.world.spawn((ScoreboardUi, scoreboard())).id();
+
+        for entity in [ball, paddle, ui] {
+            assert!(app.world.despawn(entity));
+        }
+        tick(&mut app, 0.1);
+        app.world.run_schedule(Update);
+        assert_eq!(app.world.resource::<Scoreboard>().score, 0);
+        assert!(app.world.get_entity(brick).is_some());
+
+        let spawn_ball = |world: &mut World| {
+            world
+                .spawn((
+                    Ball,
+                    Transform::from_translation(position.extend(1.)),
+                    Velocity(velocity),
+                ))
+                .id()
+        };
+        let ball = spawn_ball(&mut app.world);
+        let extra_ball = spawn_ball(&mut app.world);
+        let paddle = app
+            .world
+            .spawn((Paddle::default(), Transform::default()))
+            .id();
+        let extra_paddle = app
+            .world
+            .spawn((Paddle::default(), Transform::default()))
+            .id();
+        let ui = app.world.spawn((ScoreboardUi, scoreboard())).id();
+        let extra_ui = app.world.spawn((ScoreboardUi, scoreboard())).id();
+        app.world
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::ArrowRight);
+
+        tick(&mut app, 0.1);
+        app.world.run_schedule(Update);
+        assert_eq!(ball_state(&app, ball), (position, velocity));
+        assert_eq!(
+            app.world.get::<Transform>(paddle).unwrap().translation.x,
+            0.
+        );
+        assert!(app.world.get::<Text>(ui).unwrap().sections[1]
+            .value
+            .is_empty());
+        assert_eq!(app.world.resource::<Scoreboard>().score, 0);
+
+        for entity in [extra_ball, extra_paddle, extra_ui] {
+            assert!(app.world.despawn(entity));
+        }
+        tick(&mut app, 0.1);
+        app.world.run_schedule(Update);
+        assert!(app.world.get_entity(brick).is_none());
+        assert_eq!(app.world.resource::<Scoreboard>().score, 1);
+        assert_eq!(app.world.get::<Text>(ui).unwrap().sections[1].value, "1");
+        assert!(app.world.get::<Transform>(paddle).unwrap().translation.x > 0.);
+    }
+
+    #[test]
+    fn scoreboard_skips_text_without_a_score_section() {
+        let mut app = App::new();
+        app.insert_resource(Scoreboard { score: 1 })
+            .add_systems(Update, update_scoreboard);
+        let ui = app
+            .world
+            .spawn((
+                ScoreboardUi,
+                Text::from_section("Score: ", TextStyle::default()),
+            ))
+            .id();
+        app.world.run_schedule(Update);
+        assert_eq!(
+            app.world.get::<Text>(ui).unwrap().sections[0].value,
+            "Score: "
         );
     }
 
