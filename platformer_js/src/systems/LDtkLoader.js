@@ -128,8 +128,12 @@ export class LDtkLoader {
     );
     let body;
     let reader;
-    const cancelReader = () => {
-      void reader?.cancel(controller.signal.reason).catch(() => {});
+    const cancelReader = async () => {
+      try {
+        await reader?.cancel(controller.signal.reason);
+      } catch {
+        // Cancellation is best-effort; the transfer owns its result.
+      }
     };
     controller.signal.addEventListener('abort', cancelReader, { once: true });
     try {
@@ -186,7 +190,11 @@ export class LDtkLoader {
           // Preserve the transfer error if body disposal fails.
         }
       }
-      reader?.releaseLock();
+      try {
+        reader?.releaseLock();
+      } catch {
+        // A release failure must not replace the transfer or publication result.
+      }
       if (this.loadController === controller) {
         this.loadController = null;
       }

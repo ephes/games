@@ -476,6 +476,37 @@ describe('World transfer admission', () => {
     }
   );
 
+  it.each(['invalid', 'valid'])(
+    'preserves the %s world result when reader release throws',
+    async kind => {
+      vi.useFakeTimers();
+      const loader = new LDtkLoader();
+      const world = kind === 'valid' ? { levels: [level()] } : {};
+      const body = stream(bytes(world));
+      const reader = body.getReader();
+      vi.spyOn(body, 'getReader').mockReturnValue(reader);
+      const releaseLock = vi
+        .spyOn(reader, 'releaseLock')
+        .mockImplementation(() => {
+          throw new Error('synthetic reader release failure');
+        });
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body)));
+
+      const pending = loader.loadWorld('synthetic');
+      if (kind === 'valid') {
+        const loaded = await pending;
+        expect(loaded).toEqual(world);
+        expect(loader.world).toBe(loaded);
+      } else {
+        await expect(pending).rejects.toThrow('LDtk level budget exceeded');
+        expect(loader.world).toBeNull();
+      }
+      expect(releaseLock).toHaveBeenCalledOnce();
+      expect(loader.loadController).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
   it.each(['deadline', 'dispose', 'supersede'])(
     'cancels a stalled body on %s without parsing or publication',
     async kind => {
