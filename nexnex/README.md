@@ -15,14 +15,14 @@ Collision observations run before grounded state, player movement, and climbing
 gravity, in that order, at the existing Update cadence. Physics messages produced
 in Rapier's PostUpdate are consumed on the next Update. Removed ground/ladder
 contacts are pruned even when no stopped message arrives. Climbing owns the
-zero-gravity override only while active: leaving a ladder or removing `Climber`
-restores the pre-climb gravity scale before Rapier runs. A different nonzero
-gravity override is retained; removal/readdition starts fresh ownership, and
-despawn never recreates an entity. Removing or inserting/replacing `GravityScale`
-retires the old component's cached base, including removal/reinsertion within one
-frame. A new gravity component on an active climber is suppressed before Rapier
-steps and its own base is restored on exit. Ordinary mutable nonzero overrides
-from other features remain intact on exit; removed components stay absent.
+zero-gravity override only while active. Leaving a ladder or removing `Climber`
+restores the saved gravity scale before Rapier runs, unless another feature has
+already set a nonzero scale. If a contact change reapplies the override after
+such a write, the new scale becomes the base restored on exit. Removing or
+replacing `GravityScale` retires the old base, including removal and reinsertion
+within one frame. A new gravity component on an active climber is suppressed
+before Rapier steps and its own base is restored on exit. Removed components
+stay absent and despawn never recreates an entity.
 
 Ladder contact observation marks `Climber` changed only when contact membership
 changes, and player movement marks it changed only when the climbing state
