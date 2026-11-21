@@ -105,6 +105,53 @@ describe('Latest world import owns publication', () => {
       );
     }
   );
+  it.each(['addLDtkLevels', 'loadLDtkLevels'])(
+    'acknowledges publication through %s when the success diagnostic throws',
+    async method => {
+      const original = game.levels;
+      const player = game.player;
+      const latest = world('B');
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {
+        throw new Error('synthetic console failure');
+      });
+
+      const result = game[method]('B');
+      b.resolve(latest);
+      expect(await result).toBe(true);
+      expect(log).toHaveBeenCalledTimes(1);
+      expect(console.error).not.toHaveBeenCalled();
+      expect(game.ldtkLoader.world).toEqual(latest);
+      expect(game.levels.map(level => level.name)).toEqual(
+        method === 'addLDtkLevels'
+          ? [...original.map(level => level.name), 'B']
+          : ['B']
+      );
+      expect(game.totalLevels).toBe(game.levels.length);
+      if (method === 'addLDtkLevels') {
+        expect(game.player).toBe(player);
+      } else {
+        expect(game.player).not.toBe(player);
+      }
+    }
+  );
+  it.each(['addLDtkLevels', 'loadLDtkLevels'])(
+    'refuses invalid input through %s even when reporting the refusal throws',
+    async method => {
+      const original = game.levels;
+      const player = game.player;
+      vi.mocked(console.error).mockImplementation(() => {
+        throw new Error('synthetic console failure');
+      });
+
+      const result = game[method]('B');
+      b.resolve({ levels: [{}] });
+      expect(await result).toBe(false);
+      expect(console.error).toHaveBeenCalledTimes(1);
+      expect(game.ldtkLoader.world).toBeNull();
+      expect(game.levels).toBe(original);
+      expect(game.player).toBe(player);
+    }
+  );
   it('does not publish an import completed after disposal', async () => {
     const original = game.levels;
     const result = game.loadLDtkLevels('A');

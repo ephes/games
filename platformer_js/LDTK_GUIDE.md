@@ -140,6 +140,8 @@ load publishes; superseded calls still return their own candidate. Pass that
 returned world to `getAllLevels(world)` to convert the intended request.
 For game imports use `await game.loadLDtkLevels(url)` or
 `await game.addLDtkLevels(url)` so the coordinator owns publication.
+Both resolve to `true` when the level table is published. Refused imports
+resolve to `false`. A failing console diagnostic leaves either result intact.
 
 ## Playable extents
 

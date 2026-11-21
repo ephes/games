@@ -24,6 +24,14 @@ import {
 import { GAME_CONFIG, LEVELS } from './utils/constants.js';
 import { LDtkLoader, WORLD_LIMITS } from './systems/LDtkLoader.js';
 
+function reportDiagnostic(report) {
+  try {
+    report();
+  } catch {
+    // A diagnostic sink can fail independently of the operation it reports.
+  }
+}
+
 /**
  * Main game class that coordinates all game systems
  */
@@ -807,11 +815,15 @@ export class Game {
         this.restorePlayableLevel();
         this.camera.reset();
 
-        console.log(`Loaded ${ldtkLevels.length} levels from LDtk`);
+        reportDiagnostic(() =>
+          console.log(`Loaded ${ldtkLevels.length} levels from LDtk`)
+        );
         return true;
       }
     } catch (error) {
-      console.error('Failed to load LDtk levels:', error);
+      reportDiagnostic(() =>
+        console.error('Failed to load LDtk levels:', error)
+      );
     }
     return false;
   }
@@ -858,11 +870,15 @@ export class Game {
         this.levels = combined;
         this.totalLevels = this.levels.length;
 
-        console.log(`Added ${ldtkLevels.length} levels from LDtk`);
+        reportDiagnostic(() =>
+          console.log(`Added ${ldtkLevels.length} levels from LDtk`)
+        );
         return true;
       }
     } catch (error) {
-      console.error('Failed to add LDtk levels:', error);
+      reportDiagnostic(() =>
+        console.error('Failed to add LDtk levels:', error)
+      );
     }
     return false;
   }
