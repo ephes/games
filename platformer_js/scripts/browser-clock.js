@@ -95,12 +95,66 @@ try {
       render();
       assertPortalPhase(game.portal.pulseTime, phase);
       const stale = frames.values().next().value;
-      game.dispose();
+      if (hz === 30) {
+        const cleanup = Error('synthetic LDtk retirement failure');
+        let cancellations = 0;
+        game.ldtkLoader.cancelLoad = () => {
+          cancellations++;
+          throw cleanup;
+        };
+        game.player.takeDamage(game.lives);
+        game.canvas.focus();
+        let failure;
+        try {
+          game.dispose();
+        } catch (error) {
+          failure = error;
+        }
+        game.dispose();
+        if (failure !== cleanup || cancellations !== 1) {
+          throw Error('standalone retirement error was lost or retried');
+        }
+        game.lastTime = 123;
+        document.dispatchEvent(new Event('visibilitychange'));
+        window.dispatchEvent(new Event('focus'));
+        const key = new KeyboardEvent('keydown', {
+          key: 'ArrowRight',
+          bubbles: true,
+          cancelable: true
+        });
+        game.canvas.dispatchEvent(key);
+        if (
+          frames.size ||
+          key.defaultPrevented ||
+          game.inputManager.isActionActive('moveRight') ||
+          game.lastTime !== 123 ||
+          !game.spriteController.signal.aborted ||
+          !game.player.disposed ||
+          game.player.hitTimeout !== null ||
+          game.player.invulnerabilityTimeout !== null
+        ) {
+          throw Error('failed LDtk retirement prevented later game cleanup');
+        }
+      } else {
+        game.dispose();
+      }
       stale(2000);
       if (frames.size) {
         throw Error('disposed chain restarted');
       }
       results.push({ hz, positions, renders });
+    }
+    const failedStartup = new Game('clock');
+    const startupError = Error('synthetic startup failure');
+    failedStartup.spriteLoader.loadAll = async () => {
+      throw startupError;
+    };
+    failedStartup.ldtkLoader.cancelLoad = () => {
+      throw Error('synthetic startup cleanup failure');
+    };
+    const failure = await failedStartup.init().catch(error => error);
+    if (failure !== startupError || failedStartup.inputManager.enabled) {
+      throw Error('startup lost its original error or retained input');
     }
     const { Enemy } = await import('/src/entities/Enemy.js');
     const game = new Game('clock');

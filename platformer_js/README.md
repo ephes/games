@@ -304,6 +304,11 @@ that error). If disposal follows publication but precedes activation, `init()`
 resolves without activating the game. Update/render failures also dispose the game
 and rethrow the original error: synchronous startup errors reach the caller of
 `start()`, and scheduled-frame errors reach the browser error surface.
+Disposal attempts each loader, animation, input, listener and player retirement
+once. A direct `game.dispose()` call throws after all attempts if cleanup fails,
+using `AggregateError` for multiple failures. During initialization or a game
+frame, cleanup failures are reported separately through the console and the
+original error still propagates.
 
 With the canvas focused, Escape toggles a visible **Paused - Esc to resume**
 message. Pause freezes simulation (movement, collisions, projectiles and animation)

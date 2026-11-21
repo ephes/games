@@ -106,6 +106,55 @@ describe('Owned game lifecycle and simulation clock', () => {
     expect(frames.size).toBe(0);
     expect(game.update).toHaveBeenCalledTimes(1);
   });
+  it('reports standalone cleanup errors after attempting every retirement once', async () => {
+    vi.spyOn(game.spriteLoader, 'loadAll').mockResolvedValue();
+    await game.init();
+    game.start();
+    const loadFailure = new Error('synthetic LDtk cancellation failure');
+    const focusFailure = new Error('synthetic focus removal failure');
+    const cancelLoad = vi
+      .spyOn(game.ldtkLoader, 'cancelLoad')
+      .mockImplementation(() => {
+        throw loadFailure;
+      });
+    const removeWindow = window.removeEventListener.bind(window);
+    vi.spyOn(window, 'removeEventListener').mockImplementation(
+      (type, callback) => {
+        removeWindow(type, callback);
+        if (type === 'focus' && callback === game.onClockBoundary) {
+          throw focusFailure;
+        }
+      }
+    );
+    const removeDocument = vi.spyOn(document, 'removeEventListener');
+    const removeCanvas = vi.spyOn(game.canvas, 'removeEventListener');
+    const retirePlayer = vi.spyOn(game.player, 'dispose');
+    let failure;
+    try {
+      game.dispose();
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(failure.errors).toEqual([loadFailure, focusFailure]);
+    expect(game.spriteController.signal.aborted).toBe(true);
+    expect(frames.size).toBe(0);
+    expect(game.inputManager.enabled).toBe(false);
+    expect(game.inputManager.listeners.size).toBe(0);
+    expect(removeDocument).toHaveBeenCalledWith(
+      'visibilitychange',
+      game.onClockBoundary
+    );
+    expect(removeCanvas).toHaveBeenCalledWith(
+      'pointerdown',
+      game.onPointerDown
+    );
+    expect(game.player.disposed).toBe(true);
+    game.dispose();
+    expect(cancelLoad).toHaveBeenCalledTimes(1);
+    expect(cancelAnimationFrame).toHaveBeenCalledTimes(1);
+    expect(retirePlayer).toHaveBeenCalledTimes(1);
+  });
   it('releases every input listener on startup failure and retains the error', async () => {
     const loading = deferred();
     vi.spyOn(game.spriteLoader, 'loadAll').mockReturnValue(loading.promise);
@@ -125,6 +174,25 @@ describe('Owned game lifecycle and simulation clock', () => {
     expect(removeWindow).toHaveBeenCalledWith('blur', game.inputManager.onBlur);
     expect(game.inputManager.enabled).toBe(false);
     expect(game.player).toBeNull();
+  });
+  it('keeps the initialization error if cleanup and its diagnostic throw', async () => {
+    const primary = new Error('synthetic initialization failure');
+    const cleanup = new Error('synthetic cleanup failure');
+    vi.spyOn(game.spriteLoader, 'loadAll').mockRejectedValue(primary);
+    vi.spyOn(game.ldtkLoader, 'cancelLoad').mockImplementation(() => {
+      throw cleanup;
+    });
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {
+      throw new Error('synthetic console failure');
+    });
+    await expect(game.init()).rejects.toBe(primary);
+    await expect(game.init()).rejects.toBe(primary);
+    expect(game.inputManager.enabled).toBe(false);
+    expect(game.spriteController.signal.aborted).toBe(true);
+    expect(report).toHaveBeenCalledExactlyOnceWith(
+      'Failed to dispose game after a game error:',
+      cleanup
+    );
   });
   it('aborts real pending images when disposed during initialization', async () => {
     const images = [];
@@ -259,6 +327,11 @@ describe('Owned game lifecycle and simulation clock', () => {
       clear.mockImplementation(() => {
         throw error;
       });
+      const cleanup = new Error('synthetic cleanup failure during render');
+      vi.spyOn(game.ldtkLoader, 'cancelLoad').mockImplementation(() => {
+        throw cleanup;
+      });
+      const report = vi.spyOn(console, 'error').mockImplementation(() => {});
       const stale = frames.values().next().value;
       let failure;
       try {
@@ -271,6 +344,10 @@ describe('Owned game lifecycle and simulation clock', () => {
         failure = caught;
       }
       expect(failure).toBe(error);
+      expect(report).toHaveBeenCalledExactlyOnceWith(
+        'Failed to dispose game after a game error:',
+        cleanup
+      );
       expect(game.running).toBe(false);
       expect(game.disposed).toBe(true);
       expect(frames.size).toBe(0);
