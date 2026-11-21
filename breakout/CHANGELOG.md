@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Skip paddle, ball and scoreboard updates when their entity is missing or
+  duplicated, and tolerate a scoreboard without its score text section.
 - Label Space as continuing the frame and verify that S advances one system
   and Space executes the remaining systems in a headless schedule.
 - Separate embedded balls by the minimum circle/AABB displacement with explicit
