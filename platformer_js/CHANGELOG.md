@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject LDtk worlds when synchronous decoding, parsing or preflight reaches
+  the load deadline, retaining the previous world.
+
 - Contain disposal failures during page hide and explicit page removal so
   BFCache restoration or hot replacement can still start a fresh game.
 

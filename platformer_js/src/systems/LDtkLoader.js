@@ -122,8 +122,10 @@ export class LDtkLoader {
     const generation = this.loadGeneration;
     const controller = new AbortController();
     this.loadController = controller;
+    const deadline = performance.now() + WORLD_LIMITS.timeoutMs;
+    const deadlineError = new Error('LDtk transfer deadline exceeded');
     const timer = setTimeout(
-      () => controller.abort(new Error('LDtk transfer deadline exceeded')),
+      () => controller.abort(deadlineError),
       WORLD_LIMITS.timeoutMs
     );
     let body;
@@ -174,6 +176,9 @@ export class LDtkLoader {
         new TextDecoder('utf-8', { fatal: true }).decode(buffer)
       );
       this.preflightWorld(data);
+      if (performance.now() >= deadline) {
+        throw deadlineError;
+      }
       const world = data;
       if (publish && generation === this.loadGeneration) {
         this.world = world;

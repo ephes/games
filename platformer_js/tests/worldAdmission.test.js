@@ -555,6 +555,35 @@ describe('World transfer admission', () => {
     await vi.advanceTimersByTimeAsync(WORLD_LIMITS.timeoutMs);
     expect(await pending).toBe(false);
   });
+
+  it('rejects a world when synchronous admission reaches the deadline', async () => {
+    const loader = new LDtkLoader();
+    const previous = { levels: [] };
+    const candidate = { levels: [level()] };
+    loader.world = previous;
+    let now = 100;
+    let admissionMs = WORLD_LIMITS.timeoutMs;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const preflight = loader.preflightWorld.bind(loader);
+    vi.spyOn(loader, 'preflightWorld').mockImplementation(data => {
+      preflight(data);
+      now += admissionMs;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => response(stream(bytes(candidate))))
+    );
+
+    await expect(loader.loadWorld('expired')).rejects.toThrow(
+      'LDtk transfer deadline exceeded'
+    );
+    expect(loader.world).toBe(previous);
+
+    admissionMs--;
+    const loaded = await loader.loadWorld('on-time');
+    expect(loaded).toEqual(candidate);
+    expect(loader.world).toBe(loaded);
+  });
 });
 
 describe('Whole-world geometry budgets', () => {
