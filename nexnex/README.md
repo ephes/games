@@ -25,6 +25,7 @@ steps and its own base is restored on exit. Ordinary mutable nonzero overrides
 from other features remain intact on exit; removed components stay absent.
 
 Ladder contact observation marks `Climber` changed only when contact membership
+changes, and player movement marks it changed only when the climbing state
 changes. Applying or restoring climbing gravity marks `GravityScale` changed
 only when its value changes.
 

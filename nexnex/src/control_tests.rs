@@ -82,6 +82,56 @@ fn climb_contacts_only_mark_changes_when_membership_changes() {
 }
 
 #[test]
+fn player_movement_marks_climber_changed_only_when_climbing_changes() {
+    #[derive(Resource, Default)]
+    struct ClimberChanged(bool);
+
+    let mut app = app();
+    app.init_resource::<ClimberChanged>().add_systems(
+        PostUpdate,
+        |changed: Query<(), (Changed<Climber>, With<Player>)>,
+         mut observed: ResMut<ClimberChanged>| {
+            observed.0 = !changed.is_empty();
+        },
+    );
+    let ladder = app.world_mut().spawn(Climbable).id();
+    let player = app
+        .world_mut()
+        .spawn((
+            Player,
+            Velocity::zero(),
+            Climber {
+                climbing: false,
+                intersecting_climbables: HashSet::from([ladder]),
+            },
+            GroundDetection::default(),
+            GravityScale(1.),
+        ))
+        .id();
+    let step = |app: &mut App, press: Option<KeyCode>| {
+        let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        input.clear();
+        input.release_all();
+        if let Some(key) = press {
+            input.press(key);
+        }
+        app.update();
+        (
+            app.world().resource::<ClimberChanged>().0,
+            app.world().get::<Climber>(player).unwrap().climbing,
+        )
+    };
+
+    assert_eq!(step(&mut app, None), (true, false));
+    assert_eq!(step(&mut app, None), (false, false));
+    assert_eq!(step(&mut app, Some(KeyCode::KeyW)), (true, true));
+    assert_eq!(step(&mut app, None), (false, true));
+    assert_eq!(step(&mut app, None), (false, true));
+    assert_eq!(step(&mut app, Some(KeyCode::Space)), (true, false));
+    assert_eq!(step(&mut app, None), (false, false));
+}
+
+#[test]
 fn removed_contacts_clear_ground_climbing_and_gravity() {
     for stopped in [false, true] {
         let mut app = app();

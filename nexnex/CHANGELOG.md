@@ -8,6 +8,9 @@
 - Mark ladder contact sets changed only when adding or removing a contact,
   including cleanup of despawned ladders.
 
+- Mark the player's `Climber` changed only when its climbing state changes,
+  instead of on every movement update.
+
 - Restrict level fitting to the platformer camera so additional cameras keep
   their own projections and transforms.
 

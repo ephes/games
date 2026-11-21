@@ -59,10 +59,13 @@ pub fn player_movement(
         let jump = (input.just_pressed(KeyCode::Space)
             || (!at_ladder && input.just_pressed(KeyCode::ArrowUp)))
             && (ground_detection.on_ground || climbing);
-        climber.climbing = climbing && !jump;
+        let climbing = climbing && !jump;
+        if climber.climbing != climbing {
+            climber.climbing = climbing;
+        }
         if jump {
             velocity.linvel.y = 500.;
-        } else if climber.climbing {
+        } else if climbing {
             let up = if input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp) {
                 1.
             } else {
