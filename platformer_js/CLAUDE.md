@@ -177,12 +177,13 @@ replace the projectile owner. Programmatic boss speed zero stays stationary.
 3. One owned RAF loop runs bounded fixed 60 Hz simulation steps and renders once per frame
 4. Renderer handles all drawing operations with sprite animations
 
-The entry point disposes its current Game on every `pagehide`, including pending
-initialization. A persisted `pageshow` starts a fresh game (level zero, initial
-score/lives); BFCache does not preserve progress. Ordinary hidden-tab input reset
-keeps the Game. Duplicate restore events do not retry failed initialization;
+On every `pagehide`, the entry point releases its current Game slot before
+attempting disposal, including during pending initialization. A persisted
+`pageshow` starts a fresh game (level zero, initial score/lives). Ordinary
+hidden-tab input reset keeps the Game. Duplicate restore events do not retry failed initialization;
 another hide/restore cycle can retry with a new instance. `disposePage()` removes
 entry-point listeners and retires the Game, and Vite HMR calls it before replacement.
+Both retirement paths report disposal failures to the console and return normally.
 Old initialization completion/rejection cannot affect the replacement owner.
 `pageLifetime.test.js` and the Chromium smoke cover synthetic retirement,
 restoration, pending initialization, failed re-entry and replacement sequences.

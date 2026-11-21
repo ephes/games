@@ -1259,7 +1259,7 @@ fn unloaded_restart_accepts_checked_extremes_and_parent_transforms() {
 }
 
 #[test]
-fn level_selection_reads_loaded_transforms_once_per_pass() {
+fn level_selection_indexes_loaded_transforms_only_on_fallback() {
     for count in [100, 200, 400] {
         let levels = (0..count)
             .map(|i| bevy_ecs_ldtk::ldtk::Level {
@@ -1281,18 +1281,38 @@ fn level_selection_reads_loaded_transforms_once_per_pass() {
                 GlobalTransform::from_translation(Vec3::new(i as f32 * 128., 0., 0.)),
             ));
         }
-        app.world_mut().spawn((
-            Player,
-            GlobalTransform::from_translation(Vec3::new(-1., 64., 0.)),
-        ));
+        let player = app
+            .world_mut()
+            .spawn((
+                Player,
+                GlobalTransform::from_translation(Vec3::new(-1., 64., 0.)),
+            ))
+            .id();
+
         app.update();
         let work = app.world().resource::<game_flow::SelectionWork>();
+        assert_eq!(work.fallback_index_builds, 1);
         assert!(
-            work.transform_reads <= count as usize,
-            "{count} levels read {} transforms",
-            work.transform_reads
+            work.indexed_transforms <= count as usize,
+            "{count} levels indexed {} transforms",
+            work.indexed_transforms
         );
         assert_eq!(work.containment_checks, count as usize + 1);
+        assert_eq!(
+            *app.world().resource::<LevelSelection>(),
+            LevelSelection::Uid(1)
+        );
+
+        *app.world_mut().get_mut::<GlobalTransform>(player).unwrap() =
+            GlobalTransform::from_translation(Vec3::new(64., 64., 0.));
+        app.insert_resource(game_flow::SelectionWork::default());
+        for _ in 0..4 {
+            app.update();
+        }
+        let work = app.world().resource::<game_flow::SelectionWork>();
+        assert_eq!(work.fallback_index_builds, 0, "{count} loaded levels");
+        assert_eq!(work.indexed_transforms, 0);
+        assert_eq!(work.containment_checks, 4);
         assert_eq!(
             *app.world().resource::<LevelSelection>(),
             LevelSelection::Uid(1)

@@ -290,8 +290,9 @@ frame; call `start()` again once initialization succeeds. Starting twice keeps
 one animation chain. Disposal is terminal:
 create a fresh Game to restart.
 The `main.js` entry point owns one current Game, including while sprites load.
-Every `pagehide` disposes it immediately. A persisted `pageshow` (BFCache return)
-starts a fresh game at level zero with initial score/lives; progress is not restored.
+Every `pagehide` releases the current game slot before attempting disposal.
+A persisted `pageshow` (BFCache return) starts a fresh game at level zero with
+initial score/lives; progress is not restored.
 Ordinary tab hiding releases held input, suspends simulation and keeps the current
 game. Visibility/focus boundaries discard partial and missed simulation time.
 Duplicate restore events do not start extra games or retry failed startup;
@@ -301,6 +302,7 @@ error even if cleanup also fails. Retired startup completions cannot start or
 replace the current game. Vite hot replacement calls
 `disposePage()` before reinitializing; embedders removing the entry point can call
 that same terminal cleanup to release its DOM/page listeners and Game.
+Both retirement paths report disposal failures to the console and return normally.
 
 Concurrent and later `init()` calls share one initialization and register controls
 once. Failed initialization disposes input; every later `init()` call rejects

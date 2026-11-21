@@ -117,6 +117,52 @@ describe('Entry-point page lifetime', () => {
     }
   );
 
+  it.each(['pagehide', 'disposePage'])(
+    'contains a cleanup failure during %s',
+    async boundary => {
+      const entry = await enter();
+      expectOwners(1);
+      const retired = instances[0];
+      const failure = new Error('synthetic cleanup failure');
+      const cancelLoad = vi
+        .spyOn(retired.ldtkLoader, 'cancelLoad')
+        .mockImplementationOnce(() => {
+          throw failure;
+        });
+      const lifecycleErrors = [];
+      const captureError = event => {
+        lifecycleErrors.push(event.error);
+        event.preventDefault();
+      };
+      window.addEventListener('error', captureError);
+      try {
+        if (boundary === 'pagehide') {
+          transition('pagehide');
+        } else {
+          expect(() => entry.disposePage()).not.toThrow();
+        }
+
+        expectOwners(0);
+        expect(retired.disposed).toBe(true);
+        transition('pageshow');
+        transition('pageshow');
+        await settle();
+
+        const restored = boundary === 'pagehide';
+        expectOwners(restored ? 1 : 0);
+        expect(instances).toHaveLength(restored ? 2 : 1);
+        expect(cancelLoad).toHaveBeenCalledTimes(1);
+        expect(lifecycleErrors).toEqual([]);
+        expect(errors).toHaveBeenCalledExactlyOnceWith(
+          'Failed to dispose retired game:',
+          failure
+        );
+      } finally {
+        window.removeEventListener('error', captureError);
+      }
+    }
+  );
+
   it.each(['resolve', 'reject'])(
     'fences a retired pending init that later %ss',
     async outcome => {

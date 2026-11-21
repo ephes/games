@@ -4,6 +4,7 @@
  */
 
 import { Game } from './Game.js';
+import { reportDiagnostic } from './utils/reportDiagnostic.js';
 
 let game = null;
 let hidden = false;
@@ -46,7 +47,13 @@ function onPageHide() {
   hidden = true;
   const retired = game;
   game = null;
-  retired?.dispose();
+  try {
+    retired?.dispose();
+  } catch (error) {
+    reportDiagnostic(() =>
+      console.error('Failed to dispose retired game:', error)
+    );
+  }
 }
 
 function onPageShow(event) {

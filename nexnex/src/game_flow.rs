@@ -30,7 +30,8 @@ pub fn setup(
 #[cfg(test)]
 #[derive(Resource, Default)]
 pub(crate) struct SelectionWork {
-    pub transform_reads: usize,
+    pub fallback_index_builds: usize,
+    pub indexed_transforms: usize,
     pub containment_checks: usize,
 }
 
@@ -57,41 +58,56 @@ pub fn update_level_selection(
     let Ok(player) = player_query.single() else {
         return;
     };
-    // Snapshot each loaded transform once; candidate traversal stays in authored
-    // project order, independent of ECS iteration/spawn order.
+    let contains = |level: &ldtk::Level, transform: &GlobalTransform| {
+        let local = transform
+            .affine()
+            .inverse()
+            .transform_point3(player.translation())
+            .truncate();
+        // Half-open bounds give an exact seam to the level beginning there.
+        local.is_finite()
+            && local.cmpge(Vec2::ZERO).all()
+            && local
+                .cmplt(Vec2::new(level.px_wid as f32, level.px_hei as f32))
+                .all()
+    };
+    if level_query
+        .iter()
+        .find(|(iid, _)| iid.get() == &selected.iid)
+        .is_some_and(|(_, transform)| {
+            #[cfg(test)]
+            if let Some(work) = work.as_mut() {
+                work.containment_checks += 1;
+            }
+            contains(selected, transform)
+        })
+    {
+        return;
+    }
+
+    // Snapshot loaded transforms only for fallback. Keep the first transform
+    // for each IID, matching the selected-level probe if an IID is duplicated.
+    #[cfg(test)]
+    if let Some(work) = work.as_mut() {
+        work.fallback_index_builds += 1;
+    }
     let mut transforms = std::collections::HashMap::new();
     for (iid, transform) in &level_query {
         #[cfg(test)]
         if let Some(work) = work.as_mut() {
-            work.transform_reads += 1;
+            work.indexed_transforms += 1;
         }
-        // Keep the same first-match behavior if an IID is transiently duplicated.
         transforms.entry(iid.get()).or_insert(transform);
     }
-    #[allow(unused_mut)] // The test-only work counter mutates its captured resource.
-    let mut contains = |level: &ldtk::Level| {
-        #[cfg(test)]
-        if let Some(work) = work.as_mut() {
-            work.containment_checks += 1;
-        }
+    if let Some(level) = project.iter_raw_levels().find(|level| {
         transforms.get(&level.iid).is_some_and(|transform| {
-            let local = transform
-                .affine()
-                .inverse()
-                .transform_point3(player.translation())
-                .truncate();
-            // Half-open bounds give an exact seam to the level beginning there.
-            local.is_finite()
-                && local.cmpge(Vec2::ZERO).all()
-                && local
-                    .cmplt(Vec2::new(level.px_wid as f32, level.px_hei as f32))
-                    .all()
+            #[cfg(test)]
+            if let Some(work) = work.as_mut() {
+                work.containment_checks += 1;
+            }
+            contains(level, transform)
         })
-    };
-    if contains(selected) {
-        return;
-    }
-    if let Some(level) = project.iter_raw_levels().find(|level| contains(level)) {
+    }) {
         *level_selection = LevelSelection::iid(level.iid.clone());
     }
 }
