@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Start a new run at level zero with a cleared score after winning. Live resets
+  and game-over retries keep the current score.
+
 - Follow the player's final position on the same frame as a respawn or stomp
   bounce.
 

@@ -255,9 +255,11 @@ Shooting requires successful initialization and a playable game. Both direct
 failed initialization without allocating projectiles or consuming cooldown.
 Live level resets/replacements preserve power-up and cooldown behavior.
 A successful reset or replacement after win/death restores initial lives and a
-playable player, preserving score, shooting ability and cooldown. Reset after
-winning restarts level zero; after death it retries the current level. Failed
-construction retains terminal state and objects; a disposed Game cannot reset.
+playable player, preserving shooting ability and cooldown. Reset after winning
+starts a new run at level zero with zero score once construction succeeds.
+Live resets, same-level retries after death and level replacements preserve
+score. Failed construction retains the score, terminal state and objects; a
+disposed Game cannot reset.
 Successful resets/replacements clear both sides' projectiles, held input and
 retired player timers. `resetLevel()` returns true on reset, false after disposal;
 construction errors still propagate.

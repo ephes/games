@@ -925,15 +925,19 @@ export class Game {
   }
 
   /**
-   * Reset current level
+   * Retry the current level or start a new run after winning.
    */
   resetLevel() {
     if (this.disposed) {
       return false;
     }
-    const index = this.gameWon ? 0 : this.currentLevel;
+    const startsNewRun = this.gameWon;
+    const index = startsNewRun ? 0 : this.currentLevel;
     this.createLevel(this.levels[index]);
     this.currentLevel = index;
+    if (startsNewRun) {
+      this.score = 0;
+    }
     this.restorePlayableLevel();
     this.camera.reset();
     return true;
