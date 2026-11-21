@@ -67,10 +67,12 @@ Level selection keeps the current level while the player remains inside it.
 Otherwise, overlapping candidates use authored project order, independent of ECS
 spawn order. Bounds are half-open: minimum edges belong to a level, maximum
 edges belong to the neighboring level beginning there. Outside every loaded
-level, the current selection is retained. Each selection pass indexes the loaded
-IID-to-world-transform pairs once, then checks candidates in project order with
-constant-time average lookup. Headless operation-count tests cover 100, 200 and
-400 loaded levels alongside the overlap/seam fixtures.
+level, the current selection is retained. Selection first probes the loaded
+transform for the current level. While the player stays inside, the fallback
+index is skipped. Otherwise, selection indexes the loaded IID-to-world-transform
+pairs once and checks candidates in project order with constant-time
+average lookup. Headless operation-count tests cover stable frames and fallback
+with 100, 200 and 400 loaded levels alongside the overlap/seam fixtures.
 
 Selection and camera fitting use propagated world coordinates after physics and
 transform propagation. Level bounds include parent translation and scale; the

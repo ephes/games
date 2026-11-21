@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Skip building the loaded-transform index while the player remains inside the
+  selected level.
+
 - Restore the latest nonzero gravity scale on climbing exit when a ladder
   contact change reapplies the zero-gravity override.
 
