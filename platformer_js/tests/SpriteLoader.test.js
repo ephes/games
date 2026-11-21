@@ -36,6 +36,7 @@ describe('Real sprite loading', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -128,6 +129,40 @@ describe('Real sprite loading', () => {
       expect(loader.getSprite(name)).toBe(images[index]);
     });
   });
+
+  it.each(['loadSprite', 'loadAll'])(
+    'rejects pre-aborted %s before allocating or superseding requests',
+    async method => {
+      vi.useFakeTimers();
+      const initial = loader.loadAll();
+      images.forEach(image => image.onload());
+      await initial;
+      const previous = loader.getSprite('player.idle');
+      const controller = new AbortController();
+      controller.abort(new Error('synthetic cancellation'));
+      const load = options =>
+        method === 'loadAll'
+          ? loader.loadAll(options)
+          : loader.loadSprite('player.idle', 'replacement.png', options);
+      const schedule = vi.spyOn(globalThis, 'setTimeout');
+      const abort = () => load({ signal: controller.signal });
+
+      await expect(abort()).rejects.toMatchObject({ name: 'AbortError' });
+      expect(images).toHaveLength(requestedSprites.length);
+      expect(schedule).not.toHaveBeenCalled();
+      expect(loader.loaded).toBe(true);
+      expect(loader.getSprite('player.idle')).toBe(previous);
+
+      const active = load();
+      const replacement = images.slice(requestedSprites.length);
+      schedule.mockClear();
+      await expect(abort()).rejects.toMatchObject({ name: 'AbortError' });
+      expect(schedule).not.toHaveBeenCalled();
+      replacement.forEach(image => image.onload());
+      await active;
+      expect(loader.getSprite('player.idle')).toBe(replacement[0]);
+    }
+  );
 
   it.each([true, false])(
     'publishes only the latest complete batch (old first: %s)',

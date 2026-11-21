@@ -108,6 +108,8 @@ accept an optional AbortSignal and a positive finite per-image deadline (default
 callbacks, timers and signal listeners. Failed batches abort their remaining
 images; a new batch aborts its predecessor. Game disposal aborts initialization
 images; startup failure remains terminal for that Game.
+An already-aborted signal rejects with `AbortError` before either loader
+creates images or timers, leaving existing requests and cached sprites intact.
 Timeout and abort attempt to remove the pending image's `src` attribute.
 The promise rejects with the original failure even if source removal throws.
 Completed images keep their sources. The Chromium suite holds a synthetic
