@@ -126,6 +126,7 @@ export class LDtkLoader {
       () => controller.abort(new Error('LDtk transfer deadline exceeded')),
       WORLD_LIMITS.timeoutMs
     );
+    let body;
     let reader;
     const cancelReader = () => {
       void reader?.cancel(controller.signal.reason).catch(() => {});
@@ -133,11 +134,12 @@ export class LDtkLoader {
     controller.signal.addEventListener('abort', cancelReader, { once: true });
     try {
       const response = await fetch(url, { signal: controller.signal });
+      body = response.body;
       controller.signal.throwIfAborted();
       if (!response.ok) {
         throw new Error('LDtk transfer failed');
       }
-      reader = response.body?.getReader();
+      reader = body?.getReader();
       if (!reader) {
         throw new Error('LDtk response requires a streamed body');
       }
@@ -177,6 +179,13 @@ export class LDtkLoader {
       clearTimeout(timer);
       controller.abort();
       controller.signal.removeEventListener('abort', cancelReader);
+      if (body && !reader) {
+        try {
+          void body.cancel(controller.signal.reason).catch(() => {});
+        } catch {
+          // Preserve the transfer error if body disposal fails.
+        }
+      }
       reader?.releaseLock();
       if (this.loadController === controller) {
         this.loadController = null;

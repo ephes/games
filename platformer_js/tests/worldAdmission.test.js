@@ -450,6 +450,32 @@ describe('World transfer admission', () => {
     }
   );
 
+  it.each(['HTTP error', 'late cancellation'])(
+    'cancels the unread body once after %s',
+    async kind => {
+      const loader = new LDtkLoader();
+      const cancel = vi.fn();
+      const body = new ReadableStream({ cancel });
+      const getReader = vi.spyOn(body, 'getReader');
+      const fetch = vi.fn().mockResolvedValue({
+        ...response(body),
+        ok: kind !== 'HTTP error'
+      });
+      vi.stubGlobal('fetch', fetch);
+      const pending = loader.loadWorld('unread');
+      if (kind === 'late cancellation') {
+        loader.cancelLoad();
+      }
+
+      await expect(pending).rejects.toThrow(
+        kind === 'HTTP error' ? 'LDtk transfer failed' : 'LDtk load cancelled'
+      );
+      expect(getReader).not.toHaveBeenCalled();
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(loader.world).toBeNull();
+    }
+  );
+
   it.each(['deadline', 'dispose', 'supersede'])(
     'cancels a stalled body on %s without parsing or publication',
     async kind => {

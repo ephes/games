@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Cancel unread LDtk response bodies when the HTTP response fails or arrives
+  after cancellation.
+
 - Reject sprite loads with the original abort or timeout error when retiring
   the pending image source fails.
 
