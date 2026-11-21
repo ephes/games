@@ -424,6 +424,8 @@ levels. Superseded replacements return false, even if the newer request fails;
 imports completed after disposal do not publish. Supersession and disposal abort
 pending transfers. Each transfer has a 10-second total deadline and a 16 MiB
 streamed response limit (actual bytes, even without an accurate Content-Length).
+The loader cancels an unread response body when the HTTP response fails or
+arrives after cancellation.
 The loader requires valid UTF-8 and refuses duplicate JSON member names in any
 object, including names written with equivalent Unicode escapes. Before
 `JSON.parse` constructs the tree, a quoted-token pass admits at most 64 nested
