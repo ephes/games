@@ -39,6 +39,9 @@ pub fn camera_fit_inside_current_level(
     let Some(level) = project.find_raw_level_by_level_selection(&level_selection) else {
         return;
     };
+    if level.px_wid <= 0 || level.px_hei <= 0 {
+        return;
+    }
     let Some((level_transform, _)) = level_query.iter().find(|(_, iid)| iid.get() == &level.iid)
     else {
         return;
@@ -141,8 +144,10 @@ fn viewport_geometry(level: Vec2, player: Vec2) -> (Vec2, Vec2) {
 mod tests {
     use super::*;
     use crate::testing;
+    use bevy::ecs::change_detection::Tick;
+    use bevy_ecs_ldtk::ldtk::Level;
 
-    fn camera_app(level: bevy_ecs_ldtk::ldtk::Level) -> (App, Handle<LdtkProject>, Entity, Entity) {
+    fn camera_app(level: Level) -> (App, Handle<LdtkProject>, Entity, Entity) {
         let (mut app, handle) = testing::project_app(vec![level]);
         app.insert_resource(LevelSelection::iid("synthetic-level"))
             .add_systems(
@@ -163,28 +168,33 @@ mod tests {
         (app, handle, player, camera)
     }
 
+    fn camera_ticks(app: &App, camera: Entity) -> (Tick, Tick, Tick) {
+        let camera = app.world().entity(camera);
+        (
+            camera.get_ref::<Projection>().unwrap().last_changed(),
+            camera.get_ref::<Transform>().unwrap().last_changed(),
+            camera.get_ref::<GlobalTransform>().unwrap().last_changed(),
+        )
+    }
+
     #[test]
     fn camera_fit_marks_only_changed_components() {
-        let (mut app, _, player, camera) = camera_app(bevy_ecs_ldtk::ldtk::Level {
+        let (mut app, _, player, camera) = camera_app(Level {
             px_wid: 512,
             ..testing::level()
         });
-        let ticks = |app: &App| {
-            let camera = app.world().entity(camera);
-            (
-                camera.get_ref::<Projection>().unwrap().last_changed(),
-                camera.get_ref::<Transform>().unwrap().last_changed(),
-                camera.get_ref::<GlobalTransform>().unwrap().last_changed(),
-            )
-        };
 
         app.update();
         // Let propagation consume the local transform from the initial fit.
         app.update();
-        let fitted = ticks(&app);
+        let fitted = camera_ticks(&app, camera);
         for _ in 0..2 {
             app.update();
-            assert_eq!(ticks(&app), fitted, "stationary fit changed camera ticks");
+            assert_eq!(
+                camera_ticks(&app, camera),
+                fitted,
+                "stationary fit changed camera ticks"
+            );
         }
 
         app.world_mut()
@@ -193,7 +203,7 @@ mod tests {
             .translation
             .x = 300.;
         app.update();
-        let moved = ticks(&app);
+        let moved = camera_ticks(&app, camera);
         assert_eq!(moved.0, fitted.0);
         assert_ne!(moved.1, fitted.1);
         assert_ne!(moved.2, fitted.2);
@@ -204,6 +214,35 @@ mod tests {
             camera.get::<GlobalTransform>().unwrap().translation(),
             expected
         );
+    }
+
+    #[test]
+    fn camera_fit_keeps_last_valid_state_for_nonpositive_level_size() {
+        let (mut app, handle, _, camera) = camera_app(testing::level());
+        app.update();
+        app.update();
+        let fitted = camera_ticks(&app, camera);
+
+        for (px_wid, px_hei) in [(-64, 128), (128, -64), (0, 128), (128, 0)] {
+            let (replacement, replacement_handle) = testing::project_app(vec![Level {
+                px_wid,
+                px_hei,
+                ..testing::level()
+            }]);
+            let project = replacement
+                .world()
+                .resource::<Assets<LdtkProject>>()
+                .get(&replacement_handle)
+                .unwrap()
+                .clone();
+            app.world_mut()
+                .resource_mut::<Assets<LdtkProject>>()
+                .insert(handle.id(), project)
+                .unwrap();
+
+            app.update();
+            assert_eq!(camera_ticks(&app, camera), fitted, "size {px_wid}×{px_hei}");
+        }
     }
 
     #[test]

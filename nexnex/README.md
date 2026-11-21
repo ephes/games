@@ -59,7 +59,9 @@ The camera uses a rounded 16:9 viewport of at least 16 by 9 world units. When
 rounding makes the viewport larger than a level, that axis stays at the level
 origin. Scroll extents never become negative. Level fitting applies only to the
 camera created by game setup. Additional cameras keep their own projections and
-transforms while the platformer camera follows level changes.
+transforms while the platformer camera follows level changes. If the selected
+level has a zero or negative authored pixel width or height, the camera retains
+its last valid fit.
 
 Level selection keeps the current level while the player remains inside it.
 Otherwise, overlapping candidates use authored project order, independent of ECS
