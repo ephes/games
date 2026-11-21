@@ -43,12 +43,15 @@ pub fn camera_fit_inside_current_level(
     else {
         return;
     };
-    let Ok((mut projection, mut camera_transform, mut camera_global, parent)) =
+    let Ok((projection, mut camera_transform, mut camera_global, parent)) =
         camera_query.single_mut()
     else {
         return;
     };
-    let Projection::Orthographic(ref mut orthographic) = *projection else {
+    let Some(mut orthographic) = projection.filter_map_unchanged(|projection| match projection {
+        Projection::Orthographic(orthographic) => Some(orthographic),
+        _ => None,
+    }) else {
         return;
     };
     let mut min = Vec2::splat(f32::INFINITY);
@@ -68,31 +71,46 @@ pub fn camera_fit_inside_current_level(
     }
     let (size, offset) = viewport_geometry(max - min, player.translation().truncate() - min);
     let position = (min + offset).extend(0.);
-    let position = if let Some(parent) = parent {
-        let Ok(transform) = globals.get(parent.parent()) else {
+    let (position, parent_transform) = if let Some(parent) = parent {
+        let Ok(parent_transform) = globals.get(parent.parent()) else {
             return;
         };
-        transform.affine().inverse().transform_point3(position)
+        (
+            parent_transform
+                .affine()
+                .inverse()
+                .transform_point3(position),
+            Some(parent_transform),
+        )
     } else {
-        position
+        (position, None)
     };
     if !position.is_finite() {
         return;
     }
-    orthographic.viewport_origin = Vec2::ZERO;
-    orthographic.scaling_mode = ScalingMode::Fixed {
-        width: size.x,
-        height: size.y,
-    };
-    camera_transform.translation.x = position.x;
-    camera_transform.translation.y = position.y;
+    let mut fitted_transform = *camera_transform;
+    fitted_transform.translation.x = position.x;
+    fitted_transform.translation.y = position.y;
+    let fitted_global = parent_transform.map_or_else(
+        || GlobalTransform::from(fitted_transform),
+        |parent| parent.mul_transform(fitted_transform),
+    );
+
+    if orthographic.viewport_origin != Vec2::ZERO
+        || !matches!(orthographic.scaling_mode, ScalingMode::Fixed { width, height }
+            if width == size.x && height == size.y)
+    {
+        orthographic.viewport_origin = Vec2::ZERO;
+        orthographic.scaling_mode = ScalingMode::Fixed {
+            width: size.x,
+            height: size.y,
+        };
+    }
+    camera_transform.set_if_neq(fitted_transform);
     // This system follows propagated world transforms. Publish the camera's
     // global pose too, so extraction sees this frame's target without a frame lag;
     // main.rs orders it before the projection update and frustum culling.
-    *camera_global = parent
-        .and_then(|parent| globals.get(parent.parent()).ok())
-        .map(|parent| parent.mul_transform(*camera_transform))
-        .unwrap_or_else(|| GlobalTransform::from(*camera_transform));
+    camera_global.set_if_neq(fitted_global);
 }
 
 fn viewport_geometry(level: Vec2, player: Vec2) -> (Vec2, Vec2) {
@@ -122,6 +140,71 @@ fn viewport_geometry(level: Vec2, player: Vec2) -> (Vec2, Vec2) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing;
+
+    fn camera_app(level: bevy_ecs_ldtk::ldtk::Level) -> (App, Handle<LdtkProject>, Entity, Entity) {
+        let (mut app, handle) = testing::project_app(vec![level]);
+        app.insert_resource(LevelSelection::iid("synthetic-level"))
+            .add_systems(
+                PostUpdate,
+                camera_fit_inside_current_level.after(bevy::transform::TransformSystems::Propagate),
+            );
+        let world = app.world_mut();
+        world.spawn(LdtkProjectHandle::from(handle.clone()));
+        world.spawn((LevelIid::new("synthetic-level"), Transform::default()));
+        let player = world.spawn((Player, Transform::default())).id();
+        let camera = world
+            .spawn((
+                PlatformerCamera,
+                Projection::Orthographic(OrthographicProjection::default_2d()),
+                Transform::from_xyz(20., 30., 99.),
+            ))
+            .id();
+        (app, handle, player, camera)
+    }
+
+    #[test]
+    fn camera_fit_marks_only_changed_components() {
+        let (mut app, _, player, camera) = camera_app(bevy_ecs_ldtk::ldtk::Level {
+            px_wid: 512,
+            ..testing::level()
+        });
+        let ticks = |app: &App| {
+            let camera = app.world().entity(camera);
+            (
+                camera.get_ref::<Projection>().unwrap().last_changed(),
+                camera.get_ref::<Transform>().unwrap().last_changed(),
+                camera.get_ref::<GlobalTransform>().unwrap().last_changed(),
+            )
+        };
+
+        app.update();
+        // Let propagation consume the local transform from the initial fit.
+        app.update();
+        let fitted = ticks(&app);
+        for _ in 0..2 {
+            app.update();
+            assert_eq!(ticks(&app), fitted, "stationary fit changed camera ticks");
+        }
+
+        app.world_mut()
+            .get_mut::<Transform>(player)
+            .unwrap()
+            .translation
+            .x = 300.;
+        app.update();
+        let moved = ticks(&app);
+        assert_eq!(moved.0, fitted.0);
+        assert_ne!(moved.1, fitted.1);
+        assert_ne!(moved.2, fitted.2);
+        let camera = app.world().entity(camera);
+        let expected = Vec3::new(188., 0., 99.);
+        assert_eq!(camera.get::<Transform>().unwrap().translation, expected);
+        assert_eq!(
+            camera.get::<GlobalTransform>().unwrap().translation(),
+            expected
+        );
+    }
 
     #[test]
     fn tiny_and_near_aspect_levels_have_valid_viewports() {
