@@ -61,7 +61,11 @@ export class SpriteLoader {
         img.onload = null;
         img.onerror = null;
         if (releaseSource) {
-          img.removeAttribute?.('src');
+          try {
+            img.removeAttribute?.('src');
+          } catch {
+            // Source cleanup is best effort. Preserve the original failure.
+          }
         }
         if (error) {
           reject(error);

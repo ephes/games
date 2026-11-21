@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject sprite loads with the original abort or timeout error when retiring
+  the pending image source fails.
+
 - Start a new run at level zero with a cleared score after winning. Live resets
   and game-over retries keep the current score.
 

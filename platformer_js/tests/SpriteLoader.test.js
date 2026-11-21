@@ -200,6 +200,49 @@ describe('Real sprite loading', () => {
     }
   );
 
+  it.each(['abort', 'timeout'])(
+    'settles a sprite on %s even when removing its source throws',
+    async reason => {
+      vi.useFakeTimers();
+      const controller = new AbortController();
+      const settled = vi.fn();
+      loader
+        .loadSprite('single', 'single.png', {
+          signal: controller.signal,
+          timeoutMs: 10
+        })
+        .then(settled, settled);
+      const [image] = images;
+      const lateLoad = image.onload;
+      const removeSource = vi
+        .spyOn(image, 'removeAttribute')
+        .mockImplementation(() => {
+          throw new Error('synthetic source retirement failure');
+        });
+
+      if (reason === 'abort') {
+        controller.abort();
+      }
+      await vi.advanceTimersByTimeAsync(reason === 'abort' ? 0 : 10);
+      expect(settled.mock.calls[0]?.[0]).toMatchObject({
+        name: reason === 'abort' ? 'AbortError' : 'Error',
+        message:
+          reason === 'abort'
+            ? 'Sprite load aborted'
+            : 'Sprite load timed out: single.png'
+      });
+      lateLoad();
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(settled).toHaveBeenCalledTimes(1);
+      expect(removeSource).toHaveBeenCalledExactlyOnceWith('src');
+      expect(image.onload).toBeNull();
+      expect(image.onerror).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(loader.getSprite('single')).toBeNull();
+    }
+  );
+
   it('keeps a direct request authoritative over an overlapping batch', async () => {
     const batch = loader.loadAll().catch(error => error);
     const direct = loader.loadSprite('player.idle', 'direct.png');
