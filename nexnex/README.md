@@ -59,7 +59,9 @@ The camera uses a rounded 16:9 viewport of at least 16 by 9 world units. When
 rounding makes the viewport larger than a level, that axis stays at the level
 origin. Scroll extents never become negative. Level fitting applies only to the
 camera created by game setup. Additional cameras keep their own projections and
-transforms while the platformer camera follows level changes.
+transforms while the platformer camera follows level changes. If the selected
+level has a zero or negative authored pixel width or height, the camera retains
+its last valid fit.
 
 Level selection keeps the current level while the player remains inside it.
 Otherwise, overlapping candidates use authored project order, independent of ECS
@@ -73,10 +75,10 @@ constant-time average lookup. Headless operation-count tests cover 100, 200 and
 Selection and camera fitting use propagated world coordinates after physics and
 transform propagation. Level bounds include parent translation and scale; the
 camera fits the world-space bounds and converts its position into its own
-parent's coordinates. Its global pose is published in the same frame, before
-Bevy's camera projection update and frustum culling, so both use the fitted
-view. Restart
-transforms the authored spawn plus layer offsets through the level and back into
+parent's coordinates. Fitting writes the projection and each transform only
+when its value changes. The fitted global pose is available in the same frame,
+before Bevy's camera projection update and frustum culling. Restart transforms
+the authored spawn plus layer offsets through the level and back into
 the surviving Worldly player's parent space. Headless integration tests cover
 translated/scaled worlds, independent layer and camera offsets, level crossings
 and restart without duplicating the player.

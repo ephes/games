@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Keep the last valid camera fit when an authored level's pixel width or
+  height is zero or negative.
+
+- Publish camera fit changes only when the projection or pose changes, with
+  movement still visible to projection updates and frustum culling in the same frame.
+
 - Avoid publishing identical climbing gravity values during contact changes or
   when restoring an already-zero base gravity.
 
