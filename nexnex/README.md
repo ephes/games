@@ -24,6 +24,11 @@ frame. A new gravity component on an active climber is suppressed before Rapier
 steps and its own base is restored on exit. Ordinary mutable nonzero overrides
 from other features remain intact on exit; removed components stay absent.
 
+Ladder contact observation marks `Climber` changed only when contact membership
+changes, and player movement marks it changed only when the climbing state
+changes. Applying or restoring climbing gravity marks `GravityScale` changed
+only when its value changes.
+
 Missing, wrongly typed or null-containing Mob `patrol` arrays produce one
 authoring warning and a stationary route at the spawn, without partially
 importing points or preventing valid sibling mobs from loading. Empty arrays

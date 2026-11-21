@@ -44,33 +44,32 @@ pub fn detect_climb_range(
     mut collisions: MessageReader<CollisionEvent>,
 ) {
     for collision in collisions.read() {
-        match collision.to_owned() {
-            CollisionEvent::Started(collider_a, collider_b, _) => {
-                if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(collider_a), climbables.get(collider_b))
-                {
-                    climber.intersecting_climbables.insert(climbable);
-                }
-                if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(collider_b), climbables.get(collider_a))
-                {
-                    climber.intersecting_climbables.insert(climbable);
-                };
-            }
-            CollisionEvent::Stopped(collider_a, collider_b, _) => {
-                if let Ok(mut climber) = climbers.get_mut(collider_a) {
-                    climber.intersecting_climbables.remove(&collider_b);
-                }
-                if let Ok(mut climber) = climbers.get_mut(collider_b) {
-                    climber.intersecting_climbables.remove(&collider_a);
-                }
+        let (a, b, started) = match *collision {
+            CollisionEvent::Started(a, b, _) => (a, b, true),
+            CollisionEvent::Stopped(a, b, _) => (a, b, false),
+        };
+        for (entity, contact) in [(a, b), (b, a)] {
+            let Ok(mut climber) = climbers.get_mut(entity) else {
+                continue;
+            };
+            let already_in_range = climber.intersecting_climbables.contains(&contact);
+            if started && !already_in_range && climbables.contains(contact) {
+                climber.intersecting_climbables.insert(contact);
+            } else if !started && already_in_range {
+                climber.intersecting_climbables.remove(&contact);
             }
         }
     }
     for mut climber in &mut climbers {
-        climber
+        if climber
             .intersecting_climbables
-            .retain(|entity| climbables.contains(*entity));
+            .iter()
+            .any(|entity| !climbables.contains(*entity))
+        {
+            climber
+                .intersecting_climbables
+                .retain(|entity| climbables.contains(*entity));
+        }
     }
 }
 
@@ -110,7 +109,7 @@ pub fn ignore_gravity_if_climbing(
         if let Some(previous) = owned_gravity.remove(&entity) {
             if let Ok((mut gravity, _)) = bodies.get_mut(entity) {
                 if gravity.0 == 0. {
-                    gravity.0 = previous;
+                    gravity.set_if_neq(GravityScale(previous));
                 }
             }
         }
@@ -121,10 +120,10 @@ pub fn ignore_gravity_if_climbing(
         };
         if climber.climbing {
             owned_gravity.entry(entity).or_insert(gravity.0);
-            gravity.0 = 0.;
+            gravity.set_if_neq(GravityScale(0.));
         } else if let Some(previous) = owned_gravity.remove(&entity) {
             if gravity.0 == 0. {
-                gravity.0 = previous;
+                gravity.set_if_neq(GravityScale(previous));
             }
         }
     }

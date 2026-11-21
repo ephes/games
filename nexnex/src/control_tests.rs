@@ -20,6 +20,118 @@ fn app() -> App {
 }
 
 #[test]
+fn climb_contacts_only_mark_changes_when_membership_changes() {
+    #[derive(Resource, Default)]
+    struct ChangedClimbers(Vec<Entity>);
+
+    let mut app = App::new();
+    app.add_message::<CollisionEvent>()
+        .init_resource::<ChangedClimbers>()
+        .add_systems(
+            Update,
+            (
+                climbing::detect_climb_range,
+                |changed: Query<Entity, Changed<Climber>>,
+                 mut observed: ResMut<ChangedClimbers>| {
+                    observed.0 = changed.iter().collect();
+                },
+            )
+                .chain(),
+        );
+    let climber = app.world_mut().spawn(Climber::default()).id();
+    let ladder = app.world_mut().spawn(Climbable).id();
+    let other = app.world_mut().spawn(Climbable).id();
+    let flags = CollisionEventFlags::empty();
+    let check = |app: &mut App, changed, contacts: &[Entity]| {
+        app.update();
+        let expected_changes = if changed { &[climber][..] } else { &[] };
+        assert_eq!(
+            app.world().resource::<ChangedClimbers>().0,
+            expected_changes
+        );
+        assert_eq!(
+            app.world()
+                .get::<Climber>(climber)
+                .unwrap()
+                .intersecting_climbables,
+            contacts.iter().copied().collect(),
+        );
+    };
+
+    check(&mut app, true, &[]);
+    check(&mut app, false, &[]);
+    app.world_mut()
+        .write_message(CollisionEvent::Started(climber, ladder, flags));
+    check(&mut app, true, &[ladder]);
+    check(&mut app, false, &[ladder]);
+
+    app.world_mut()
+        .write_message(CollisionEvent::Started(ladder, climber, flags));
+    app.world_mut()
+        .write_message(CollisionEvent::Stopped(climber, other, flags));
+    check(&mut app, false, &[ladder]);
+    app.world_mut()
+        .write_message(CollisionEvent::Started(other, climber, flags));
+    check(&mut app, true, &[ladder, other]);
+    app.world_mut().despawn(ladder);
+    check(&mut app, true, &[other]);
+    app.world_mut()
+        .write_message(CollisionEvent::Stopped(other, climber, flags));
+    check(&mut app, true, &[]);
+    check(&mut app, false, &[]);
+}
+
+#[test]
+fn player_movement_marks_climber_changed_only_when_climbing_changes() {
+    #[derive(Resource, Default)]
+    struct ClimberChanged(bool);
+
+    let mut app = app();
+    app.init_resource::<ClimberChanged>().add_systems(
+        PostUpdate,
+        |changed: Query<(), (Changed<Climber>, With<Player>)>,
+         mut observed: ResMut<ClimberChanged>| {
+            observed.0 = !changed.is_empty();
+        },
+    );
+    let ladder = app.world_mut().spawn(Climbable).id();
+    let player = app
+        .world_mut()
+        .spawn((
+            Player,
+            Velocity::zero(),
+            Climber {
+                climbing: false,
+                intersecting_climbables: HashSet::from([ladder]),
+            },
+            GroundDetection::default(),
+            GravityScale(1.),
+        ))
+        .id();
+    let step = |app: &mut App, press: Option<KeyCode>| {
+        let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        input.clear();
+        input.release_all();
+        if let Some(key) = press {
+            input.press(key);
+        }
+        app.update();
+        (
+            app.world().resource::<ClimberChanged>().0,
+            app.world().get::<Climber>(player).unwrap().climbing,
+        )
+    };
+
+    assert_eq!(step(&mut app, None), (true, false));
+    assert_eq!(step(&mut app, None), (false, false));
+    assert_eq!(step(&mut app, Some(KeyCode::KeyW)), (true, true));
+    assert_eq!(step(&mut app, None), (false, true));
+    assert_eq!(step(&mut app, None), (false, true));
+    assert_eq!(step(&mut app, Some(KeyCode::Space)), (true, false));
+    assert_eq!(step(&mut app, None), (false, false));
+}
+
+#[test]
 fn removed_contacts_clear_ground_climbing_and_gravity() {
     for stopped in [false, true] {
         let mut app = app();
@@ -619,6 +731,57 @@ fn assert_sensor(app: &mut App, player: Entity, half_extents: Vec2, y: f32) -> E
     assert_eq!(collider.as_cuboid().unwrap().half_extents(), half_extents);
     assert_eq!(transform.translation, Vec3::new(0., y, 0.));
     entity
+}
+
+#[test]
+fn contact_changes_do_not_republish_climbing_gravity() {
+    for base in [2.5, 0.] {
+        let mut app = app();
+        let ladder = app.world_mut().spawn(Climbable).id();
+        let other = app.world_mut().spawn(Climbable).id();
+        let body = app
+            .world_mut()
+            .spawn((
+                Climber {
+                    climbing: true,
+                    intersecting_climbables: HashSet::from([ladder]),
+                },
+                GravityScale(base),
+            ))
+            .id();
+        let gravity_state = |app: &App| {
+            let entity = app.world().entity(body);
+            let gravity = entity.get_ref::<GravityScale>().unwrap();
+            (gravity.0, gravity.last_changed())
+        };
+
+        app.update();
+        let suppressed = gravity_state(&app);
+        assert_eq!(suppressed.0, 0.);
+        let flags = CollisionEventFlags::empty();
+        for (event, expected_contact) in [
+            (CollisionEvent::Started(body, other, flags), true),
+            (CollisionEvent::Stopped(body, other, flags), false),
+        ] {
+            app.world_mut().write_message(event);
+            app.update();
+            assert_eq!(
+                app.world()
+                    .get::<Climber>(body)
+                    .unwrap()
+                    .intersecting_climbables
+                    .contains(&other),
+                expected_contact
+            );
+            assert_eq!(gravity_state(&app), suppressed);
+        }
+
+        app.world_mut().get_mut::<Climber>(body).unwrap().climbing = false;
+        app.update();
+        let restored = gravity_state(&app);
+        assert_eq!(restored.0, base);
+        assert_eq!(restored.1 != suppressed.1, base != 0.);
+    }
 }
 
 #[test]
