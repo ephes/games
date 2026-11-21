@@ -355,16 +355,22 @@ export class Game {
       this.player.isJumping = true;
     }
 
-    // Update camera
+    // Projectile culling uses the viewport at the end of player movement.
+    const cameraTargetX = this.player.x;
+    const cameraTargetY = this.player.y;
+    const levelBeforeContacts = this.currentLevel;
     this.camera.follow(this.player, true);
 
-    // Snapshot target positions before movement for relative projectile sweeps.
-    const previousTargets = new Map(
-      [...this.enemies, this.boss].map(target => [
-        target,
-        { x: target.x, y: target.y }
-      ])
-    );
+    // Protection cannot expire during this synchronous step. Boss shots can
+    // grant protection, but cannot enable a body sweep that was disabled here.
+    let previousTargets;
+    if (this.projectiles.length > 0 || !this.player.isInvulnerable) {
+      previousTargets = new Map();
+      for (const enemy of this.enemies) {
+        previousTargets.set(enemy, { x: enemy.x, y: enemy.y });
+      }
+      previousTargets.set(this.boss, { x: this.boss.x, y: this.boss.y });
+    }
 
     // Update enemies
     this.enemies.forEach(enemy => enemy.update(this.platforms, deltaTime));
@@ -393,6 +399,7 @@ export class Game {
         if (this.lives <= 0) {
           this.gameOver = true;
           this.player.dispose();
+          this.camera.follow(this.player, true);
           return;
         }
         if (this.lives < livesBefore) {
@@ -414,6 +421,14 @@ export class Game {
 
     // Check collisions
     this.checkCollisions(previousPlayer, previousTargets, portalOpenAtStart);
+
+    // Render a same-level respawn or bounce with the player's final pose.
+    if (
+      this.currentLevel === levelBeforeContacts &&
+      (this.player.x !== cameraTargetX || this.player.y !== cameraTargetY)
+    ) {
+      this.camera.follow(this.player, true);
+    }
   }
 
   /**
@@ -421,7 +436,7 @@ export class Game {
    * @param {number} deltaTime - Time since last update
    * @param {Map} [previousTargets] - Target positions before this step
    */
-  updateProjectiles(deltaTime, previousTargets = new Map()) {
+  updateProjectiles(deltaTime, previousTargets) {
     if (this.projectiles.length === 0) {
       return;
     }
@@ -522,7 +537,7 @@ export class Game {
    */
   checkCollisions(
     previousPlayer,
-    previousTargets = new Map(),
+    previousTargets,
     portalOpenAtStart = !this.portal.isLocked
   ) {
     if (this.gameOver || this.gameWon) {
@@ -552,7 +567,7 @@ export class Game {
             this.player,
             hit.target,
             bodyStart,
-            previousTargets.get(hit.target) ?? hit.target
+            previousTargets?.get(hit.target) ?? hit.target
           )
         : Infinity;
       const coins =
@@ -594,7 +609,7 @@ export class Game {
         this.player,
         target,
         previousPlayer,
-        previousTargets.get(target)
+        previousTargets?.get(target)
       );
       if (collision === 'stomp') {
         const points =
@@ -618,7 +633,7 @@ export class Game {
         boss = null;
       }
       previousPlayer = { x: this.player.x, y: this.player.y };
-      previousTargets = new Map();
+      previousTargets = undefined;
     }
 
     // Portal collision - only allow entry if unlocked

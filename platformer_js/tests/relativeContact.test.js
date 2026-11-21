@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Game } from '../src/Game.js';
 import { Enemy } from '../src/entities/Enemy.js';
 import { BossProjectile } from '../src/entities/BossProjectile.js';
+import { Projectile } from '../src/entities/Projectile.js';
 import { CollisionSystem } from '../src/systems/CollisionSystem.js';
 
 let game;
@@ -163,6 +164,42 @@ it('still consumes later shots along the real path while protected', () => {
   expect(game.lives).toBe(3);
   expect(first.active).toBe(false);
   expect(onPath.active).toBe(false);
+});
+
+it('skips target pose reads during protection and restores body sweeps on expiry', () => {
+  game.enemies = Array.from(
+    { length: 1000 },
+    (_, i) => new Enemy({ x: 3000 + i * 50, y: 100, speed: 1 })
+  );
+  const readY = vi.fn(() => 100);
+  for (const enemy of game.enemies) {
+    // Enemy movement itself only reads x in this fixture.
+    Object.defineProperty(enemy, 'y', { get: readY });
+  }
+  game.player.makeInvulnerable(100);
+  game.update(16);
+  expect(readY.mock.calls.length).toBe(0);
+  expect(game.enemies[0].x).toBe(3001);
+  expect(game.lives).toBe(3);
+
+  const crossing = new Enemy({ x: 0, y: 100, speed: 240 });
+  game.enemies.push(crossing);
+  vi.advanceTimersByTime(100);
+  game.update(16);
+  expect(crossing.x).toBe(240);
+  expect(game.lives).toBe(2);
+});
+
+it('sweeps moving shot targets even while the player is protected', () => {
+  const crossing = new Enemy({ x: 0, y: 100, speed: 240 });
+  game.enemies = [crossing];
+  game.player.makeInvulnerable();
+  game.projectiles = [new Projectile(100, 110, 1)];
+  game.update(16);
+  expect(crossing.x).toBe(240);
+  expect(crossing.alive).toBe(false);
+  expect(game.score).toBe(50);
+  expect(game.projectiles).toEqual([]);
 });
 
 it('passes the full prior player pose for diagonal platform contact', () => {

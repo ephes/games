@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Skip enemy and boss movement snapshots during player protection when no
+  player shots are in flight.
+
 ### Security
 
 - Bound LDtk JSON nesting, containers and tokens before native tree construction,
@@ -17,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require Node 24 LTS or 26+; use Node 24 in CI and keep dev servers local.
 
 ### Fixed
+
+- Follow the player's final position on the same frame as a respawn or stomp
+  bounce.
 
 - Continue game cleanup after a retirement failure and preserve the original
   initialization or frame error.
