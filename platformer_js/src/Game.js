@@ -355,7 +355,10 @@ export class Game {
       this.player.isJumping = true;
     }
 
-    // Update camera
+    // Projectile culling uses the viewport at the end of player movement.
+    const cameraTargetX = this.player.x;
+    const cameraTargetY = this.player.y;
+    const levelBeforeContacts = this.currentLevel;
     this.camera.follow(this.player, true);
 
     // Protection cannot expire during this synchronous step. Boss shots can
@@ -396,6 +399,7 @@ export class Game {
         if (this.lives <= 0) {
           this.gameOver = true;
           this.player.dispose();
+          this.camera.follow(this.player, true);
           return;
         }
         if (this.lives < livesBefore) {
@@ -417,6 +421,14 @@ export class Game {
 
     // Check collisions
     this.checkCollisions(previousPlayer, previousTargets, portalOpenAtStart);
+
+    // Render a same-level respawn or bounce with the player's final pose.
+    if (
+      this.currentLevel === levelBeforeContacts &&
+      (this.player.x !== cameraTargetX || this.player.y !== cameraTargetY)
+    ) {
+      this.camera.follow(this.player, true);
+    }
   }
 
   /**

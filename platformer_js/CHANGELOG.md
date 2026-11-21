@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Follow the player's final position on the same frame as a respawn or stomp
+  bounce.
+
 - Continue game cleanup after a retirement failure and preserve the original
   initialization or frame error.
 

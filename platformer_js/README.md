@@ -372,6 +372,9 @@ endpoint pose.
 
 Damage respawns the player at the active level's start, clearing vertical speed
 and jumping state while retaining the usual life loss and invulnerability.
+The camera follows the final same-level position on the respawn or stomp frame.
+Player-shot culling uses the viewport from before contact resolution, and level
+handover resets the camera.
 Enemies accept one defeat and award 50 points once, even when bullets and a
 stomp overlap. Defeated enemies stop moving/colliding immediately while their
 300 ms hit animation remains visible. After its final hit frame, the level retires
