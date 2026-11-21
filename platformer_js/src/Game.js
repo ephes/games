@@ -272,7 +272,13 @@ export class Game {
       const elapsed = Math.max(0, timestamp - (this.lastTime ?? timestamp));
       this.lastTime = timestamp;
       // Drop suspension time; ordinary slow frames can catch up at most five steps.
-      if (this.paused || document.hidden || elapsed > 250) {
+      if (
+        this.paused ||
+        this.gameOver ||
+        this.gameWon ||
+        document.hidden ||
+        elapsed > 250
+      ) {
         this.accumulator = 0;
       } else {
         this.accumulator += Math.min(elapsed, step * 5);
@@ -284,6 +290,10 @@ export class Game {
         steps++;
         if (!this.running || this.disposed) {
           return;
+        }
+        if (this.gameOver || this.gameWon) {
+          this.accumulator = 0;
+          break;
         }
       }
       this.render();

@@ -50,6 +50,33 @@ function frame(time) {
   expect(frames.size).toBe(1);
 }
 
+it.each([
+  ['gameWon', 'drawWinScreen'],
+  ['gameOver', 'drawGameOver']
+])('skips terminal ticks for %s while rendering the overlay', (state, draw) => {
+  const update = vi.spyOn(game, 'update').mockImplementationOnce(() => {
+    game[state] = true;
+  });
+  const overlay = vi.spyOn(game.renderer, draw);
+  frame(100); // The first step ends the run with several steps still queued.
+  expect(update).toHaveBeenCalledTimes(1);
+  expect(game.accumulator).toBe(0);
+  expect(overlay).toHaveBeenCalledTimes(1);
+
+  update.mockClear();
+  game.accumulator = 100;
+  frame(200);
+  expect(update).not.toHaveBeenCalled();
+  expect(game.accumulator).toBe(0);
+  expect(overlay).toHaveBeenCalledTimes(2);
+
+  expect(game.resetLevel()).toBe(true);
+  frame(300);
+  expect(update).not.toHaveBeenCalled();
+  frame(320);
+  expect(update).toHaveBeenCalledTimes(1);
+});
+
 it('pauses real Escape input, simulation and shots; resumes once without held input or catch-up', () => {
   key('ArrowRight');
   frame(10); // Retire even this partial fixed step on pause.

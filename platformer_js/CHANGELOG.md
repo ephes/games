@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Stop fixed simulation steps on win and game-over screens while continuing to
+  render the overlay.
+
 - Skip enemy and boss movement snapshots during player protection when no
   player shots are in flight.
 

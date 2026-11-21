@@ -260,6 +260,8 @@ starts a new run at level zero with zero score once construction succeeds.
 Live resets, same-level retries after death and level replacements preserve
 score. Failed construction retains the score, terminal state and objects; a
 disposed Game cannot reset.
+Win and game-over screens keep rendering while simulation is stopped. A
+successful reset starts with a fresh simulation clock.
 Successful resets/replacements clear both sides' projectiles, held input and
 retired player timers. `resetLevel()` returns true on reset, false after disposal;
 construction errors still propagate.
