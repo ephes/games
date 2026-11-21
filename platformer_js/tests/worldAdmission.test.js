@@ -23,7 +23,7 @@ const level = () => ({
   ]
 });
 const response = (body, length = null) => ({
-  ok: true,
+  status: 200,
   headers: new Headers(
     length === null ? {} : { 'content-length': String(length) }
   ),
@@ -459,7 +459,7 @@ describe('World transfer admission', () => {
       const getReader = vi.spyOn(body, 'getReader');
       const fetch = vi.fn().mockResolvedValue({
         ...response(body),
-        ok: kind !== 'HTTP error'
+        status: kind === 'HTTP error' ? 500 : 200
       });
       vi.stubGlobal('fetch', fetch);
       const pending = loader.loadWorld('unread');
@@ -475,6 +475,41 @@ describe('World transfer admission', () => {
       expect(loader.world).toBeNull();
     }
   );
+
+  it.each([
+    ['206 without Content-Range', { status: 206 }],
+    [
+      '200 with Content-Range',
+      { headers: { 'Content-Range': 'bytes 0-9/20' } }
+    ],
+    ['other successful status', { status: 201 }]
+  ])('rejects %s before reading a valid world body', async (_kind, init) => {
+    const loader = new LDtkLoader();
+    const previous = { levels: [] };
+    const candidate = { levels: [level()] };
+    loader.world = previous;
+    const body = stream(bytes(candidate));
+    const getReader = vi.spyOn(body, 'getReader');
+    const cancel = vi.spyOn(body, 'cancel');
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(body, init))
+        .mockResolvedValueOnce(new Response(stream(bytes(candidate))))
+    );
+
+    await expect(loader.loadWorld('incomplete')).rejects.toThrow(
+      'LDtk transfer failed'
+    );
+    expect(getReader).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(loader.world).toBe(previous);
+
+    const loaded = await loader.loadWorld('complete');
+    expect(loaded).toEqual(candidate);
+    expect(loader.world).toBe(loaded);
+  });
 
   it.each(['invalid', 'valid'])(
     'preserves the %s world result when reader release throws',

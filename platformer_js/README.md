@@ -428,8 +428,9 @@ pending transfers. Each load has a 10-second monotonic deadline covering the
 transfer, UTF-8 decoding, JSON parsing and world preflight. A candidate must
 finish these steps before the deadline to be accepted. The streamed response
 limit is 16 MiB (actual bytes, even without an accurate Content-Length).
-The loader cancels an unread response body when the HTTP response fails or
-arrives after cancellation.
+The loader requires HTTP 200 without a `Content-Range` header for a world
+download. It cancels the unread body if the response fails that check or
+arrives after cancellation, preserving the previous world.
 The loader requires valid UTF-8 and refuses duplicate JSON member names in any
 object, including names written with equivalent Unicode escapes. Before
 `JSON.parse` constructs the tree, a quoted-token pass admits at most 64 nested

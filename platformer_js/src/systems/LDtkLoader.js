@@ -142,7 +142,7 @@ export class LDtkLoader {
       const response = await fetch(url, { signal: controller.signal });
       body = response.body;
       controller.signal.throwIfAborted();
-      if (!response.ok) {
+      if (response.status !== 200 || response.headers.has('content-range')) {
         throw new Error('LDtk transfer failed');
       }
       reader = body?.getReader();

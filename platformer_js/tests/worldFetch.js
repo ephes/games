@@ -15,7 +15,7 @@ export function mockWorldFetch() {
           .then(data => {
             const bytes = new TextEncoder().encode(JSON.stringify(data));
             resolve({
-              ok: true,
+              status: 200,
               headers: new Headers(),
               body: new ReadableStream({
                 start(controller) {
