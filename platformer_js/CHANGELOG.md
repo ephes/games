@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Scan player shot candidates without sorting per shot, preserving level order
+  and enemy-before-boss priority for exact contact ties.
+
 - Reject already-aborted sprite requests before allocating images or timers.
 
 - Stop fixed simulation steps on win and game-over screens while continuing to

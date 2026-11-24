@@ -241,8 +241,7 @@ export class CollisionSystem {
       }
     };
     visit(index);
-    // Preserve level order for identical rectangles, and enemy-before-boss ties.
-    return candidates.sort((a, b) => a.order - b.order);
+    return candidates;
   }
 
   /**
@@ -254,7 +253,7 @@ export class CollisionSystem {
    * @param {Object} [boss] - Boss enemy
    * @param {Object} [previousProjectile] - Projectile position before this step
    * @param {Map} [previousTargets] - Target positions before this step
-   * @param {Array} [candidates] - Optional broad-phase query in level order
+   * @param {Array} [candidates] - Optional broad-phase entries with level order
    * @returns {Object|null} Hit type, target and contact time, or null
    */
   static checkProjectileCollisions(
@@ -267,12 +266,14 @@ export class CollisionSystem {
   ) {
     let hit = null;
     let earliest = Infinity;
+    let hitOrder = Infinity;
     const targets = candidates ?? [
       ...enemies.map(target => ({ type: 'enemy', target })),
       ...(boss ? [{ type: 'boss', target: boss }] : [])
     ];
-    for (const candidate of targets) {
-      const { target } = candidate;
+    for (let i = 0; i < targets.length; i++) {
+      const candidate = targets[i];
+      const { target, order = i } = candidate;
       if (!target.alive) {
         continue;
       }
@@ -289,6 +290,7 @@ export class CollisionSystem {
       // of enemy array order. Exact duplicate rectangles retain level order.
       let before = false;
       if (hit && time === earliest) {
+        before = order < hitOrder;
         for (const key of ['x', 'y', 'width', 'height']) {
           if (target[key] !== hit.target[key]) {
             before = target[key] < hit.target[key];
@@ -298,6 +300,7 @@ export class CollisionSystem {
       }
       if (time < earliest || before) {
         earliest = time;
+        hitOrder = order;
         hit = { type: candidate.type, target, time };
       }
     }

@@ -127,7 +127,9 @@ Player shots sweep their whole step against enemies and the boss, accounting for
 both projectile and target movement. Each step builds one balanced tree of
 target swept bounds, shared by all player shots. Queries prune disjoint subtrees
 before exact contact tests; dense intersecting targets still require exact tests.
-The conservative bounds include target motion, and preserve exhaustive hit ordering.
+The conservative bounds include target motion. Each query walks candidates in
+tree order without sorting; exact contact selection uses their original level
+order to break ties between identical rectangles.
 Competing shots resolve in contact-time order across the whole fixed step. A shot
 whose selected target was defeated earlier checks its path again for the next
 live target. Simultaneous shots use pre-step x/y/width/height, then endpoint
