@@ -63,3 +63,78 @@ it('matches exhaustive ordering for crossing, tied, grazing and distant targets'
     }
   }
 });
+
+it.each([false, true])(
+  'selects the exhaustive winner in a dense query without sorting (reverse: %s)',
+  reverse => {
+    const shot = { x: 50, y: 100, width: 5, height: 5 };
+    const previousShot = { x: shot.x, y: 0 };
+    const first = { x: 50, y: 50, width: 20, height: 20, alive: true };
+    const duplicate = { ...first };
+    const boss = { ...first };
+    const dense = Array.from({ length: 256 }, (_, i) => ({
+      ...first,
+      x: 51 + ((i * 3) % 4)
+    }));
+    const enemies = [first, ...dense, duplicate];
+    if (reverse) {
+      enemies.reverse();
+    }
+    const previousTargets = new Map([
+      [first, { x: 49, y: 50 }],
+      [duplicate, { x: 40, y: 50 }],
+      [boss, { x: 35, y: 50 }]
+    ]);
+    const index = CollisionSystem.buildProjectileIndex(
+      enemies,
+      boss,
+      previousTargets
+    );
+
+    // Count query comparisons only, excluding the shared tree build.
+    const sort = Array.prototype.sort;
+    let comparisons = 0;
+    const sortSpy = vi
+      .spyOn(Array.prototype, 'sort')
+      .mockImplementation(function (compare) {
+        return sort.call(this, (a, b) => {
+          comparisons++;
+          return compare(a, b);
+        });
+      });
+    let candidates;
+    try {
+      candidates = CollisionSystem.queryProjectileIndex(
+        index,
+        shot,
+        previousShot
+      );
+    } finally {
+      sortSpy.mockRestore();
+    }
+
+    expect(candidates).toHaveLength(enemies.length + 1);
+    const exhaustive = CollisionSystem.checkProjectileCollisions(
+      shot,
+      enemies,
+      boss,
+      previousShot,
+      previousTargets
+    );
+    const indexed = CollisionSystem.checkProjectileCollisions(
+      shot,
+      enemies,
+      boss,
+      previousShot,
+      previousTargets,
+      candidates
+    );
+    expect(exhaustive.type).toBe('enemy');
+    expect(exhaustive.target).toBe(enemies[0]);
+    expect(exhaustive.time).toBe(0.45);
+    expect(indexed.target).toBe(exhaustive.target);
+    expect(indexed.type).toBe(exhaustive.type);
+    expect(indexed.time).toBe(exhaustive.time);
+    expect(comparisons).toBe(0);
+  }
+);

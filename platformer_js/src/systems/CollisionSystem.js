@@ -25,14 +25,17 @@ export class CollisionSystem {
    * Check platform collisions for an entity
    * @param {Object} entity - Entity to check
    * @param {Array} platforms - List of platforms
-   * @param {Object|number} [previousPose] - Pre-step x/y (legacy Y-only is supported)
+   * @param {Object|number|null} [previousPose] - Pre-step x/y, legacy Y-only, or null for no history
    * @returns {Object} Collision info
    */
   static checkPlatformCollisions(entity, platforms, previousPose) {
+    const position =
+      previousPose !== null && typeof previousPose === 'object'
+        ? previousPose
+        : undefined;
     const previousY =
-      typeof previousPose === 'number' ? previousPose : previousPose?.y;
-    const previousX =
-      typeof previousPose === 'object' ? previousPose.x : entity.x;
+      typeof previousPose === 'number' ? previousPose : position?.y;
+    const previousX = position ? position.x : entity.x;
     const result = { isGrounded: false, platform: null, side: null };
     const falling = entity.velocityY > 0;
     if (!falling && entity.velocityY >= 0) {
@@ -241,8 +244,7 @@ export class CollisionSystem {
       }
     };
     visit(index);
-    // Preserve level order for identical rectangles, and enemy-before-boss ties.
-    return candidates.sort((a, b) => a.order - b.order);
+    return candidates;
   }
 
   /**
@@ -254,7 +256,7 @@ export class CollisionSystem {
    * @param {Object} [boss] - Boss enemy
    * @param {Object} [previousProjectile] - Projectile position before this step
    * @param {Map} [previousTargets] - Target positions before this step
-   * @param {Array} [candidates] - Optional broad-phase query in level order
+   * @param {Array} [candidates] - Optional broad-phase entries with level order
    * @returns {Object|null} Hit type, target and contact time, or null
    */
   static checkProjectileCollisions(
@@ -267,12 +269,14 @@ export class CollisionSystem {
   ) {
     let hit = null;
     let earliest = Infinity;
+    let hitOrder = Infinity;
     const targets = candidates ?? [
       ...enemies.map(target => ({ type: 'enemy', target })),
       ...(boss ? [{ type: 'boss', target: boss }] : [])
     ];
-    for (const candidate of targets) {
-      const { target } = candidate;
+    for (let i = 0; i < targets.length; i++) {
+      const candidate = targets[i];
+      const { target, order = i } = candidate;
       if (!target.alive) {
         continue;
       }
@@ -289,6 +293,7 @@ export class CollisionSystem {
       // of enemy array order. Exact duplicate rectangles retain level order.
       let before = false;
       if (hit && time === earliest) {
+        before = order < hitOrder;
         for (const key of ['x', 'y', 'width', 'height']) {
           if (target[key] !== hit.target[key]) {
             before = target[key] < hit.target[key];
@@ -298,6 +303,7 @@ export class CollisionSystem {
       }
       if (time < earliest || before) {
         earliest = time;
+        hitOrder = order;
         hit = { type: candidate.type, target, time };
       }
     }

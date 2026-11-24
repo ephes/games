@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Scan player shot candidates without sorting per shot, preserving level order
+  and enemy-before-boss priority for exact contact ties.
+
 - Reject already-aborted sprite requests before allocating images or timers.
 
 - Stop fixed simulation steps on win and game-over screens while continuing to
@@ -27,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require Node 24 LTS or 26+; use Node 24 in CI and keep dev servers local.
 
 ### Fixed
+
+- Treat a null previous platform pose as absent so overlap resolution can run.
 
 - Advance player hit visuals and invulnerability on the simulation clock so
   pause and tab hiding preserve the remaining recovery time.
