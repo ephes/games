@@ -7,6 +7,9 @@
  * Handles player state, movement, and actions
  */
 export class Player {
+  #hitRemaining = null;
+  #invulnerabilityRemaining = null;
+
   /**
    * Create a new player
    * @param {number} x - Initial X position
@@ -27,8 +30,6 @@ export class Player {
     this.direction = 1; // 1 for right, -1 for left
     this.isHit = false;
     this.disposed = false;
-    this.hitTimeout = null;
-    this.invulnerabilityTimeout = null;
     this.hitAnimationDuration = 500; // Duration of hit animation in milliseconds
 
     // Animation properties
@@ -43,6 +44,25 @@ export class Player {
    * @param {number} deltaTime - Time since last update
    */
   update(keys, deltaTime) {
+    // Apply expiry before animation selection and the step's collision checks.
+    if (Number.isFinite(deltaTime) && deltaTime > 0) {
+      // Tolerate rounding at exact multiples of the fixed simulation step.
+      if (this.#hitRemaining !== null) {
+        this.#hitRemaining -= deltaTime;
+        if (this.#hitRemaining <= 1e-7) {
+          this.#hitRemaining = null;
+          this.isHit = false;
+        }
+      }
+      if (this.#invulnerabilityRemaining !== null) {
+        this.#invulnerabilityRemaining -= deltaTime;
+        if (this.#invulnerabilityRemaining <= 1e-7) {
+          this.#invulnerabilityRemaining = null;
+          this.isInvulnerable = false;
+        }
+      }
+    }
+
     // Handle horizontal movement
     if (keys['ArrowLeft']) {
       this.x -= this.speed;
@@ -131,38 +151,23 @@ export class Player {
 
   /**
    * Make player invulnerable for a period
-   * @param {number} duration - Duration in milliseconds
+   * @param {number} duration - Duration in simulation milliseconds
    */
   makeInvulnerable(duration = 2000) {
     if (this.disposed) {
       return;
     }
-    clearTimeout(this.hitTimeout);
-    clearTimeout(this.invulnerabilityTimeout);
     this.isInvulnerable = true;
     this.isHit = true;
-
-    // One owned elapsed timer controls hit expiry, independent of wall time.
-    this.hitTimeout = setTimeout(() => {
-      this.isHit = false;
-    }, this.hitAnimationDuration);
-
-    // Reset invulnerability
-    this.invulnerabilityTimeout = setTimeout(() => {
-      this.isInvulnerable = false;
-    }, duration);
+    this.#hitRemaining = this.hitAnimationDuration;
+    this.#invulnerabilityRemaining = duration;
   }
 
-  /** Release timers when this player leaves the playable world. */
+  /** Retire recovery counters when this player leaves the playable world. */
   dispose() {
-    if (this.disposed) {
-      return;
-    }
     this.disposed = true;
-    clearTimeout(this.hitTimeout);
-    clearTimeout(this.invulnerabilityTimeout);
-    this.hitTimeout = null;
-    this.invulnerabilityTimeout = null;
+    this.#hitRemaining = null;
+    this.#invulnerabilityRemaining = null;
   }
 
   /**

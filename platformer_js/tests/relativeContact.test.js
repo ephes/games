@@ -184,8 +184,7 @@ it('skips target pose reads during protection and restores body sweeps on expiry
 
   const crossing = new Enemy({ x: 0, y: 100, speed: 240 });
   game.enemies.push(crossing);
-  vi.advanceTimersByTime(100);
-  game.update(16);
+  game.update(84);
   expect(crossing.x).toBe(240);
   expect(game.lives).toBe(2);
 });

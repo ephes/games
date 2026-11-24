@@ -15,69 +15,59 @@ describe('Player protection', () => {
 
   it('renews protection through the old expiry until the new expiry', () => {
     player.makeInvulnerable(2000);
-    vi.advanceTimersByTime(1000);
+    player.update({}, 1000);
     player.makeInvulnerable(2000);
-    vi.advanceTimersByTime(1000);
+    player.update({}, 1000);
     expect(player.isInvulnerable).toBe(true);
-    vi.advanceTimersByTime(999);
+    player.update({}, 999);
     expect(player.isInvulnerable).toBe(true);
-    vi.advanceTimersByTime(1);
+    player.update({}, 1);
     expect(player.isInvulnerable).toBe(false);
   });
 
   it('renews the hit animation independently of protection', () => {
     player.makeInvulnerable(2000);
-    vi.advanceTimersByTime(250);
-    player.makeInvulnerable(2000);
-    vi.advanceTimersByTime(250);
-    player.update({}, 1000 / 60);
+    player.update({}, 250);
+    player.makeInvulnerable(100);
+    player.update({}, 100);
+    expect(player.isInvulnerable).toBe(false);
     expect(player.isHit).toBe(true);
-    vi.advanceTimersByTime(249);
-    expect(player.isHit).toBe(true);
-    vi.advanceTimersByTime(1);
+    player.update({}, 399);
+    expect(player.currentAnimation).toBe('hit');
+    player.update({}, 1);
     expect(player.isHit).toBe(false);
-    expect(player.isInvulnerable).toBe(true);
+    expect(player.currentAnimation).toBe('idle');
   });
 
   it.each([1_000_000_000, -1_000_000_000])(
-    'keeps hit pose and renewal on elapsed timers across wall-clock jump %i',
+    'ignores wall-clock jumps and elapsed real time (%i)',
     wallTime => {
-      player.makeInvulnerable(2000);
-      vi.advanceTimersByTime(250);
+      player.makeInvulnerable();
       vi.setSystemTime(wallTime);
-      player.update({}, 1000 / 60);
+      vi.advanceTimersByTime(3000);
+      player.update({}, 250);
       expect(player.currentAnimation).toBe('hit');
       expect(player.isInvulnerable).toBe(true);
-      player.makeInvulnerable(2000);
-      vi.setSystemTime(-wallTime);
-      vi.advanceTimersByTime(250);
-      player.update({}, 1000 / 60);
-      expect(player.currentAnimation).toBe('hit');
-      vi.advanceTimersByTime(249);
-      player.update({}, 1000 / 60);
-      expect(player.currentAnimation).toBe('hit');
-      vi.advanceTimersByTime(1);
-      player.update({}, 1000 / 60);
-      expect(player.isHit).toBe(false);
+      player.update({}, 250);
       expect(player.currentAnimation).toBe('idle');
       expect(player.isInvulnerable).toBe(true);
-      vi.advanceTimersByTime(1499);
-      expect(player.isInvulnerable).toBe(true);
-      vi.advanceTimersByTime(1);
-      expect(player.isInvulnerable).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
     }
   );
 
-  it('retires both elapsed callbacks and refuses renewal after disposal', () => {
-    player.makeInvulnerable();
+  it('retires both counters and refuses renewal after disposal', () => {
+    player.makeInvulnerable(1000);
     player.dispose();
-    vi.setSystemTime(1_000_000_000);
-    vi.advanceTimersByTime(3000);
-    player.update({}, 1000 / 60);
+    player.makeInvulnerable(50);
+    player.update({}, 3000);
     expect(player.isHit).toBe(true);
     expect(player.isInvulnerable).toBe(true);
-    player.makeInvulnerable();
-    expect(vi.getTimerCount()).toBe(0);
+
+    const retiredWithoutDamage = new Player(0, 0);
+    retiredWithoutDamage.dispose();
+    retiredWithoutDamage.makeInvulnerable();
+    expect(retiredWithoutDamage.isHit).toBe(false);
+    expect(retiredWithoutDamage.isInvulnerable).toBe(false);
   });
 
   it('loses one life and respawns once while protected, then accepts damage again', () => {
@@ -92,7 +82,7 @@ describe('Player protection', () => {
     });
     lives = player.takeDamage(lives);
     expect(lives).toBe(2);
-    vi.advanceTimersByTime(2000);
+    player.update({}, 2000);
     expect(player.takeDamage(lives)).toBe(1);
   });
 });
@@ -171,22 +161,12 @@ describe('Player animation', () => {
     expect(player.currentAnimation).toBe('fall');
   });
 
-  it('expires hit state by elapsed real time, independently of fixed simulation steps', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    try {
-      player.makeInvulnerable();
-      for (let step = 0; step < 120; step++) {
-        player.update({ ArrowRight: true }, 1000 / 60);
-      }
-      expect(player.currentAnimation).toBe('hit');
-      vi.advanceTimersByTime(500);
+  it('expires hit state and protection at their fixed-step boundaries', () => {
+    player.makeInvulnerable();
+    for (let tick = 1; tick <= 120; tick++) {
       player.update({ ArrowRight: true }, 1000 / 60);
-      expect(player.currentAnimation).toBe('run');
-      expect(player.isInvulnerable).toBe(true);
-    } finally {
-      vi.clearAllTimers();
-      vi.useRealTimers();
+      expect(player.currentAnimation).toBe(tick < 30 ? 'hit' : 'run');
+      expect(player.isInvulnerable).toBe(tick < 120);
     }
   });
 });

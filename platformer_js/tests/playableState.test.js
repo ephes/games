@@ -116,7 +116,7 @@ describe('Playable level state', () => {
     expect(game.lives).toBe(2);
     expect(game.player.isInvulnerable).toBe(true);
     expect(game.player.takeDamage(game.lives)).toBe(2);
-    vi.advanceTimersByTime(2000);
+    game.player.update({}, 2000);
     expect(game.player.isInvulnerable).toBe(false);
   }
 

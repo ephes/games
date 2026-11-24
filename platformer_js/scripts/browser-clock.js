@@ -40,6 +40,15 @@ try {
         throw Error(`portal pulse mismatch: ${actual} vs ${expected}`);
       }
     }
+    // A retired player keeps its hit state: no recovery counter remains to
+    // expire it, even far beyond both durations.
+    function recoveryRetired(player) {
+      if (!player.isHit || !player.isInvulnerable) {
+        return false;
+      }
+      player.update({}, 60_000);
+      return player.isHit && player.isInvulnerable;
+    }
     const results = [];
     for (const hz of [30, 60, 144]) {
       frames = new Map();
@@ -130,8 +139,7 @@ try {
           game.lastTime !== 123 ||
           !game.spriteController.signal.aborted ||
           !game.player.disposed ||
-          game.player.hitTimeout !== null ||
-          game.player.invulnerabilityTimeout !== null
+          !recoveryRetired(game.player)
         ) {
           throw Error('failed LDtk retirement prevented later game cleanup');
         }
@@ -175,12 +183,8 @@ try {
     }
     const retired = game.player;
     game.resetLevel();
-    if (
-      !retired.disposed ||
-      retired.hitTimeout !== null ||
-      retired.invulnerabilityTimeout !== null
-    ) {
-      throw Error('retired timers retained');
+    if (!retired.disposed || !recoveryRetired(retired)) {
+      throw Error('retired recovery counters retained');
     }
     game.platforms = [];
     game.coins = [];

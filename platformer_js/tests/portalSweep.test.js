@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Game } from '../src/Game.js';
+import { Coin } from '../src/objects/Coin.js';
 import { Enemy } from '../src/entities/Enemy.js';
 import { BossProjectile } from '../src/entities/BossProjectile.js';
 
@@ -37,6 +38,28 @@ it.each([false, true])(
       game.update(16);
       expect(next).toHaveBeenCalledTimes(1);
     }
+  }
+);
+
+it.each([
+  { enemyX: 155, level: 1, lives: 3 },
+  { enemyX: 130, level: 0, lives: 2 }
+])(
+  'resolves an open portal and body contact in sweep order ($enemyX)',
+  ({ enemyX, level, lives }) => {
+    game.portal.unlock();
+    game.enemies = [new Enemy({ x: enemyX, y: 149, speed: 0 })];
+    const earlyCoin = new Coin(60, 149);
+    const lateCoin = new Coin(150, 149);
+    game.coins = [earlyCoin, lateCoin];
+    Object.assign(game.player, { x: 400, y: 149, velocityY: 0 });
+
+    game.checkCollisions({ x: 0, y: 149 });
+
+    expect(game.currentLevel).toBe(level);
+    expect(game.lives).toBe(lives);
+    expect(earlyCoin.collected).toBe(true);
+    expect(lateCoin.collected).toBe(false);
   }
 );
 
