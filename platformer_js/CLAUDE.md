@@ -82,11 +82,11 @@ bounce/respawn retires previous player and target sweeps. Coins use the same
 swept rectangle primitive with the pre-step player pose, skipping collected coins
 and respawn teleport paths. Platform and coin candidates query the level-owned
 static tree in level order; collected coins retire from collision branches.
-Coins/body effects resolve by contact time, retaining coin precedence for exact
-ties and replacing unused sweeps after bounce/respawn. Unlocked portal entry
-sweeps the admitted post-platform motion with the existing center threshold
-only when the portal was unlocked at step start; a mid-step unlock (player shot
-defeating the boss, or stomp) is endpoint-only.
+Coins, body effects and already-open portal entry resolve by contact time;
+exact ties go coins, then body, then portal, and bounce/respawn replaces unused
+sweeps. Unlocked portal entry sweeps the admitted post-platform motion with the
+existing center threshold only when the portal was unlocked at step start; a
+mid-step unlock (player shot defeating the boss, or stomp) is endpoint-only.
 Enemy draw calls use inclusive camera bounds (run and hit sprites fit their
 destination rectangle), while offscreen simulation continues. Enemies retire
 from the level after their 300 ms hit visual finishes. Keep these fixtures synthetic, dispose each Game and
@@ -212,9 +212,9 @@ frame remainder (200 ms per sequence step)
 and a monotonic accumulated clock shared by hit expiry and renderer fading.
 Accepted damage renews the 400 ms hit visual without resetting animation.
 Boss overrides `isInHitAnimation()` to false: a defeated boss is not drawn.
-Player hit visuals and protection each expire on their own owned real-time timeout (500 ms and the requested duration),
-both restarted on renewal and cancelled by `dispose()`, independent of simulation duration and
-system-clock changes. Authored LDtk dimensions are validated and retained;
+Player hit visuals and protection count down in simulation milliseconds (500 ms and the requested duration),
+both restarted on renewal and retired by `dispose()`; pause, hidden tabs and
+wall-clock changes leave them unchanged. Authored LDtk dimensions are validated and retained;
 Game derives complete object extents and shares bounds with its player, camera
 and boss shots, including vertical camera following in tall levels.
 
