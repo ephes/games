@@ -29,6 +29,7 @@ beforeEach(async () => {
 });
 afterEach(() => {
   game.dispose();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -147,6 +148,43 @@ it('preserves manual pause across focus and visibility changes and resets clocks
   frame(280);
   expect(game.portal.pulseTime).toBeGreaterThan(hiddenPhase);
 });
+
+it.each(['uninterrupted', 'paused', 'hidden'])(
+  'preserves hit state and damage eligibility at the same step when %s',
+  mode => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    game.lives = game.player.takeDamage(game.lives);
+    const step = 1000 / 60;
+    for (let tick = 1; tick <= 15; tick++) {
+      vi.advanceTimersByTime(step);
+      frame(tick * step);
+    }
+
+    let resumedAt = 15 * step;
+    if (mode !== 'uninterrupted') {
+      if (mode === 'paused') {
+        escape();
+      } else {
+        vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+        document.dispatchEvent(new Event('visibilitychange'));
+      }
+      vi.advanceTimersByTime(3000);
+      resumedAt += 3000;
+      frame(resumedAt);
+      if (mode === 'paused') {
+        escape();
+      } else {
+        vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+        document.dispatchEvent(new Event('visibilitychange'));
+      }
+      frame(resumedAt);
+    }
+
+    frame(resumedAt + step);
+    expect(game.player.isHit).toBe(true);
+    expect(game.player.takeDamage(game.lives)).toBe(2);
+  }
+);
 
 it('restarts into play only on successful reset and retires a paused loop on disposal', async () => {
   await game.init();

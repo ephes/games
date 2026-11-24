@@ -58,11 +58,12 @@ Note: Due to ES module CORS restrictions, the game must be served via HTTP. Open
 ## Testing
 
 The Vitest suite imports the real Player and InputManager for animation, timer
-and action delivery contracts. Renewing invulnerability cancels the previous hit
-and protection timeouts; each new call owns both expirations. Animation state
+and action delivery contracts. Renewing invulnerability restarts the hit visual
+and protection counters, which advance in simulation milliseconds. Animation state
 priority is hit, jump/fall, run, idle, with state changes resetting frame and timer.
 Frames advance at 15 FPS with idle/run/hit counts 11/12/7 and single-frame jump/fall.
-Use fake wall time for hit/protection tests independently of fixed simulation steps.
+Advance fixed simulation steps to test hit and protection expiry. Fake wall
+time tests verify that discarded time during suspension leaves both intact.
 Action dispatch snapshots subscribers per edge; self-removal cannot skip peers.
 Dispose each test input manager and restore fake timers after each case.
 

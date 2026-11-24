@@ -364,8 +364,8 @@ export class Game {
     const levelBeforeContacts = this.currentLevel;
     this.camera.follow(this.player, true);
 
-    // Protection cannot expire during this synchronous step. Boss shots can
-    // grant protection, but cannot enable a body sweep that was disabled here.
+    // Player.update has already applied this step’s protection expiry. Boss
+    // shots can grant protection before body contacts are resolved.
     let previousTargets;
     if (this.projectiles.length > 0 || !this.player.isInvulnerable) {
       previousTargets = new Map();

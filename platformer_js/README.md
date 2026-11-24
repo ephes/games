@@ -68,8 +68,8 @@ npm run preview
 
 The project uses Vitest for unit testing covering game logic. Tests exercise
 the production Player and InputManager, including animation precedence/frame counts,
-renewed hit/protection timers and self-removing action subscribers. Player tests
-keep fixed simulation steps separate from fake wall time; input tests dispose
+renewed hit/protection counters and self-removing action subscribers. Player tests
+advance simulation steps independently of fake wall time; input tests dispose
 every DOM listener after each case. Collision tests call the production system
 with synthetic rectangles: touching edges do not overlap,
 landing needs at least 50% horizontal support while falling, and an upward
@@ -266,8 +266,8 @@ disposed Game cannot reset.
 Win and game-over screens keep rendering while simulation is stopped. A
 successful reset starts with a fresh simulation clock.
 Successful resets/replacements clear both sides' projectiles, held input and
-retired player timers. `resetLevel()` returns true on reset, false after disposal;
-construction errors still propagate.
+retired player recovery counters. `resetLevel()` returns true on reset and false
+after disposal. Construction errors still propagate.
 
 Click or Tab to the canvas to give that game keyboard focus. Only the focused
 canvas responds; moving focus away releases held keys. Handled, unmodified keys
@@ -279,11 +279,11 @@ already held is still released on its keyup, even with a modifier down. Standalo
 pass a focusable surface to scope it to a game.
 
 Switching windows or hiding the tab clears held movement and shooting keys.
-Press again after returning. Retired players cancel both damage timers after a successful level replacement,
-on win/death, or on disposal. Failed level construction retains the active
-player and its protection timers. `player.dispose()` is idempotent and terminal
-for timer renewal. Call `game.dispose()` before replacing a game to
-cancel its animation and remove input listeners; standalone input managers have
+Press again after returning. Successful level replacement, win, death and
+disposal retire both player recovery counters. Failed level construction
+retains the active player and its counters. `player.dispose()` is idempotent
+and terminal for recovery renewal. Call `game.dispose()` before replacing a game
+to cancel its animation and remove input listeners. Standalone input managers have
 `dispose()` too. Call `await game.init()` before `game.start()`. Starts before or during
 initialization are ignored without disposing the game or requesting an animation
 frame; call `start()` again once initialization succeeds. Starting twice keeps
@@ -329,8 +329,8 @@ frame establishes a fresh clock baseline. Focus/visibility changes retain manual
 pause. Successful level reset or world replacement resumes play with fresh input
 and clock state; a failed replacement keeps the previous state. Disposal releases
 the pause handler and clock listeners along with the existing input/RAF ownership.
-Player protection/hit timers and shooting cooldowns retain their existing elapsed
-real-time policy during pause; they do not create simulation catch-up.
+Player recovery freezes while paused or hidden. Shooting cooldowns continue
+to use elapsed real time.
 Unit and Chromium journeys exercise real Escape input, repeats, focus, restart
 and disposal; unit fixtures also cover short hidden intervals and failed reset.
 
@@ -348,11 +348,10 @@ Boss frames and hit fading use accumulated simulation elapsed time: the eight-fr
 ping-pong sequence advances every 200 ms, retaining fractional time, and each
 accepted hit renews a 400 ms visual. Wall-clock jumps and discarded suspension
 time do not advance or freeze these visuals; defeated bosses still disappear
-immediately. Player hit visuals and invulnerability use owned elapsed real-time timers,
-independent of simulation steps and system-clock changes. Renewing protection
-restarts both timers: hit visuals expire after 500 ms and protection after the
-requested duration, unaffected by older expirations. Retiring the player cancels
-both callbacks and prevents renewal.
+immediately. Player hit visuals and invulnerability both advance on simulation
+steps. Renewing protection restarts both counters. The hit visual lasts 500 ms
+and protection lasts the requested duration (2,000 ms by default). Expiry takes
+effect before that step’s animation selection and collision checks.
 Action delivery uses the subscribers present at the start of each edge; changes
 to subscriptions take effect on the next edge.
 
