@@ -367,16 +367,14 @@ horizontal and vertical player movement inside these bounds. This establishes
 spatial reachability; authors still provide platforms/jump routes to exits.
 Large collision meshes are reduced without spreading into function arguments.
 
-Coins and enemy/boss body contacts resolve in earliest-contact order within a
-step; coins retain precedence for an exact time tie. A lethal contact keeps only earlier
-coin awards. Stomps and respawns replace the unused sweep with current-pose
-overlaps, excluding coins along the discarded motion or teleport; coins already
-at a respawn position remain collectible. Unlocked portals test the player's
-center along the admitted movement after platform resolution, retaining the
-usual center-radius threshold. Fast crossings enter even with both endpoints
-outside; locked sweeps and discarded pre-bounce/respawn motion are not replayed.
-Only a portal that was already unlocked when the step began is swept; one unlocked
-during the step (a player shot that defeats the boss, or a stomp) admits only the
+Coins, enemy/boss body contacts and already-open portal entry resolve in
+earliest-contact order within a step. Exact ties resolve coins first, then
+body contact, then portal entry. A transition keeps coin awards up to entry.
+Stomps and respawns replace unused motion with current-pose overlaps, where
+coins and open portals can still trigger. Unlocked portals test the player's
+center along the movement admitted by platform resolution, using the usual
+center-radius threshold. Fast crossings can enter with both endpoints outside.
+A portal unlocked during the step by a player shot or stomp admits only the
 endpoint pose.
 
 Damage respawns the player at the active level's start, clearing vertical speed
@@ -525,8 +523,8 @@ entity and minimum width before the candidate world is accepted.
 Conversion throws on invalid data, and `game.loadLDtkLevels(url)` returns `false`
 while retaining the previous playable state, including the loaded world.
 
-Lethal enemy, boss or boss-projectile contact ends that update immediately;
-the player cannot enter a portal or win on the death frame. Coins sweep the
+Lethal enemy, boss or boss-projectile contact ends the update immediately
+when resolved. Coins sweep the
 player's pre-step pose to its current pose, awarding each ordinary
 or power-up coin once even without endpoint overlap. Tangent edges do not collect;
 a boss-shot respawn retires the old pose so the teleport collects nothing in between.

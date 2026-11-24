@@ -338,6 +338,22 @@ export class CollisionSystem {
     threshold = 0.6,
     previousPlayer = player
   ) {
+    return (
+      this.portalEntryTime(player, portal, threshold, previousPlayer) !== null
+    );
+  }
+
+  /**
+   * Return the first contact fraction for the portal's open entry region.
+   * Tangency and an endpoint only touching the boundary do not enter.
+   * @returns {number|null}
+   */
+  static portalEntryTime(
+    player,
+    portal,
+    threshold = 0.6,
+    previousPlayer = player
+  ) {
     const playerCenterX = player.x + player.width / 2;
     const playerCenterY = player.y + player.height / 2;
     const portalCenterX = portal.x + portal.width / 2;
@@ -363,13 +379,32 @@ export class CollisionSystem {
     const x = previousPlayer.x + motionX * time;
     const y = previousPlayer.y + motionY * time;
     if (!this.checkCollision({ ...player, x, y }, portal)) {
-      return false;
+      return null;
     }
     const dx = x + player.width / 2 - portalCenterX;
     const dy = y + player.height / 2 - portalCenterY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    const portalRadius = portal.width / 2;
-    return distance < portalRadius * threshold;
+    const radius = (portal.width / 2) * threshold;
+    if (!(distance < radius)) {
+      return null;
+    }
+    if (lengthSquared === 0) {
+      return 0;
+    }
+
+    // Trace backward from the closest admitted point to the circle boundary.
+    const dot = dx * motionX + dy * motionY;
+    const reach = Math.sqrt(
+      dot * dot + lengthSquared * (radius * radius - distance * distance)
+    );
+    const circleEntry = time - (dot + reach) / lengthSquared;
+    const boxEntry = this.sweptContactTime(
+      player,
+      portal,
+      previousPlayer,
+      portal
+    );
+    return Math.max(circleEntry, boxEntry);
   }
 }

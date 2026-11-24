@@ -547,8 +547,8 @@ export class Game {
       return;
     }
 
-    // Coins retain their existing precedence for exact time ties. A bounce/respawn replaces the remaining
-    // sweep with current-pose overlaps, so coins beyond the contact cannot award.
+    // Exact time ties resolve coins first, then body contact, then portal entry.
+    // A bounce or respawn replaces the remaining sweep with current-pose overlaps.
     let remaining = this.enemies;
     let boss = this.boss;
     for (;;) {
@@ -573,6 +573,17 @@ export class Game {
             previousTargets?.get(hit.target) ?? hit.target
           )
         : Infinity;
+      const portalTime =
+        portalOpenAtStart && !this.portal.isLocked && previousPlayer
+          ? CollisionSystem.portalEntryTime(
+              this.player,
+              this.portal,
+              0.6,
+              previousPlayer
+            )
+          : null;
+      const entersPortal = portalTime !== null && portalTime < bodyTime;
+      const cutoff = entersPortal ? portalTime : bodyTime;
       const coins =
         this.coins === this.indexedCoins
           ? queryStaticWorld(
@@ -592,7 +603,7 @@ export class Game {
             coin
           )
         }))
-        .filter(contact => contact.time !== null && contact.time <= bodyTime)
+        .filter(contact => contact.time !== null && contact.time <= cutoff)
         .sort((a, b) => a.time - b.time);
       for (const { coin } of contacts) {
         const result = coin.collect();
@@ -603,6 +614,10 @@ export class Game {
             this.canShoot = true;
           }
         }
+      }
+      if (entersPortal) {
+        this.loadNextLevel();
+        return;
       }
       if (!hit) {
         break;
@@ -639,15 +654,10 @@ export class Game {
       previousTargets = undefined;
     }
 
-    // Portal collision - only allow entry if unlocked
+    // An unlock during the step admits only the endpoint.
     if (
       !this.portal.isLocked &&
-      CollisionSystem.checkPortalEntry(
-        this.player,
-        this.portal,
-        0.6,
-        portalOpenAtStart ? previousPlayer : this.player
-      )
+      CollisionSystem.checkPortalEntry(this.player, this.portal)
     ) {
       this.loadNextLevel();
     }

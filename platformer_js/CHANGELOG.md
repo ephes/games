@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Resolve already-open portal entry in movement order with coins and enemy or
+  boss bodies, so a later body hit cannot erase an earlier level transition.
+
 - Reject LDtk worlds when synchronous decoding, parsing or preflight reaches
   the load deadline, retaining the previous world.
 
