@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Treat a null previous platform pose as absent so overlap resolution can run.
+
 - Advance player hit visuals and invulnerability on the simulation clock so
   pause and tab hiding preserve the remaining recovery time.
 

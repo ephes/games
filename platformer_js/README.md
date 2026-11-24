@@ -79,7 +79,7 @@ crossed support/ceiling even through thin geometry, independent of platform orde
 Horizontal overlap is evaluated at the vertical crossing time: landing requires
 50% support and ceilings require positive overlap. Diagonal movement cannot gain
 support by entering after crossing the top or lose contact by leaving afterward.
-Direct collision callers can omit the previous pose to resolve existing overlaps;
+Direct collision callers can omit the previous pose or pass `null` to resolve existing overlaps;
 legacy Y-only snapshots retain fixed-X behavior. Renderer tests
 record sprite source/destination geometry, facing transforms and canvas state
 restoration without pixel snapshots. Coin tests verify one award, hidden

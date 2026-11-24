@@ -25,14 +25,17 @@ export class CollisionSystem {
    * Check platform collisions for an entity
    * @param {Object} entity - Entity to check
    * @param {Array} platforms - List of platforms
-   * @param {Object|number} [previousPose] - Pre-step x/y (legacy Y-only is supported)
+   * @param {Object|number|null} [previousPose] - Pre-step x/y, legacy Y-only, or null for no history
    * @returns {Object} Collision info
    */
   static checkPlatformCollisions(entity, platforms, previousPose) {
+    const position =
+      previousPose !== null && typeof previousPose === 'object'
+        ? previousPose
+        : undefined;
     const previousY =
-      typeof previousPose === 'number' ? previousPose : previousPose?.y;
-    const previousX =
-      typeof previousPose === 'object' ? previousPose.x : entity.x;
+      typeof previousPose === 'number' ? previousPose : position?.y;
+    const previousX = position ? position.x : entity.x;
     const result = { isGrounded: false, platform: null, side: null };
     const falling = entity.velocityY > 0;
     if (!falling && entity.velocityY >= 0) {

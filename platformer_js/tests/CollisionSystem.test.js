@@ -54,6 +54,39 @@ describe('Platform contact boundaries', () => {
     }
   });
 
+  it.each([
+    ['omitted', undefined, true],
+    ['null', null, true],
+    ['legacy Y crossing', 70, true],
+    ['legacy Y below the surface', 85, false],
+    ['paired pose with support', { x: 20, y: 70 }, true],
+    ['paired pose without support at crossing', { x: -60, y: 70 }, false]
+  ])(
+    'handles a descending overlap with previous pose %s',
+    (_label, pose, lands) => {
+      const entity = {
+        x: 20,
+        y: 90,
+        width: 20,
+        height: 20,
+        velocityY: 20,
+        isJumping: true
+      };
+      const before = { ...entity };
+      const result = CollisionSystem.checkPlatformCollisions(
+        entity,
+        [platform],
+        pose
+      );
+      expect(result).toEqual(
+        lands ? { isGrounded: true, platform, side: 'top' } : noContact
+      );
+      expect(entity).toEqual(
+        lands ? { ...before, y: 80, velocityY: 0, isJumping: false } : before
+      );
+    }
+  );
+
   it('ignores unrelated platforms before and after landing', () => {
     const entity = {
       x: 25,
