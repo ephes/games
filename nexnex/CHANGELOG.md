@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refresh grounded state only when a foot sensor's contacts change after
+  initialization, including when a supporting collider is removed.
+
 - Restore gravity held at zero by climbing to its saved scale on restart.
   Preserve standing gravity and gravity already set by another feature.
 

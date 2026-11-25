@@ -28,13 +28,17 @@ export class SpriteLoader {
    * @returns {Promise} Load promise
    */
   async loadSprite(name, path, options = {}) {
-    if (options.signal?.aborted) {
+    const { signal } = options;
+    if (signal?.aborted) {
       throw spriteAbortError();
     }
     const request = Symbol(name);
     this.requests.set(name, request);
     try {
       const img = await this.loadImage(path, options);
+      if (signal?.aborted) {
+        throw spriteAbortError();
+      }
       if (this.requests.get(name) === request) {
         this.sprites.set(name, img);
       }
