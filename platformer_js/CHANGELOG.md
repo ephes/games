@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Clear the shooting power-up and cooldown when resetting after victory to
+  start a new run.
+
 - Reject malformed LDtk Content-Length declarations and mismatched
   identity-encoded body lengths before publishing a world.
 

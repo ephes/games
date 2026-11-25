@@ -64,7 +64,9 @@
 ### Implementation Features
 
 - **Dynamic level loading**: Game starts with LEVELS and can replace or append LDtk levels
-- **State preservation**: Player abilities persist between levels
+- **State preservation**: Shooting ability and cooldown persist between levels
+  and on same-level retries. Resetting after victory starts a fresh run and
+  requires collecting the shooting power-up again.
 - **Clean transitions**: Construct the next level before publishing its index and objects
 - **Victory detection**: Game detects when all levels are completed
 

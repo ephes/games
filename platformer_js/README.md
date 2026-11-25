@@ -260,13 +260,13 @@ platformer_js/
 Shooting requires successful initialization and a playable game. Both direct
 `game.shoot()` calls and input actions ignore win, death, disposal and pending or
 failed initialization without allocating projectiles or consuming cooldown.
-Live level resets/replacements preserve power-up and cooldown behavior.
-A successful reset or replacement after win/death restores initial lives and a
-playable player, preserving shooting ability and cooldown. Reset after winning
-starts a new run at level zero with zero score once construction succeeds.
-Live resets, same-level retries after death and level replacements preserve
-score. Failed construction retains the score, terminal state and objects; a
-disposed Game cannot reset.
+Live resets, same-level retries after death, level transitions and LDtk
+replacements preserve score, shooting ability and cooldown. A successful reset
+or replacement after win/death restores initial lives and a playable player.
+Reset after winning starts a new run at level zero with zero score and no shooting
+power-up or cooldown from the previous run. The first shot is available as soon
+as the player collects a new shooting power-up. Failed construction retains the
+previous run state and objects. A disposed Game cannot reset.
 Win and game-over screens keep rendering while simulation is stopped. A
 successful reset starts with a fresh simulation clock.
 Successful resets/replacements clear both sides' projectiles, held input and

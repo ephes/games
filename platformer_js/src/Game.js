@@ -959,6 +959,8 @@ export class Game {
     this.currentLevel = index;
     if (startsNewRun) {
       this.score = 0;
+      this.canShoot = false;
+      this.lastShotTime = -GAME_CONFIG.SHOT_COOLDOWN;
     }
     this.restorePlayableLevel();
     this.camera.reset();
