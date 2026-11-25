@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Emit keyboard release actions only for keys still held by the platformer.
+
 - Allow valid enemy and boss stomps during invulnerability, including after an
   earlier side contact in the same step.
 

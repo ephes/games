@@ -22,6 +22,10 @@ export async function checkInputOwnership(page, baseUrl) {
     window.games.forEach(game => {
       game.canShoot = true;
     });
+    const input = window.games[0].inputManager;
+    window.movement = [];
+    input.on('moveRight:down', () => window.movement.push('down'));
+    input.on('moveRight:up', () => window.movement.push('up'));
     window.shots = [0, 0];
     window.games.forEach((game, i) =>
       game.inputManager.on('shoot:down', () => window.shots[i]++)
@@ -40,7 +44,15 @@ export async function checkInputOwnership(page, baseUrl) {
     await page.evaluate(() => window.games.map(g => g.inputManager.getKeys())),
     [{}, {}]
   );
+  await page.locator('#one').focus();
   await page.keyboard.up('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  assert.deepEqual(await page.evaluate(() => window.movement), [
+    'down',
+    'down',
+    'up'
+  ]);
+  await page.locator('#text').focus();
   await page.keyboard.type('Synthetic text ');
   await page.locator('#edit').focus();
   await page.keyboard.press('Space');
