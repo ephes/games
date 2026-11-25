@@ -146,7 +146,7 @@ describe('Playable level state', () => {
     expect(game.levels[0].name).toBe('Replacement');
     expect(game.player).not.toBe(oldPlayer);
     expect([game.player.x, game.player.y]).toEqual([600, 80]);
-    expect(game.camera.x).toBe(0);
+    expect(game.camera.x).toBeCloseTo(600 - 800 / 3);
   });
 
   it('retains a current index still present in the replacement', async () => {

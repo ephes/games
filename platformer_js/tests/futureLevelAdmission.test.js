@@ -35,6 +35,7 @@ describe('Future level admission and publication', () => {
     game.canShoot = true;
     game.projectiles.push({ x: 1, y: 2 });
     game.camera.x = 123;
+    game.camera.y = 45;
     game.ldtkLoader.world = { levels: [level('Previous')] };
     source = mockWorldFetch();
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -67,7 +68,8 @@ describe('Future level admission and publication', () => {
       ),
       world: game.ldtkLoader.world,
       bounds: game.camera.bounds,
-      cameraX: game.camera.x
+      cameraX: game.camera.x,
+      cameraY: game.camera.y
     };
   }
 

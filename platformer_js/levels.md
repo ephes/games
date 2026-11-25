@@ -11,7 +11,8 @@
 - **Player state persistence**: Power-ups are kept between levels
 - **Level indicator UI**: Shows current level name and number
 - **Progression tests**: Synthetic tests exercise transitions, resets and imports
-- **Camera reset**: Camera resets position when loading new level
+- **Spawn framing**: Camera follows the new spawn within the level bounds before
+  the first render
 - **Victory condition**: Game shows win screen after completing all levels
 
 ### ✅ Additional Completed Features

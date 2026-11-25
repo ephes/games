@@ -368,7 +368,9 @@ Action delivery uses the subscribers present at the start of each edge; changes
 to subscriptions take effect on the next edge.
 
 Camera, player and boss-shot bounds refresh together on level creation,
-transitions, resets and LDtk replacement. Imported `pxWid`/`pxHei` are retained
+transitions, resets and LDtk replacement. The camera follows the new spawn within
+those bounds before the first render, even when no simulation step runs.
+Imported `pxWid`/`pxHei` are retained
 as level `width`/`height`: when supplied, both must be positive safe integers.
 Legacy records with neither dimension and built-in levels derive complete extents
 from platforms, the player start, enemies, coins, boss and portal rectangles.

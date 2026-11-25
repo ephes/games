@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Frame the player spawn within the new level bounds before the first render
+  after initialization, transitions, resets and LDtk replacement.
+
 - Clear the shooting power-up and cooldown when resetting after victory to
   start a new run.
 
