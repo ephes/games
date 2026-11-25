@@ -147,6 +147,31 @@ describe('Entry-point page lifetime', () => {
     }
   });
 
+  it('reports an unavailable 2D context before taking game ownership', async () => {
+    const canvas = document.getElementById('gameCanvas');
+    vi.spyOn(canvas, 'getContext').mockReturnValue(null);
+    const canvasEvents = vi.spyOn(canvas, 'addEventListener');
+
+    await enter();
+
+    expect(errors).toHaveBeenCalledExactlyOnceWith(
+      'Failed to initialize game:',
+      expect.objectContaining({
+        message: 'Platformer requires a 2D canvas context'
+      })
+    );
+    expect(load).not.toHaveBeenCalled();
+    expect(instances).toHaveLength(0);
+    expect(frames.size).toBe(0);
+    expect(canvasEvents).not.toHaveBeenCalled();
+    for (const type of ['keydown', 'keyup', 'visibilitychange']) {
+      expect(domEvents).not.toHaveBeenCalledWith(type, expect.any(Function));
+    }
+    for (const type of ['focus', 'blur']) {
+      expect(windowEvents).not.toHaveBeenCalledWith(type, expect.any(Function));
+    }
+  });
+
   it.each([false, true])(
     'retires a running page (persisted=%s)',
     async persisted => {

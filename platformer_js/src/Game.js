@@ -36,6 +36,9 @@ export class Game {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
+    if (!this.ctx) {
+      throw new Error('Platformer requires a 2D canvas context');
+    }
 
     // Game state
     this.score = 0;

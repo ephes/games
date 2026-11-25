@@ -308,7 +308,8 @@ replace the current game. Vite hot replacement calls
 that same terminal cleanup to release its DOM/page listeners and Game.
 Both retirement paths report disposal failures to the console and return normally.
 
-If listener registration fails during construction, the game releases partially
+Game construction requires a 2D canvas context before it registers input or
+starts loading sprites. If listener registration fails during construction, the game releases partially
 registered DOM listeners before propagating the startup error. A fresh Game can
 then claim the same canvas.
 

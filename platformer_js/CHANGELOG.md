@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Release partially registered game and keyboard listeners when game construction fails.
+- Fail at startup when a 2D canvas context is unavailable.
 
 - Keep the published sprite set ready during reloads and after failed, cancelled
   or superseded replacements.
