@@ -102,16 +102,23 @@ describe('Real sprite loading', () => {
     const initial = loader.loadAll();
     images.forEach(image => image.onload?.());
     await initial;
-    const before = [...loader.sprites];
     const replacement = loader.loadAll().catch(error => error);
-    images[10].onload();
-    expect([...loader.sprites]).toEqual(before);
+    images[requestedSprites.length].onload();
+    const readyDuringReload = loader.loaded;
+    requestedSprites.forEach(([name], index) => {
+      expect(loader.getSprite(name)).toBe(images[index]);
+    });
     const late = images.slice(12).map(image => image.onload);
     images[11].onerror();
-    await replacement;
+    expect(await replacement).toEqual(
+      new Error('Failed to load sprite: assets/sprites/pink-man-run.png')
+    );
     late.forEach(onload => onload());
-    expect([...loader.sprites]).toEqual(before);
-    expect(loader.loaded).toBe(false);
+    expect(loader.loaded).toBe(true);
+    expect(readyDuringReload).toBe(true);
+    requestedSprites.forEach(([name], index) => {
+      expect(loader.getSprite(name)).toBe(images[index]);
+    });
   });
 
   it('retains the published sprites when aborted after all replacement images load', async () => {
@@ -124,7 +131,7 @@ describe('Real sprite loading', () => {
     controller.abort();
 
     await expect(replacement).rejects.toMatchObject({ name: 'AbortError' });
-    expect(loader.loaded).toBe(false);
+    expect(loader.loaded).toBe(true);
     requestedSprites.forEach(([name], index) => {
       expect(loader.getSprite(name)).toBe(images[index]);
     });
@@ -337,20 +344,20 @@ describe('Real sprite loading', () => {
     expect(loader.getSprite('player.run')).toBe(images[11]);
   });
 
-  it('only the current batch can mark the loader complete', async () => {
+  it('rejects stale startup without clearing readiness on later reloads', async () => {
     const first = loader.loadAll().catch(error => error);
     const second = loader.loadAll();
     images.slice(0, 10).forEach(image => image.onload?.());
-    await first;
+    expect(await first).toMatchObject({ name: 'AbortError' });
     expect(loader.loaded).toBe(false);
     images.slice(10).forEach(image => image.onload?.());
     await second;
     expect(loader.loaded).toBe(true);
     const third = loader.loadAll().catch(error => error);
-    expect(loader.loaded).toBe(false);
+    expect(loader.loaded).toBe(true);
     images[20].onerror();
     expect(await third).toBeInstanceOf(Error);
-    expect(loader.loaded).toBe(false);
+    expect(loader.loaded).toBe(true);
   });
 
   it.each([true, false])(

@@ -76,7 +76,11 @@ export class Portal {
     const centerY = this.y + this.height / 2;
     const radius = this.width / 2;
 
-    if (this.sprite && this.sprite.complete) {
+    if (
+      this.sprite?.complete &&
+      this.sprite.naturalWidth > 0 &&
+      this.sprite.naturalHeight > 0
+    ) {
       // Create circular clipping region
       ctx.save();
       try {
@@ -104,7 +108,7 @@ export class Portal {
     } else {
       ctx.save();
       try {
-        // Fallback drawing if sprite not loaded
+        // Fallback drawing for an unavailable sprite
         ctx.fillStyle = this.isLocked ? '#4B0082' : '#9400D3';
         ctx.globalAlpha = this.isLocked ? 0.5 : 1;
         ctx.beginPath();

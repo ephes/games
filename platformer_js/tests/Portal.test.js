@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Portal } from '../src/objects/Portal.js';
 
 describe('Portal', () => {
@@ -80,6 +80,38 @@ describe('Portal', () => {
       const mockSprite = { complete: true };
       portal.setSprite(mockSprite);
       expect(portal.sprite).toBe(mockSprite);
+    });
+
+    it('renders the fallback and lock overlay for a complete image without intrinsic dimensions', () => {
+      const sprite = document.createElement('img');
+      sprite.width = 128;
+      sprite.height = 128;
+      expect(sprite.complete).toBe(true);
+      expect(sprite.naturalWidth).toBe(0);
+      expect(sprite.naturalHeight).toBe(0);
+      portal.setSprite(sprite);
+
+      const ctx = {
+        save: vi.fn(),
+        restore: vi.fn(),
+        beginPath: vi.fn(),
+        arc: vi.fn(),
+        closePath: vi.fn(),
+        clip: vi.fn(),
+        fill: vi.fn(),
+        drawImage: vi.fn(),
+        stroke: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        fillText: vi.fn()
+      };
+      portal.draw(ctx, 20);
+
+      expect(ctx.fill).toHaveBeenCalledTimes(1);
+      expect(ctx.stroke).toHaveBeenCalledTimes(2);
+      expect(ctx.fillText).toHaveBeenCalledExactlyOnceWith('LOCKED', 144, 353);
+      expect(ctx.drawImage).not.toHaveBeenCalled();
+      expect(ctx.restore).toHaveBeenCalledTimes(2);
     });
   });
 });

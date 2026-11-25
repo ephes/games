@@ -12,6 +12,7 @@ function spriteAbortError() {
 export class SpriteLoader {
   constructor() {
     this.sprites = new Map();
+    // Readiness tracks the published set across replacement attempts.
     this.loaded = false;
     this.loadPromises = [];
     this.requests = new Map();
@@ -121,7 +122,6 @@ export class SpriteLoader {
       abort();
     }
     const batch = ++this.batch;
-    this.loaded = false;
     const promises = [];
     this.loadPromises = promises;
     const staged = new Map();

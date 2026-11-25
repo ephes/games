@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep the published sprite set ready during reloads and after failed, cancelled
+  or superseded replacements.
+
+- Draw the portal fallback and overlay when a completed sprite is broken.
+
 - Treat a null previous platform pose as absent so overlap resolution can run.
 
 - Advance player hit visuals and invulnerability on the simulation clock so

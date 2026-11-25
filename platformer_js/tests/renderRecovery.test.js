@@ -99,7 +99,11 @@ describe('Reusable canvas after a rendering exception', () => {
       }
     } else if (target.startsWith('portal')) {
       if (target !== 'portal fallback') {
-        game.portal.sprite = { complete: true };
+        game.portal.sprite = {
+          complete: true,
+          naturalWidth: 128,
+          naturalHeight: 128
+        };
       }
       if (target === 'portal glow') {
         game.portal.unlock();
