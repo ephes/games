@@ -14,6 +14,14 @@ pub struct WallBundle {
 #[derive(Component)]
 struct WallCollision(Entity);
 
+impl WallCollision {
+    fn source_layer(&self) -> Entity {
+        #[cfg(test)]
+        SOURCE_PROBES.with(|count| count.set(count.get() + 1));
+        self.0
+    }
+}
+
 #[derive(Clone, PartialEq, Eq)]
 struct LayerWalls {
     level: Entity,
@@ -29,6 +37,7 @@ thread_local! {
     static PLATE_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static LIVE_PLATE_ROWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static PEAK_PLATE_ROWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static SOURCE_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static CELL_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -203,6 +212,13 @@ fn spawn_wall_collision(
     {
         return;
     }
+    let mut generated_by_layer: HashMap<_, Vec<_>> = HashMap::new();
+    for (collider, source) in &generated {
+        generated_by_layer
+            .entry(source.source_layer())
+            .or_default()
+            .push(collider);
+    }
     let mut cells_by_layer: HashMap<Entity, HashSet<GridCoords>> = HashMap::new();
     for (coords, parent) in &walls {
         cells_by_layer
@@ -235,10 +251,8 @@ fn spawn_wall_collision(
         if previous.get(&entity) == Some(&snapshot) {
             continue;
         }
-        for (collider, source) in &generated {
-            if source.0 == entity {
-                commands.entity(collider).despawn();
-            }
+        for collider in generated_by_layer.remove(&entity).into_iter().flatten() {
+            commands.entity(collider).despawn();
         }
         let grid = i64::from(snapshot.grid_size);
         for rect in rectangles(&snapshot.cells, snapshot.width, snapshot.height) {
@@ -272,10 +286,8 @@ fn spawn_wall_collision(
     }
     for layer in previous.keys().copied().collect::<Vec<_>>() {
         if !layers.contains(layer) {
-            for (collider, source) in &generated {
-                if source.0 == layer {
-                    commands.entity(collider).despawn();
-                }
+            for collider in generated_by_layer.remove(&layer).into_iter().flatten() {
+                commands.entity(collider).despawn();
             }
             previous.remove(&layer);
         }
@@ -422,6 +434,81 @@ mod tests {
             .collect();
         rects.sort();
         rects
+    }
+
+    #[test]
+    fn bulk_reload_examines_each_existing_collider_source_once() {
+        let mut app = App::new();
+        app.add_systems(Update, spawn_wall_collision);
+        let level = app.world_mut().spawn(LevelIid::new("synthetic")).id();
+        let mut layers = Vec::new();
+        for index in 0..128 {
+            let x = index * 32;
+            let layer = app
+                .world_mut()
+                .spawn((
+                    LayerMetadata::from(&LayerInstance {
+                        c_wid: 3,
+                        c_hei: 1,
+                        grid_size: 8,
+                        px_total_offset_x: x,
+                        ..default()
+                    }),
+                    ChildOf(level),
+                ))
+                .id();
+            tile(&mut app, layer, 0);
+            tile(&mut app, layer, 2);
+            layers.push((layer, x));
+        }
+        app.update();
+        let mut query = app.world_mut().query::<(Entity, &WallCollision)>();
+        let mut original: HashMap<_, Vec<_>> = HashMap::new();
+        for (collider, source) in query.iter(app.world()) {
+            original.entry(source.0).or_default().push(collider);
+        }
+        assert_eq!(original.len(), layers.len());
+        assert!(original.values().all(|colliders| colliders.len() == 2));
+
+        let mut expected = Vec::new();
+        for (index, &(layer, x)) in layers.iter().enumerate() {
+            match index % 4 {
+                0 => {
+                    tile(&mut app, layer, 1);
+                    expected.push((x, 0, x + 24, 8));
+                }
+                1 => {
+                    app.world_mut().despawn(layer);
+                }
+                kind => {
+                    if kind == 2 {
+                        app.world_mut()
+                            .get_mut::<LayerMetadata>(layer)
+                            .unwrap()
+                            .grid_size = 0;
+                    }
+                    expected.extend([(x, 0, x + 8, 8), (x + 16, 0, x + 24, 8)]);
+                }
+            }
+        }
+        SOURCE_PROBES.with(|count| count.set(0));
+        app.update();
+
+        assert_eq!(geometry(&mut app), expected);
+        for (index, &(layer, _)) in layers.iter().enumerate() {
+            for &collider in &original[&layer] {
+                let source = app
+                    .world()
+                    .get::<WallCollision>(collider)
+                    .map(|source| source.0);
+                assert_eq!(source, (index % 4 >= 2).then_some(layer));
+            }
+        }
+        assert_eq!(SOURCE_PROBES.with(std::cell::Cell::get), layers.len() * 2);
+
+        SOURCE_PROBES.with(|count| count.set(0));
+        app.update();
+        assert_eq!(SOURCE_PROBES.with(std::cell::Cell::get), 0);
     }
 
     #[test]

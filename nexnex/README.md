@@ -89,10 +89,12 @@ Wall colliders use each tile's source `LayerMetadata`, including its grid size
 and pixel offsets. Layers are merged independently. ECS tile additions, grid or
 parent changes, removals, and layer changes replace that layer's generated
 colliders from its complete current cell set. Level/layer removal retires the
-colliders. Invalid grids produce a warning and retain previous geometry until
-corrected. Cells without source layer metadata are refused with a warning. Live
-layer metadata allows collision state to survive temporary project-asset
-unavailability.
+colliders. Each reload pass indexes existing generated colliders once by
+source layer, then looks up only the layers it replaces or retires. Unchanged
+layers retain their collider IDs. Invalid grids produce a warning and retain
+previous geometry until corrected. Cells without source layer metadata are
+refused with a warning. Live layer metadata allows collision state to survive
+temporary project-asset unavailability.
 
 A wall layer admits at most 1,000,000 cells (`width * height`, including empty
 cells), positive grid dimensions/size, valid cell coordinates, and pixel extents
