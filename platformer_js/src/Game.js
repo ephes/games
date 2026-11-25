@@ -371,16 +371,12 @@ export class Game {
     const levelBeforeContacts = this.currentLevel;
     this.camera.follow(this.player, true);
 
-    // Player.update has already applied this step’s protection expiry. Boss
-    // shots can grant protection before body contacts are resolved.
-    let previousTargets;
-    if (this.projectiles.length > 0 || !this.player.isInvulnerable) {
-      previousTargets = new Map();
-      for (const enemy of this.enemies) {
-        previousTargets.set(enemy, { x: enemy.x, y: enemy.y });
-      }
-      previousTargets.set(this.boss, { x: this.boss.x, y: this.boss.y });
+    // Both body contacts and player shots use the targets' relative motion.
+    const previousTargets = new Map();
+    for (const enemy of this.enemies) {
+      previousTargets.set(enemy, { x: enemy.x, y: enemy.y });
     }
+    previousTargets.set(this.boss, { x: this.boss.x, y: this.boss.y });
 
     // Update enemies
     this.enemies.forEach(enemy => enemy.update(this.platforms, deltaTime));
@@ -559,27 +555,14 @@ export class Game {
     let remaining = this.enemies;
     let boss = this.boss;
     for (;;) {
-      const bodyStart = previousPlayer ?? {
-        x: this.player.x,
-        y: this.player.y - Math.max(0, this.player.velocityY)
-      };
-      const hit = this.player.isInvulnerable
-        ? null
-        : CollisionSystem.checkProjectileCollisions(
-            this.player,
-            remaining,
-            boss,
-            bodyStart,
-            previousTargets
-          );
-      const bodyTime = hit
-        ? CollisionSystem.sweptContactTime(
-            this.player,
-            hit.target,
-            bodyStart,
-            previousTargets?.get(hit.target) ?? hit.target
-          )
-        : Infinity;
+      const hit = CollisionSystem.checkBodyContacts(
+        this.player,
+        remaining,
+        boss,
+        previousPlayer,
+        previousTargets
+      );
+      const bodyTime = hit?.time ?? Infinity;
       const portalTime =
         portalOpenAtStart && !this.portal.isLocked && previousPlayer
           ? CollisionSystem.portalEntryTime(
@@ -629,13 +612,7 @@ export class Game {
       if (!hit) {
         break;
       }
-      const { target, type } = hit;
-      const collision = CollisionSystem.checkEnemyCollision(
-        this.player,
-        target,
-        previousPlayer,
-        previousTargets?.get(target)
-      );
+      const { target, type, collision } = hit;
       if (collision === 'stomp') {
         const points =
           type === 'boss' ? target.takeDamage() : target.hit() ? 50 : 0;

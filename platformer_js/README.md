@@ -549,7 +549,9 @@ or power-up coin once even without endpoint overlap. Tangent edges do not collec
 a boss-shot respawn retires the old pose so the teleport collects nothing in between.
 Body contacts choose the earliest relative contact across enemies and boss, with
 the same geometric ties as player shots. The game saves pre-movement target
-poses when player shots are present or the player is vulnerable to body contact.
+poses for both. Invulnerability filters damaging body contacts out of that
+order, so an earlier side contact cannot prevent a later valid enemy or boss
+stomp.
 After bounce/respawn, checks restart at current poses rather than continuing
 the retired sweep. Coins are checked
 before enemy/boss contact, while boss projectiles are checked before player

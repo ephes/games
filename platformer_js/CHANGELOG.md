@@ -17,9 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stop fixed simulation steps on win and game-over screens while continuing to
   render the overlay.
 
-- Skip enemy and boss movement snapshots during player protection when no
-  player shots are in flight.
-
 ### Security
 
 - Bound LDtk JSON nesting, containers and tokens before native tree construction,
@@ -30,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require Node 24 LTS or 26+; use Node 24 in CI and keep dev servers local.
 
 ### Fixed
+
+- Allow valid enemy and boss stomps during invulnerability, including after an
+  earlier side contact in the same step.
 
 - Keep the cached sprite when a single-image replacement is cancelled after
   loading and before publication.
