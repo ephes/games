@@ -357,12 +357,23 @@ export class LDtkLoader {
   }
 
   /**
-   * Get level name from field instances
+   * Get the authored LevelName, using the level identifier when the field is absent.
+   * @throws {Error} If the selected label is not a string
    * @param {Object} ldtkLevel - LDtk level
    * @returns {string} Level name
    */
   getLevelName(ldtkLevel) {
-    return this.getFieldValue(ldtkLevel, 'LevelName', ldtkLevel.identifier);
+    const name = this.getFieldValue(
+      ldtkLevel,
+      'LevelName',
+      ldtkLevel.identifier
+    );
+    if (typeof name !== 'string') {
+      throw new Error(
+        'Invalid LDtk LevelName or level identifier: expected a string'
+      );
+    }
+    return name;
   }
 
   /**

@@ -491,10 +491,11 @@ level requires one Boss and one Portal; Player
 may be omitted to use the default start at (50, 200). Duplicate Player, Boss or
 Portal entities are rejected. Recognized fields (`LevelName`, enemy `Speed`,
 enemy/boss `PlatformIndex`, coin `IsPowerUp`) must occur at most once on their
-owning level/entity. `IsPowerUp` must be a boolean when present and defaults to
-false when absent. A failed next-level construction leaves the current index,
-objects, projectiles and camera intact and rethrows the error. Direct
-`loadNextLevel()` callers may retry; during normal play the game loop disposes the
+owning level/entity. `LevelName` must be a string when present. If the field is
+absent, the level's string `identifier` supplies the HUD label. `IsPowerUp`
+must be a boolean when present and defaults to false when absent. A failed
+next-level construction leaves the current index, objects, projectiles and
+camera intact and rethrows the error. Direct `loadNextLevel()` callers may retry; during normal play the game loop disposes the
 game on that error, so a live game does not recover by itself.
 
 LDtk Platforms layers require positive safe integer grid size, width and height,
