@@ -142,30 +142,47 @@ pub fn ground_detection(
     for collision_event in collisions.read() {
         match collision_event.to_owned() {
             CollisionEvent::Started(e1, e2, _) => {
-                if is_live(e1) {
-                    if let Ok(mut sensor) = ground_sensors.get_mut(e2) {
-                        sensor.intersecting_ground_entities.insert(e1);
-                    }
+                let (sensor, collider) = if is_live(e1) {
+                    (e2, e1)
                 } else if is_live(e2) {
-                    if let Ok(mut sensor) = ground_sensors.get_mut(e1) {
-                        sensor.intersecting_ground_entities.insert(e2);
+                    (e1, e2)
+                } else {
+                    continue;
+                };
+                if let Ok(mut sensor) = ground_sensors.get_mut(sensor) {
+                    if sensor
+                        .bypass_change_detection()
+                        .intersecting_ground_entities
+                        .insert(collider)
+                    {
+                        sensor.set_changed();
                     }
                 }
             }
             CollisionEvent::Stopped(e1, e2, _) => {
-                if let Ok(mut sensor) = ground_sensors.get_mut(e2) {
-                    sensor.intersecting_ground_entities.remove(&e1);
-                }
-                if let Ok(mut sensor) = ground_sensors.get_mut(e1) {
-                    sensor.intersecting_ground_entities.remove(&e2);
+                for (sensor, collider) in [(e2, e1), (e1, e2)] {
+                    if let Ok(mut sensor) = ground_sensors.get_mut(sensor) {
+                        if sensor
+                            .bypass_change_detection()
+                            .intersecting_ground_entities
+                            .remove(&collider)
+                        {
+                            sensor.set_changed();
+                        }
+                    }
                 }
             }
         }
     }
     for mut sensor in &mut ground_sensors {
-        sensor
-            .intersecting_ground_entities
-            .retain(|entity| is_live(*entity));
+        let contacts = &mut sensor
+            .bypass_change_detection()
+            .intersecting_ground_entities;
+        let previous_count = contacts.len();
+        contacts.retain(|entity| is_live(*entity));
+        if contacts.len() != previous_count {
+            sensor.set_changed();
+        }
     }
 }
 
@@ -210,6 +227,93 @@ impl Plugin for GroundDetectionPlugin {
 mod tests {
     use super::*;
     use bevy_rapier2d::rapier::geometry::CollisionEventFlags;
+
+    #[test]
+    fn only_contact_changes_update_ground_detectors() {
+        #[derive(Default, Resource)]
+        struct UpdatedDetectors(HashSet<Entity>);
+
+        let mut app = App::new();
+        app.add_message::<CollisionEvent>()
+            .add_plugins(GroundDetectionPlugin)
+            .init_resource::<UpdatedDetectors>()
+            .add_systems(
+                Update,
+                (|detectors: Query<Entity, Changed<GroundDetection>>,
+                  mut updated: ResMut<UpdatedDetectors>| {
+                    updated.0.clear();
+                    updated.0.extend(&detectors);
+                })
+                .after(crate::ControlSet::Grounded),
+            );
+
+        let contacts: Vec<_> = (0..100)
+            .map(|_| {
+                let world = app.world_mut();
+                let owner = world
+                    .spawn((Collider::cuboid(6., 14.), GroundDetection::default()))
+                    .id();
+                let floor = world.spawn(Collider::cuboid(20., 2.)).id();
+                (owner, floor)
+            })
+            .collect();
+        app.update();
+
+        let sensors: HashMap<_, _> = app
+            .world_mut()
+            .query::<(Entity, &GroundSensor)>()
+            .iter(app.world())
+            .map(|(entity, sensor)| (sensor.ground_detection_entity, entity))
+            .collect();
+        for &(owner, floor) in &contacts {
+            app.world_mut().write_message(CollisionEvent::Started(
+                sensors[&owner],
+                floor,
+                CollisionEventFlags::empty(),
+            ));
+        }
+        app.update();
+        assert_eq!(
+            app.world().resource::<UpdatedDetectors>().0.len(),
+            contacts.len()
+        );
+        for _ in 0..3 {
+            app.update();
+            assert!(app.world().resource::<UpdatedDetectors>().0.is_empty());
+        }
+
+        let (owner, floor) = contacts[0];
+        app.world_mut().write_message(CollisionEvent::Started(
+            sensors[&owner],
+            floor,
+            CollisionEventFlags::empty(),
+        ));
+        app.world_mut().write_message(CollisionEvent::Stopped(
+            sensors[&owner],
+            contacts[1].1,
+            CollisionEventFlags::empty(),
+        ));
+        app.update();
+        assert!(app.world().resource::<UpdatedDetectors>().0.is_empty());
+
+        app.world_mut().entity_mut(floor).remove::<Collider>();
+        app.update();
+        assert_eq!(
+            app.world().resource::<UpdatedDetectors>().0,
+            HashSet::from([owner])
+        );
+        for &(detector, _) in &contacts {
+            assert_eq!(
+                app.world()
+                    .get::<GroundDetection>(detector)
+                    .unwrap()
+                    .on_ground,
+                detector != owner
+            );
+        }
+        app.update();
+        assert!(app.world().resource::<UpdatedDetectors>().0.is_empty());
+    }
 
     #[test]
     fn simultaneous_detector_changes_use_linear_owner_inventory() {
