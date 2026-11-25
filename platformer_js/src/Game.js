@@ -36,6 +36,9 @@ export class Game {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
+    if (!this.ctx) {
+      throw new Error('Platformer requires a 2D canvas context');
+    }
 
     // Game state
     this.score = 0;
@@ -50,20 +53,6 @@ export class Game {
     this.totalLevels = this.levels.length;
 
     // Systems
-    if (!this.canvas.hasAttribute('tabindex')) {
-      this.canvas.tabIndex = 0;
-    }
-    this.onPointerDown = () => this.canvas.focus({ preventScroll: true });
-    this.canvas.addEventListener('pointerdown', this.onPointerDown);
-    this.inputManager = new InputManager(this.canvas);
-    this.onClockBoundary = () => {
-      this.accumulator = 0;
-      this.lastTime = null;
-    };
-    window.addEventListener('blur', this.onClockBoundary);
-    window.addEventListener('focus', this.onClockBoundary);
-    this.canvas.addEventListener('blur', this.onClockBoundary);
-    document.addEventListener('visibilitychange', this.onClockBoundary);
     this.spriteLoader = new SpriteLoader();
     this.spriteController = new AbortController();
     this.camera = new Camera(this.canvas.width, this.canvas.height);
@@ -88,6 +77,26 @@ export class Game {
     this.importGeneration = 0;
     this.initPromise = null;
     this.initialized = false;
+
+    this.onPointerDown = () => this.canvas.focus({ preventScroll: true });
+    this.onClockBoundary = () => {
+      this.accumulator = 0;
+      this.lastTime = null;
+    };
+    try {
+      this.canvas.addEventListener('pointerdown', this.onPointerDown);
+      this.inputManager = new InputManager(this.canvas);
+      window.addEventListener('blur', this.onClockBoundary);
+      window.addEventListener('focus', this.onClockBoundary);
+      this.canvas.addEventListener('blur', this.onClockBoundary);
+      document.addEventListener('visibilitychange', this.onClockBoundary);
+      if (!this.canvas.hasAttribute('tabindex')) {
+        this.canvas.tabIndex = 0;
+      }
+    } catch (error) {
+      this.#disposeAfterFailure();
+      throw error;
+    }
   }
 
   /**
@@ -783,7 +792,7 @@ export class Game {
       () => this.ldtkLoader.cancelLoad(),
       () => this.spriteController.abort(),
       () => cancelAnimationFrame(this.animationFrameId),
-      () => this.inputManager.dispose(),
+      () => this.inputManager?.dispose(),
       () => window.removeEventListener('blur', this.onClockBoundary),
       () => window.removeEventListener('focus', this.onClockBoundary),
       () => this.canvas.removeEventListener('blur', this.onClockBoundary),

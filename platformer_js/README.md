@@ -308,6 +308,11 @@ replace the current game. Vite hot replacement calls
 that same terminal cleanup to release its DOM/page listeners and Game.
 Both retirement paths report disposal failures to the console and return normally.
 
+Game construction requires a 2D canvas context before it registers input or
+starts loading sprites. If listener registration fails during construction, the game releases partially
+registered DOM listeners before propagating the startup error. A fresh Game can
+then claim the same canvas.
+
 Concurrent and later `init()` calls share one initialization and register controls
 once. Failed initialization disposes input; every later `init()` call rejects
 with the same startup error. Create a fresh Game to retry. Disposal during sprite
@@ -428,10 +433,14 @@ shooting ability. Replacement and append imports share latest-request ownership:
 only the most recently requested import can publish its candidate world and
 levels. Superseded replacements return false, even if the newer request fails;
 imports completed after disposal do not publish. Supersession and disposal abort
-pending transfers. Each load has a 10-second monotonic deadline covering the
+pending transfers. A cancelled load settles even if fetch or a body reader
+remains pending. Each load has a 10-second monotonic deadline covering the
 transfer, UTF-8 decoding, JSON parsing and world preflight. A candidate must
 finish these steps before the deadline to be accepted. The streamed response
-limit is 16 MiB (actual bytes, even without an accurate Content-Length).
+limit is 16 MiB of delivered bytes. A present `Content-Length` must be a single
+unsigned decimal integer. For identity encoding, the delivered byte count must
+match that length. Compressed responses, CORS responses with hidden encoding,
+and responses without a declared length use the delivered byte limit.
 The loader requires HTTP 200 without a `Content-Range` header for a world
 download. It cancels the unread body if the response fails that check or
 arrives after cancellation, preserving the previous world.

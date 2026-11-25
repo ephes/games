@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject malformed LDtk Content-Length declarations and mismatched
+  identity-encoded body lengths before publishing a world.
+
+- Settle cancelled LDtk transfers promptly if fetch or the stream reader stalls,
+  and retire response bodies that arrive after cancellation.
+
+- Release partially registered game and keyboard listeners when game construction fails.
+- Fail at startup when a 2D canvas context is unavailable.
+
 - Keep the published sprite set ready during reloads and after failed, cancelled
   or superseded replacements.
 

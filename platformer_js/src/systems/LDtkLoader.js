@@ -95,6 +95,26 @@ function checkExtent(x, y, width, height) {
   }
 }
 
+// Detach each read's abort listener on settlement, keeping ownership bounded
+// even when a transfer arrives in many small chunks.
+function withTransferAbort(signal, operation) {
+  signal.throwIfAborted();
+  let onAbort;
+  return new Promise((resolve, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    Promise.resolve(operation()).then(resolve, reject);
+  }).finally(() => signal.removeEventListener('abort', onAbort));
+}
+
+function cancelTransfer(transfer, reason) {
+  try {
+    void Promise.resolve(transfer?.cancel(reason)).catch(() => {});
+  } catch {
+    // Best-effort cleanup preserves the original transfer result.
+  }
+}
+
 /**
  * LDtk level loader
  */
@@ -110,8 +130,8 @@ export class LDtkLoader {
 
   /**
    * Load a candidate world. Only the latest requested load may publish it.
-   * A superseded call still returns its own candidate; convert that returned
-   * world with getAllLevels(world), rather than reading the published default.
+   * Cancellation and supersession reject pending loads. Convert a successful
+   * candidate with getAllLevels(world), including when publish is false.
    * @param {string} url - URL to LDtk file
    * @param {Object} options - Publication options
    * @param {boolean} options.publish - Publish if latest (default true)
@@ -122,6 +142,7 @@ export class LDtkLoader {
     const generation = this.loadGeneration;
     const controller = new AbortController();
     this.loadController = controller;
+    const { signal } = controller;
     const deadline = performance.now() + WORLD_LIMITS.timeoutMs;
     const deadlineError = new Error('LDtk transfer deadline exceeded');
     const timer = setTimeout(
@@ -130,39 +151,61 @@ export class LDtkLoader {
     );
     let body;
     let reader;
-    const cancelReader = async () => {
-      try {
-        await reader?.cancel(controller.signal.reason);
-      } catch {
-        // Cancellation is best-effort; the transfer owns its result.
-      }
-    };
-    controller.signal.addEventListener('abort', cancelReader, { once: true });
     try {
-      const response = await fetch(url, { signal: controller.signal });
-      body = response.body;
-      controller.signal.throwIfAborted();
+      const response = await withTransferAbort(signal, async () => {
+        const response = await fetch(url, { signal });
+        if (signal.aborted) {
+          cancelTransfer(response.body, signal.reason);
+        } else {
+          body = response.body;
+        }
+        return response;
+      });
+      signal.throwIfAborted();
       if (response.status !== 200 || response.headers.has('content-range')) {
         throw new Error('LDtk transfer failed');
+      }
+      const declaredLength = response.headers.get('content-length');
+      if (
+        declaredLength !== null &&
+        (!declaredLength || /[^0-9]/.test(declaredLength))
+      ) {
+        throw new Error('Invalid LDtk Content-Length');
+      }
+      // CORS can hide Content-Encoding while still exposing Content-Length.
+      const encoding = response.headers.get('content-encoding');
+      const identity =
+        encoding === null
+          ? response.type !== 'cors'
+          : encoding.toLowerCase() === 'identity';
+      const expectedBytes =
+        identity && declaredLength !== null ? Number(declaredLength) : null;
+      if (expectedBytes !== null && expectedBytes > WORLD_LIMITS.bytes) {
+        throw new Error('LDtk byte budget exceeded');
       }
       reader = body?.getReader();
       if (!reader) {
         throw new Error('LDtk response requires a streamed body');
       }
-      if (Number(response.headers.get('content-length')) > WORLD_LIMITS.bytes) {
-        throw new Error('LDtk byte budget exceeded');
-      }
       const chunks = [];
       let bytes = 0;
       for (;;) {
-        const { done, value } = await reader.read();
-        controller.signal.throwIfAborted();
+        const { done, value } = await withTransferAbort(signal, () =>
+          reader.read()
+        );
+        signal.throwIfAborted();
         if (done) {
+          if (expectedBytes !== null && bytes !== expectedBytes) {
+            throw new Error('LDtk body length does not match Content-Length');
+          }
           break;
         }
         bytes += value.byteLength;
         if (bytes > WORLD_LIMITS.bytes) {
           throw new Error('LDtk byte budget exceeded');
+        }
+        if (expectedBytes !== null && bytes > expectedBytes) {
+          throw new Error('LDtk body length does not match Content-Length');
         }
         chunks.push(value);
       }
@@ -176,6 +219,7 @@ export class LDtkLoader {
         new TextDecoder('utf-8', { fatal: true }).decode(buffer)
       );
       this.preflightWorld(data);
+      signal.throwIfAborted();
       if (performance.now() >= deadline) {
         throw deadlineError;
       }
@@ -187,14 +231,7 @@ export class LDtkLoader {
     } finally {
       clearTimeout(timer);
       controller.abort();
-      controller.signal.removeEventListener('abort', cancelReader);
-      if (body && !reader) {
-        try {
-          void body.cancel(controller.signal.reason).catch(() => {});
-        } catch {
-          // Preserve the transfer error if body disposal fails.
-        }
-      }
+      cancelTransfer(reader ?? body, signal.reason);
       try {
         reader?.releaseLock();
       } catch {

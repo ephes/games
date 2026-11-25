@@ -136,11 +136,15 @@ const ldtkLevels = loader.getAllLevels(world);
 
 Standalone `loadWorld(url, { publish: false })` returns a candidate without
 changing the published `loader.world`. By default, only the latest requested
-load publishes; superseded calls still return their own candidate. Pass that
+load publishes. Superseded or cancelled pending loads reject promptly,
+even when the transport leaves a fetch or read pending. A response that
+arrives after cancellation has its body cancelled. Pass a successfully
 returned world to `getAllLevels(world)` to convert the intended request.
 The loader retires the finished transfer even if releasing its stream reader
 fails. The published result or the original transfer error still reaches the
-caller.
+caller. An identity-encoded response with a declared `Content-Length` must
+deliver exactly that many bytes. All responses are capped at 16 MiB of
+delivered bytes, including compressed responses and responses without a length.
 For game imports use `await game.loadLDtkLevels(url)` or
 `await game.addLDtkLevels(url)` so the coordinator owns publication.
 Both resolve to `true` when the level table is published. Refused imports
