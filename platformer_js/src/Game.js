@@ -179,6 +179,7 @@ export class Game {
     this.boss = boss;
     this.portal = portal;
     this.camera.setBounds(bounds);
+    this.camera.follow(player, true);
   }
 
   /**
@@ -205,9 +206,6 @@ export class Game {
     this.createLevel(this.levels[nextLevel]);
     this.currentLevel = nextLevel;
     this.projectiles = [];
-
-    // Reset camera
-    this.camera.reset();
   }
 
   /**
@@ -876,7 +874,6 @@ export class Game {
         this.totalLevels = ldtkLevels.length;
         this.currentLevel = index;
         this.restorePlayableLevel();
-        this.camera.reset();
 
         reportDiagnostic(() =>
           console.log(`Loaded ${ldtkLevels.length} levels from LDtk`)
@@ -959,9 +956,10 @@ export class Game {
     this.currentLevel = index;
     if (startsNewRun) {
       this.score = 0;
+      this.canShoot = false;
+      this.lastShotTime = -GAME_CONFIG.SHOT_COOLDOWN;
     }
     this.restorePlayableLevel();
-    this.camera.reset();
     return true;
   }
 

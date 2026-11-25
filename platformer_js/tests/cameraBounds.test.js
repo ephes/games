@@ -33,19 +33,37 @@ describe('Render camera after same-step contacts', () => {
         playerStart: { x: 640, y: 360 },
         portal: { x: 590, y: 310 }
       },
-      { ...level(2400), playerStart: { x: 800, y: 300 } }
+      {
+        ...level(2400),
+        width: 2400,
+        height: 1000,
+        playerStart: { x: 2350, y: 950 },
+        platforms: [
+          { x: 0, y: 350, width: 200, height: 50 },
+          { x: 2340, y: 990, width: 60, height: 10 }
+        ]
+      }
     ];
     game.spriteLoader.loadAll = vi.fn().mockResolvedValue();
     await game.init();
     game.boss.canShoot = false;
     Object.assign(game.player, { x: 1300, y: 600, gravity: 0 });
-    game.ctx.translate = vi.fn();
-    game.portal.draw = vi.fn();
+    for (const method of ['translate', 'stroke', 'moveTo', 'lineTo']) {
+      game.ctx[method] = vi.fn();
+    }
   });
 
   afterEach(() => {
     game.dispose();
+    vi.restoreAllMocks();
   });
+
+  function expectSpawnFrame() {
+    expect(game.ctx.translate).toHaveBeenCalledWith(-2280, -880);
+    expect(game.camera.isVisible(game.player.getBounds())).toBe(true);
+    expect(game.ctx.fillRect).toHaveBeenCalledWith(2340, 990, 60, 10);
+    expect(game.ctx.fillRect).not.toHaveBeenCalledWith(0, 350, 200, 50);
+  }
 
   it('renders at the respawn point after body damage', () => {
     game.enemies = [new Enemy({ x: 1300, y: 600, speed: 0 })];
@@ -83,14 +101,24 @@ describe('Render camera after same-step contacts', () => {
     expect(game.ctx.translate).toHaveBeenCalledWith(-1260, -210);
   });
 
-  it('keeps the camera reset when a respawn immediately enters the next level', () => {
+  it('renders the next spawn in the step that enters the portal after a respawn', () => {
     game.portal.unlock();
     game.enemies = [new Enemy({ x: 1300, y: 600, speed: 0 })];
     game.update(16);
     expect(game.lives).toBe(2);
     expect(game.currentLevel).toBe(1);
-    expect(game.camera.x).toBe(0);
-    expect(game.camera.y).toBe(0);
+    game.render();
+    expectSpawnFrame();
+  });
+
+  it('renders the reloaded spawn before the first simulation step', () => {
+    game.loadNextLevel();
+    game.camera.follow({ x: 0, y: 0 }, true);
+    expect(game.resetLevel()).toBe(true);
+    const update = vi.spyOn(game, 'update');
+    game.start();
+    expect(update).not.toHaveBeenCalled();
+    expectSpawnFrame();
   });
 });
 

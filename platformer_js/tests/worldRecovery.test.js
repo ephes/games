@@ -119,11 +119,10 @@ describe('Terminal level recovery', () => {
         expect(game.projectiles).toEqual([]);
         expect(game.boss.projectiles).toEqual([]);
         expect(vi.getTimerCount()).toBe(0);
-        expect([game.score, game.canShoot, game.lastShotTime]).toEqual([
-          terminal === 'won' && action === 'reset' ? 0 : 125,
-          true,
-          12
-        ]);
+        const newRun = terminal === 'won' && action === 'reset';
+        expect([game.score, game.canShoot, game.lastShotTime]).toEqual(
+          newRun ? [0, false, -GAME_CONFIG.SHOT_COOLDOWN] : [125, true, 12]
+        );
         const update = vi.spyOn(game.player, 'update');
         game.update(16);
         expect(update).toHaveBeenCalledOnce();
@@ -131,8 +130,43 @@ describe('Terminal level recovery', () => {
       }
     }
   );
-  it('preserves score on a live reset and on a failed restart after winning', () => {
+  it('requires a new power-up and allows an immediate shot after earning it again', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    game.levels = [
+      {
+        playerStart: { x: 40, y: 50 },
+        platforms: [],
+        coins: [{ x: 40, y: 50, isPowerUp: true }],
+        enemies: [],
+        boss: { x: 600, y: 200 },
+        portal: { x: 700, y: 200 }
+      }
+    ];
+    game.totalLevels = 1;
+    game.resetLevel();
+    game.checkCollisions();
+    game.shoot();
+    expect(game.projectiles).toHaveLength(1);
+
+    game.loadNextLevel();
+    expect(game.gameWon).toBe(true);
+    expect(game.resetLevel()).toBe(true);
+
+    performance.now.mockReturnValue(1001);
+    expect(game.canShoot).toBe(false);
+    game.shoot();
+    expect(game.projectiles).toHaveLength(0);
+
+    // Still within the old run's cooldown when the new power-up is collected.
+    game.checkCollisions();
+    game.shoot();
+    expect(game.projectiles).toHaveLength(1);
+  });
+
+  it('preserves progress on a live reset and on a failed restart after winning', () => {
     game.score = 125;
+    game.canShoot = true;
+    game.lastShotTime = 12;
     expect(game.resetLevel()).toBe(true);
     expect(game.score).toBe(125);
 
@@ -147,6 +181,8 @@ describe('Terminal level recovery', () => {
     expect(game.currentLevel).toBe(game.levels.length);
     expect(game.player).toBe(player);
     expect(game.score).toBe(125);
+    expect(game.canShoot).toBe(true);
+    expect(game.lastShotTime).toBe(12);
   });
 
   it('keeps terminal state and objects on construction failure and refuses disposed reset', () => {

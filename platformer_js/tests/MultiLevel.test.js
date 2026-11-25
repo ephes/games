@@ -172,8 +172,8 @@ describe('Multi-Level Support', () => {
     });
   });
 
-  describe('Camera Reset', () => {
-    it('should reset camera position when loading new level', async () => {
+  describe('Spawn framing', () => {
+    it('keeps the built-in next level framed at the origin', async () => {
       await game.init();
 
       // Move camera
