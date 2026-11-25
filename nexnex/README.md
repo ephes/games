@@ -124,13 +124,15 @@ identity/hash operations and check exact non-overlapping coverage for every
 3 by 3 grid.
 
 R resets the surviving Worldly player to the project's sole authored Player
-spawn and respawns the loaded levels. Velocity, ground contacts, climb contacts,
-and climbing gravity are cleared. The spawn's level becomes selected, including
-when the player restarts from a neighboring level. LDtk's Worldly identity
-prevents a second player during level respawn. Restart scans authored entities
-in project order once and stops at the second Player. Missing project data or a
-missing or duplicate Player spawn leaves restart unavailable until valid data
-returns. Restart checks that level, entity and definition dimensions are positive,
+spawn and respawns the loaded levels. Restart runs after movement, clears
+velocity and both sets of contacts, and exits climbing. Before Rapier runs, the
+climbing system restores any gravity scale it still owns. Standing gravity and
+gravity already set by another feature are preserved. The spawn's level becomes
+selected, including when the player restarts from a neighboring level. LDtk's
+Worldly identity prevents a second player during level respawn. Restart scans
+authored entities in project order once and stops at the second Player. Missing
+project data or a missing or duplicate Player spawn leaves restart unavailable
+until valid data returns. Restart checks that level, entity and definition dimensions are positive,
 that signed 32-bit coordinate conversions fit and that the full spawn transform
 is finite, including scale and parent conversion. Invalid geometry
 emits one authoring warning per restart attempt and leaves the player's pose,

@@ -136,7 +136,6 @@ pub fn restart_level(
             &mut Velocity,
             &mut Climber,
             &mut GroundDetection,
-            &mut GravityScale,
         ),
         With<Player>,
     >,
@@ -237,7 +236,7 @@ pub fn restart_level(
                 0.,
             ),
     );
-    let Ok((player, parent, mut transform, mut velocity, mut climber, mut ground, mut gravity)) =
+    let Ok((player, parent, mut transform, mut velocity, mut climber, mut ground)) =
         players.single_mut()
     else {
         return;
@@ -263,7 +262,6 @@ pub fn restart_level(
     *velocity = Velocity::zero();
     *climber = Climber::default();
     ground.on_ground = false;
-    gravity.0 = 1.;
     for mut sensor in &mut sensors {
         if sensor.ground_detection_entity == player {
             sensor.intersecting_ground_entities.clear();
@@ -286,9 +284,11 @@ impl Plugin for GameFlowPlugin {
             )
             .add_systems(
                 Update,
-                // After every contact observation and control step, so no
-                // contact read later in this frame survives the reset.
-                restart_level.after(crate::ControlSet::Gravity),
+                // Clear contacts after movement so the gravity system can
+                // release any climbing override before physics this frame.
+                restart_level
+                    .after(crate::ControlSet::Movement)
+                    .before(crate::ControlSet::Gravity),
             );
     }
 }

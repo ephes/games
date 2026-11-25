@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Restore gravity held at zero by climbing to its saved scale on restart.
+  Preserve standing gravity and gravity already set by another feature.
+
 - Retire ladder contacts and queued starts when the ladder's collider is
   removed, including removal and reinsertion within one update.
 

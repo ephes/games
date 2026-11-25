@@ -140,6 +140,7 @@ fn assert_restart(selection: LevelSelection) {
         .get_mut::<GroundDetection>(player)
         .unwrap()
         .on_ground = true;
+    // This fixture sets zero gravity without acquiring a climbing override.
     app.world_mut().get_mut::<GravityScale>(player).unwrap().0 = 0.;
     let mut sensors = app.world_mut().query::<&mut GroundSensor>();
     for mut sensor in sensors.iter_mut(app.world_mut()) {
@@ -175,7 +176,7 @@ fn assert_restart(selection: LevelSelection) {
             .unwrap()
             .on_ground
     );
-    assert_eq!(app.world().get::<GravityScale>(player).unwrap().0, 1.);
+    assert_eq!(app.world().get::<GravityScale>(player).unwrap().0, 0.);
     assert!(sensors
         .iter(app.world())
         .all(|sensor| sensor.intersecting_ground_entities.is_empty()));
@@ -184,6 +185,70 @@ fn assert_restart(selection: LevelSelection) {
         *app.world().resource::<LevelSelection>(),
         LevelSelection::iid("synthetic-level")
     );
+}
+
+#[test]
+fn restart_releases_only_gravity_owned_by_climbing_in_the_same_update() {
+    let observed =
+        [(false, None), (true, None), (true, Some(3.))].map(|(climbing, external_gravity)| {
+            let (mut app, project) = testing::project_data_app(synthetic_project());
+            app.init_resource::<ButtonInput<KeyCode>>()
+                .init_resource::<LdtkSettings>()
+                .insert_resource(LevelSelection::Uid(2))
+                .add_message::<CollisionEvent>()
+                .add_plugins((
+                    game_flow::GameFlowPlugin,
+                    player::PlayerPlugin,
+                    climbing::ClimbingPlugin,
+                    ground_detection::GroundDetectionPlugin,
+                ));
+            app.world_mut().spawn(LdtkProjectHandle::from(project));
+            let player = app
+                .world_mut()
+                .spawn((
+                    Player,
+                    Transform::default(),
+                    Velocity::zero(),
+                    Climber::default(),
+                    GroundDetection::default(),
+                    GravityScale(2.5),
+                ))
+                .id();
+            if climbing {
+                let ladder = app
+                    .world_mut()
+                    .spawn(climbing::LadderBundle::default())
+                    .id();
+                app.world_mut().write_message(CollisionEvent::Started(
+                    player,
+                    ladder,
+                    bevy_rapier2d::rapier::geometry::CollisionEventFlags::empty(),
+                ));
+                app.world_mut()
+                    .resource_mut::<ButtonInput<KeyCode>>()
+                    .press(KeyCode::KeyW);
+            }
+            app.update();
+            assert_eq!(
+                app.world().get::<Climber>(player).unwrap().climbing,
+                climbing
+            );
+            let gravity = |app: &App| app.world().get::<GravityScale>(player).unwrap().0;
+            assert_eq!(gravity(&app), if climbing { 0. } else { 2.5 });
+            if let Some(gravity) = external_gravity {
+                app.world_mut().get_mut::<GravityScale>(player).unwrap().0 = gravity;
+            }
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::KeyR);
+            app.update();
+            assert_eq!(
+                *app.world().get::<Climber>(player).unwrap(),
+                Climber::default()
+            );
+            gravity(&app)
+        });
+    assert_eq!(observed, [2.5, 2.5, 3.]);
 }
 
 #[test]
