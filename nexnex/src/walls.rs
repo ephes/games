@@ -14,6 +14,14 @@ pub struct WallBundle {
 #[derive(Component)]
 struct WallCollision(Entity);
 
+impl WallCollision {
+    fn source_layer(&self) -> Entity {
+        #[cfg(test)]
+        SOURCE_PROBES.with(|count| count.set(count.get() + 1));
+        self.0
+    }
+}
+
 #[derive(Clone, PartialEq, Eq)]
 struct LayerWalls {
     level: Entity,
@@ -27,6 +35,9 @@ struct LayerWalls {
 #[cfg(test)]
 thread_local! {
     static PLATE_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static LIVE_PLATE_ROWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static PEAK_PLATE_ROWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static SOURCE_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static CELL_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -56,6 +67,26 @@ impl std::hash::Hash for Plate {
     }
 }
 
+struct PlateRow(Vec<Plate>);
+
+impl PlateRow {
+    fn new() -> Self {
+        #[cfg(test)]
+        LIVE_PLATE_ROWS.with(|live| {
+            live.set(live.get() + 1);
+            PEAK_PLATE_ROWS.with(|peak| peak.set(peak.get().max(live.get())));
+        });
+        Self(Vec::new())
+    }
+}
+
+#[cfg(test)]
+impl Drop for PlateRow {
+    fn drop(&mut self) {
+        LIVE_PLATE_ROWS.with(|live| live.set(live.get() - 1));
+    }
+}
+
 struct Rect {
     left: i32,
     right: i32,
@@ -64,11 +95,9 @@ struct Rect {
 }
 
 fn rectangles(level_walls: &HashSet<GridCoords>, width: i32, height: i32) -> Vec<Rect> {
-    // combine wall tiles into flat "plates" in each individual row
-    let mut plate_stack: Vec<Vec<Plate>> = Vec::new();
-
-    for y in 0..height {
-        let mut row_plates: Vec<Plate> = Vec::new();
+    // Build each row only when the merger is ready for it.
+    let rows = (0..height).map(|y| {
+        let mut row_plates = PlateRow::new();
         let mut plate_start = None;
 
         // + 1 to the width so the algorithm "terminates" plates that touch the right edge
@@ -77,7 +106,7 @@ fn rectangles(level_walls: &HashSet<GridCoords>, width: i32, height: i32) -> Vec
             CELL_PROBES.with(|count| count.set(count.get() + 1));
             match (plate_start, level_walls.contains(&GridCoords { x, y })) {
                 (Some(s), false) => {
-                    row_plates.push(Plate {
+                    row_plates.0.push(Plate {
                         left: s,
                         right: x - 1,
                     });
@@ -88,20 +117,18 @@ fn rectangles(level_walls: &HashSet<GridCoords>, width: i32, height: i32) -> Vec
             }
         }
 
-        plate_stack.push(row_plates);
-    }
+        row_plates
+    });
 
     // combine "plates" into rectangles across multiple rows
     let mut rect_builder: HashMap<Plate, Rect> = HashMap::new();
-    let mut prev_row: Vec<Plate> = Vec::new();
+    let mut prev_row = PlateRow::new();
     let mut wall_rects: Vec<Rect> = Vec::new();
 
-    // an extra empty row so the algorithm "finishes" the rects that touch the top edge
-    plate_stack.push(Vec::new());
-
-    for (y, current_row) in plate_stack.into_iter().enumerate() {
-        let current_plates: HashSet<_> = current_row.iter().collect();
-        for prev_plate in &prev_row {
+    // Finish rectangles that touch the top edge with one implicit empty row.
+    for (y, current_row) in rows.chain(std::iter::once_with(PlateRow::new)).enumerate() {
+        let current_plates: HashSet<_> = current_row.0.iter().collect();
+        for prev_plate in &prev_row.0 {
             if !current_plates.contains(prev_plate) {
                 // remove the finished rect so that the same plate in the future starts a new rect
                 if let Some(rect) = rect_builder.remove(prev_plate) {
@@ -109,7 +136,7 @@ fn rectangles(level_walls: &HashSet<GridCoords>, width: i32, height: i32) -> Vec
                 }
             }
         }
-        for plate in &current_row {
+        for plate in &current_row.0 {
             rect_builder
                 .entry(plate.clone())
                 .and_modify(|e| e.top += 1)
@@ -185,6 +212,13 @@ fn spawn_wall_collision(
     {
         return;
     }
+    let mut generated_by_layer: HashMap<_, Vec<_>> = HashMap::new();
+    for (collider, source) in &generated {
+        generated_by_layer
+            .entry(source.source_layer())
+            .or_default()
+            .push(collider);
+    }
     let mut cells_by_layer: HashMap<Entity, HashSet<GridCoords>> = HashMap::new();
     for (coords, parent) in &walls {
         cells_by_layer
@@ -217,10 +251,8 @@ fn spawn_wall_collision(
         if previous.get(&entity) == Some(&snapshot) {
             continue;
         }
-        for (collider, source) in &generated {
-            if source.0 == entity {
-                commands.entity(collider).despawn();
-            }
+        for collider in generated_by_layer.remove(&entity).into_iter().flatten() {
+            commands.entity(collider).despawn();
         }
         let grid = i64::from(snapshot.grid_size);
         for rect in rectangles(&snapshot.cells, snapshot.width, snapshot.height) {
@@ -254,10 +286,8 @@ fn spawn_wall_collision(
     }
     for layer in previous.keys().copied().collect::<Vec<_>>() {
         if !layers.contains(layer) {
-            for (collider, source) in &generated {
-                if source.0 == layer {
-                    commands.entity(collider).despawn();
-                }
+            for collider in generated_by_layer.remove(&layer).into_iter().flatten() {
+                commands.entity(collider).despawn();
             }
             previous.remove(&layer);
         }
@@ -307,12 +337,32 @@ mod tests {
     }
 
     #[test]
+    fn tall_narrow_grid_retains_at_most_two_plate_rows() {
+        let height = MAX_WALL_CELLS;
+        let cells = HashSet::from([
+            GridCoords::new(0, 0),
+            GridCoords::new(0, 1),
+            GridCoords::new(0, height - 1),
+        ]);
+        PEAK_PLATE_ROWS.with(|peak| peak.set(0));
+        let rects: Vec<_> = rectangles(&cells, 1, height)
+            .into_iter()
+            .map(|rect| (rect.left, rect.right, rect.bottom, rect.top))
+            .collect();
+        assert_eq!(rects, vec![(0, 0, 0, 1), (0, 0, height - 1, height - 1)]);
+        let peak = PEAK_PLATE_ROWS.with(std::cell::Cell::get);
+        assert!(peak <= 2, "retained {peak} plate rows at once");
+        assert_eq!(LIVE_PLATE_ROWS.with(std::cell::Cell::get), 0);
+    }
+
+    #[test]
     fn alternating_rows_use_linear_plate_identity_work() {
         for width in [128, 4096] {
             let cells: HashSet<_> = (0..width).map(|x| GridCoords::new(x, x % 2)).collect();
             PLATE_WORK.with(|count| count.set(0));
             let rects = rectangles(&cells, width, 2);
-            assert_eq!(rects.len(), width as usize);
+            let expected_order = (0..width).step_by(2).chain((1..width).step_by(2));
+            assert!(rects.iter().map(|rect| rect.left).eq(expected_order));
             let work = PLATE_WORK.with(std::cell::Cell::get);
             assert!(
                 work <= 32 * width as usize,
@@ -384,6 +434,81 @@ mod tests {
             .collect();
         rects.sort();
         rects
+    }
+
+    #[test]
+    fn bulk_reload_examines_each_existing_collider_source_once() {
+        let mut app = App::new();
+        app.add_systems(Update, spawn_wall_collision);
+        let level = app.world_mut().spawn(LevelIid::new("synthetic")).id();
+        let mut layers = Vec::new();
+        for index in 0..128 {
+            let x = index * 32;
+            let layer = app
+                .world_mut()
+                .spawn((
+                    LayerMetadata::from(&LayerInstance {
+                        c_wid: 3,
+                        c_hei: 1,
+                        grid_size: 8,
+                        px_total_offset_x: x,
+                        ..default()
+                    }),
+                    ChildOf(level),
+                ))
+                .id();
+            tile(&mut app, layer, 0);
+            tile(&mut app, layer, 2);
+            layers.push((layer, x));
+        }
+        app.update();
+        let mut query = app.world_mut().query::<(Entity, &WallCollision)>();
+        let mut original: HashMap<_, Vec<_>> = HashMap::new();
+        for (collider, source) in query.iter(app.world()) {
+            original.entry(source.0).or_default().push(collider);
+        }
+        assert_eq!(original.len(), layers.len());
+        assert!(original.values().all(|colliders| colliders.len() == 2));
+
+        let mut expected = Vec::new();
+        for (index, &(layer, x)) in layers.iter().enumerate() {
+            match index % 4 {
+                0 => {
+                    tile(&mut app, layer, 1);
+                    expected.push((x, 0, x + 24, 8));
+                }
+                1 => {
+                    app.world_mut().despawn(layer);
+                }
+                kind => {
+                    if kind == 2 {
+                        app.world_mut()
+                            .get_mut::<LayerMetadata>(layer)
+                            .unwrap()
+                            .grid_size = 0;
+                    }
+                    expected.extend([(x, 0, x + 8, 8), (x + 16, 0, x + 24, 8)]);
+                }
+            }
+        }
+        SOURCE_PROBES.with(|count| count.set(0));
+        app.update();
+
+        assert_eq!(geometry(&mut app), expected);
+        for (index, &(layer, _)) in layers.iter().enumerate() {
+            for &collider in &original[&layer] {
+                let source = app
+                    .world()
+                    .get::<WallCollision>(collider)
+                    .map(|source| source.0);
+                assert_eq!(source, (index % 4 >= 2).then_some(layer));
+            }
+        }
+        assert_eq!(SOURCE_PROBES.with(std::cell::Cell::get), layers.len() * 2);
+
+        SOURCE_PROBES.with(|count| count.set(0));
+        app.update();
+        assert_eq!(SOURCE_PROBES.with(std::cell::Cell::get), 0);
     }
 
     #[test]

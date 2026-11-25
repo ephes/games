@@ -89,10 +89,12 @@ Wall colliders use each tile's source `LayerMetadata`, including its grid size
 and pixel offsets. Layers are merged independently. ECS tile additions, grid or
 parent changes, removals, and layer changes replace that layer's generated
 colliders from its complete current cell set. Level/layer removal retires the
-colliders. Invalid grids produce a warning and retain previous geometry until
-corrected. Cells without source layer metadata are refused with a warning. Live
-layer metadata allows collision state to survive temporary project-asset
-unavailability.
+colliders. Each reload pass indexes existing generated colliders once by
+source layer, then looks up only the layers it replaces or retires. Unchanged
+layers retain their collider IDs. Invalid grids produce a warning and retain
+previous geometry until corrected. Cells without source layer metadata are
+refused with a warning. Live layer metadata allows collision state to survive
+temporary project-asset unavailability.
 
 A wall layer admits at most 1,000,000 cells (`width * height`, including empty
 cells), positive grid dimensions/size, valid cell coordinates, and pixel extents
@@ -100,10 +102,12 @@ and shifted edges representable as signed 32-bit integers. Negating the authored
 Y offset must also fit. Admission runs before scanning cells or retiring live
 colliders; refusal warns and retains the last good geometry until corrected.
 Centers and half-extents use widened integer arithmetic before float conversion.
-Per-row hashed plate membership keeps merge work linear in the number of plates
-on average while ordered row vectors preserve deterministic rectangle assembly.
-Tests count cell probes and plate identity/hash operations instead of elapsed
-time and check exact non-overlapping coverage for every 3 by 3 grid.
+The merger consumes wall plates one row at a time and retains at most two plate
+rows, even at the layer height limit. Per-row hashed membership keeps merge
+work linear in the number of plates on average, and row order preserves
+deterministic rectangle assembly. Tests count live rows, cell probes and plate
+identity/hash operations and check exact non-overlapping coverage for every
+3 by 3 grid.
 
 R resets the surviving Worldly player to the project's sole authored Player
 spawn and respawns the loaded levels. Velocity, ground contacts, climb contacts,
