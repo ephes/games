@@ -111,18 +111,26 @@ it.each([1, 4])(
   }
 );
 
-it.each([true, false])(
-  'checks the moving boss head at first contact (head %s)',
-  head => {
+it.each([
+  [true, false],
+  [false, false],
+  [true, true],
+  [false, true]
+])(
+  'checks the moving boss head at first contact (head=%s protected=%s)',
+  (head, protectedPlayer) => {
     game.boss.x = 100;
     game.boss.y = 100;
     game.boss.baseSpeed = 20;
     game.player.x = head ? 125 : 90;
     game.player.y = 0;
     game.player.velocityY = 200;
+    if (protectedPlayer) {
+      game.player.makeInvulnerable();
+    }
     game.update(16);
     expect(game.score).toBe(head ? 20 : 0);
-    expect(game.lives).toBe(head ? 3 : 2);
+    expect(game.lives).toBe(head || protectedPlayer ? 3 : 2);
   }
 );
 
@@ -166,24 +174,37 @@ it('still consumes later shots along the real path while protected', () => {
   expect(onPath.active).toBe(false);
 });
 
-it('skips target pose reads during protection and restores body sweeps on expiry', () => {
-  game.enemies = Array.from(
-    { length: 1000 },
-    (_, i) => new Enemy({ x: 3000 + i * 50, y: 100, speed: 1 })
-  );
-  const readY = vi.fn(() => 100);
-  for (const enemy of game.enemies) {
-    // Enemy movement itself only reads x in this fixture.
-    Object.defineProperty(enemy, 'y', { get: readY });
-  }
+it('ignores an earlier side contact and stomps the first moving target while protected', () => {
+  const side = new Enemy({ x: 50, y: 35, speed: 0 });
+  const firstStomp = new Enemy({ x: 125, y: 100, speed: 135 });
+  firstStomp.direction = -1;
+  const laterStomp = new Enemy({ x: 125, y: 160, speed: 0 });
+  game.enemies = [laterStomp, side, firstStomp];
+  Object.assign(game.player, { x: 0, y: 0, speed: 200, velocityY: 200 });
+  game.inputManager.keys.ArrowRight = true;
+  game.player.makeInvulnerable();
+
+  game.update(16);
+
+  expect(game.lives).toBe(3);
+  expect(game.player.isInvulnerable).toBe(true);
+  expect(game.score).toBe(50);
+  expect(side.alive).toBe(true);
+  expect(firstStomp.alive).toBe(false);
+  expect(laterStomp.alive).toBe(true);
+  expect(game.player.y).toBe(70);
+  expect(game.player.velocityY).toBeLessThan(0);
+});
+
+it('restores side-contact damage on the step protection expires', () => {
+  const crossing = new Enemy({ x: 0, y: 100, speed: 240 });
+  game.enemies = [crossing];
   game.player.makeInvulnerable(100);
   game.update(16);
-  expect(readY.mock.calls.length).toBe(0);
-  expect(game.enemies[0].x).toBe(3001);
+  expect(crossing.x).toBe(240);
   expect(game.lives).toBe(3);
 
-  const crossing = new Enemy({ x: 0, y: 100, speed: 240 });
-  game.enemies.push(crossing);
+  crossing.x = 0;
   game.update(84);
   expect(crossing.x).toBe(240);
   expect(game.lives).toBe(2);

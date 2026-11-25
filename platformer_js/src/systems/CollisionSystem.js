@@ -99,36 +99,58 @@ export class CollisionSystem {
     previousPlayer,
     previousEnemy = enemy
   ) {
-    if (!enemy.alive || player.isInvulnerable) {
+    if (!enemy.alive) {
       return null;
     }
     const captured = previousPlayer !== undefined;
-    previousPlayer ??= {
-      x: player.x,
-      y: player.y - Math.max(0, player.velocityY)
-    };
+    previousPlayer ??= this.#previousBodyPose(player);
     const time = this.sweptContactTime(
       player,
       enemy,
       previousPlayer,
       previousEnemy
     );
-    if (time === null) {
-      return null;
-    }
+    return time === null
+      ? null
+      : this.#bodyContactType(
+          player,
+          enemy,
+          previousPlayer,
+          previousEnemy,
+          time,
+          captured
+        );
+  }
+
+  static #previousBodyPose(player) {
+    return {
+      x: player.x,
+      y: player.y - Math.max(0, player.velocityY)
+    };
+  }
+
+  static #bodyContactType(
+    player,
+    enemy,
+    previousPlayer,
+    previousEnemy,
+    time,
+    captured
+  ) {
+    const damage = player.isInvulnerable ? null : 'damage';
     const gap = previousEnemy.y - (previousPlayer.y + player.height);
     const downward = player.y - previousPlayer.y - (enemy.y - previousEnemy.y);
     // Only a top crossing at the first relative contact is a stomp. Starting
     // inside or entering through a side while falling remains damage.
     if (gap < 0 || downward <= 0 || Math.abs(time - gap / downward) > 1e-7) {
-      return 'damage';
+      return damage;
     }
     if (enemy.kind === 'boss') {
       if (
         !captured &&
         player.y + player.height - enemy.y > enemy.height * 0.2
       ) {
-        return 'damage';
+        return damage;
       }
       const playerX = previousPlayer.x + (player.x - previousPlayer.x) * time;
       const enemyX = previousEnemy.x + (enemy.x - previousEnemy.x) * time;
@@ -136,7 +158,7 @@ export class CollisionSystem {
         Math.abs(playerX + player.width / 2 - enemyX - enemy.width / 2) >
         enemy.width * 0.2
       ) {
-        return 'damage';
+        return damage;
       }
       // First top contact has zero penetration, inside the top 20% head zone.
     }
@@ -267,6 +289,62 @@ export class CollisionSystem {
     previousTargets = new Map(),
     candidates = null
   ) {
+    return this.#firstTargetContact(
+      projectile,
+      enemies,
+      boss,
+      previousProjectile,
+      previousTargets,
+      candidates
+    );
+  }
+
+  /**
+   * Find the earliest enemy or boss body contact that affects the player.
+   * Protected players can stomp, but damaging contacts are ignored.
+   * @param {Object} player - Current player rectangle
+   * @param {Array} enemies - List of enemies
+   * @param {Object} boss - Boss enemy
+   * @param {Object} [previousPlayer] - Player position before this step
+   * @param {Map} [previousTargets] - Target positions before this step
+   * @returns {Object|null} Target, target type, contact time and collision type
+   */
+  static checkBodyContacts(
+    player,
+    enemies,
+    boss,
+    previousPlayer,
+    previousTargets
+  ) {
+    const start = previousPlayer ?? this.#previousBodyPose(player);
+    return this.#firstTargetContact(
+      player,
+      enemies,
+      boss,
+      start,
+      previousTargets,
+      null,
+      (target, previousTarget, time) =>
+        this.#bodyContactType(
+          player,
+          target,
+          start,
+          previousTarget,
+          time,
+          previousPlayer !== undefined
+        )
+    );
+  }
+
+  static #firstTargetContact(
+    moving,
+    enemies,
+    boss,
+    previous,
+    previousTargets,
+    candidates,
+    classify
+  ) {
     let hit = null;
     let earliest = Infinity;
     let hitOrder = Infinity;
@@ -280,11 +358,12 @@ export class CollisionSystem {
       if (!target.alive) {
         continue;
       }
+      const previousTarget = previousTargets?.get(target) ?? target;
       const time = this.sweptContactTime(
-        projectile,
+        moving,
         target,
-        previousProjectile,
-        previousTargets.get(target) ?? target
+        previous,
+        previousTarget
       );
       if (time === null) {
         continue;
@@ -302,9 +381,16 @@ export class CollisionSystem {
         }
       }
       if (time < earliest || before) {
+        const collision = classify?.(target, previousTarget, time);
+        if (classify && !collision) {
+          continue;
+        }
         earliest = time;
         hitOrder = order;
         hit = { type: candidate.type, target, time };
+        if (collision) {
+          hit.collision = collision;
+        }
       }
     }
     return hit;
