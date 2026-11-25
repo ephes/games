@@ -141,27 +141,27 @@ export class SpriteLoader {
       );
     };
 
-    // Player sprites
-    load('player.idle', 'assets/sprites/pink-man-idle.png');
-    load('player.run', 'assets/sprites/pink-man-run.png');
-    load('player.jump', 'assets/sprites/pink-man-jump.png');
-    load('player.fall', 'assets/sprites/pink-man-fall.png');
-    load('player.hit', 'assets/sprites/pink-man-hit.png');
-
-    // Enemy sprites
-    load('enemy.run', 'assets/sprites/slime-run.png');
-    load('enemy.hit', 'assets/sprites/slime-hit.png');
-
-    // Boss sprite
-    load('boss', 'assets/sprites/boss_kobra_64x96-sheet.png');
-
-    // Portal sprite
-    load('portal', 'assets/sprites/level_portal_128.png');
-
-    // Boss fireball sprite
-    load('boss.fireball', 'assets/sprites/boss-fireball.png');
-
     try {
+      // Player sprites
+      load('player.idle', 'assets/sprites/pink-man-idle.png');
+      load('player.run', 'assets/sprites/pink-man-run.png');
+      load('player.jump', 'assets/sprites/pink-man-jump.png');
+      load('player.fall', 'assets/sprites/pink-man-fall.png');
+      load('player.hit', 'assets/sprites/pink-man-hit.png');
+
+      // Enemy sprites
+      load('enemy.run', 'assets/sprites/slime-run.png');
+      load('enemy.hit', 'assets/sprites/slime-hit.png');
+
+      // Boss sprite
+      load('boss', 'assets/sprites/boss_kobra_64x96-sheet.png');
+
+      // Portal sprite
+      load('portal', 'assets/sprites/level_portal_128.png');
+
+      // Boss fireball sprite
+      load('boss.fireball', 'assets/sprites/boss-fireball.png');
+
       await Promise.all(promises);
       if (
         this.batch !== batch ||
@@ -176,6 +176,11 @@ export class SpriteLoader {
         this.sprites.set(name, img);
       }
       this.loaded = true;
+    } catch (error) {
+      // A synchronous setup failure can precede Promise.all. Observe any
+      // started images before aborting them and preserve the setup error.
+      void Promise.allSettled(promises);
+      throw error;
     } finally {
       controller.abort();
       signal?.removeEventListener('abort', abort);

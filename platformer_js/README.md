@@ -110,7 +110,8 @@ on failure as described below; retry the loader directly or create a fresh Game.
 accept an optional AbortSignal and a positive finite per-image deadline (default
 10 seconds, maximum 2,147,483,647 ms). Error, timeout, abort and success release
 callbacks, timers and signal listeners. Failed batches abort their remaining
-images; a new batch aborts its predecessor. Game disposal aborts initialization
+images, including when setup throws after some images have started. A new
+batch aborts its predecessor. Game disposal aborts initialization
 images; startup failure remains terminal for that Game.
 An already-aborted signal rejects with `AbortError` before either loader
 creates images or timers, leaving existing requests and cached sprites intact.
