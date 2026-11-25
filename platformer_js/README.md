@@ -89,8 +89,10 @@ real LDtk world/level conversion, entity field lookup and IntGrid collision mesh
 merging against synthetic records, mocking only streamed `fetch` responses. Sprite loader
 tests use explicitly triggered Image load/error events to check cache identity,
 out-of-order completion, fake deadlines and failed startup without network requests.
-SpriteLoader batches can be retried after failure. Each batch starts incomplete;
-only the newest complete batch publishes its images together and sets `loaded`.
+SpriteLoader batches can be retried after failure. Only the newest complete batch
+publishes its images together. `loaded` starts false and becomes true with the
+first successful publication. It stays true while a replacement is pending and
+if that replacement fails, is cancelled or is superseded.
 `loadAll()` resolves only after its own batch publishes. Cancellation or
 supersession before publication rejects with an `AbortError`, even if every
 image has finished loading. Game initialization then fails before creating a
@@ -340,6 +342,9 @@ Portal pulses advance by simulation elapsed time (3 radians per second), wrappin
 at 2π for both locked barriers and unlocked glows. Drawing never advances their
 phase; extra renders and different display refresh rates show the same simulated
 state. Terminal game states freeze the phase, and level creation starts it at zero.
+A missing, pending or broken portal image uses the geometric fallback, with the
+usual lock barrier or unlocked glow. The Chromium suite verifies the fallback
+and lock label after a real image decode failure.
 
 Simulation uses fixed 60 Hz steps and renders once per animation frame. A frame
 can run at most five simulation steps; gaps over 250 ms discard accumulated time

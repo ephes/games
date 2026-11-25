@@ -53,3 +53,45 @@ export async function checkSpriteCancellation(page, baseUrl) {
     cachePreserved: true
   });
 }
+
+/** Check portal rendering after a real image decode failure. */
+export async function checkBrokenPortalSprite(page) {
+  const result = await page.evaluate(async () => {
+    const { Portal } = await import('/src/objects/Portal.js');
+    const image = new Image(128, 128);
+    image.src = 'data:image/png;base64,AA==';
+    const decodeError = await image.decode().catch(error => error.name);
+
+    const portal = new Portal(0, 0);
+    portal.setSprite(image);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    let fills = 0;
+    let imageDraws = 0;
+    const labels = [];
+    const fill = ctx.fill.bind(ctx);
+    const drawImage = ctx.drawImage.bind(ctx);
+    const fillText = ctx.fillText.bind(ctx);
+    ctx.fill = (...args) => {
+      fills++;
+      fill(...args);
+    };
+    ctx.drawImage = (...args) => {
+      imageDraws++;
+      drawImage(...args);
+    };
+    ctx.fillText = (text, ...args) => {
+      labels.push(text);
+      fillText(text, ...args);
+    };
+    portal.draw(ctx, 0);
+    return { decodeError, complete: image.complete, fills, imageDraws, labels };
+  });
+  assert.deepEqual(result, {
+    decodeError: 'EncodingError',
+    complete: true,
+    fills: 1,
+    imageDraws: 0,
+    labels: ['LOCKED']
+  });
+}
