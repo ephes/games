@@ -95,8 +95,11 @@ layer's parent makes its existing wall tiles eligible on the next update.
 Removing the marker, level, or layer retires the affected colliders. Each
 reload pass indexes existing generated colliders once by source layer, then
 looks up only the layers it replaces or retires.
-Unchanged layers retain their collider IDs. Invalid grids produce a warning and
-retain previous geometry until corrected. Cells without source layer metadata
+Unchanged layers with intact colliders retain their collider IDs. If a
+generated collider disappears, the next update rebuilds its source layer
+even when the wall tiles and metadata are unchanged. Invalid grids produce
+a warning and retain existing geometry until corrected, at which point any
+pending repair runs. Cells without source layer metadata
 are refused with a warning. Live layer metadata allows collision state to
 survive temporary project-asset unavailability.
 

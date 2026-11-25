@@ -32,6 +32,11 @@ struct LayerWalls {
     cells: HashSet<GridCoords>,
 }
 
+struct LayerCollisionState {
+    snapshot: LayerWalls,
+    needs_repair: bool,
+}
+
 #[cfg(test)]
 thread_local! {
     static PLATE_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -202,11 +207,24 @@ fn spawn_wall_collision(
     mut removed_coords: RemovedComponents<GridCoords>,
     mut removed_parents: RemovedComponents<ChildOf>,
     mut removed_levels: RemovedComponents<LevelIid>,
+    mut removed_colliders: RemovedComponents<Collider>,
     generated: Query<(Entity, &WallCollision)>,
-    mut previous: Local<HashMap<Entity, LayerWalls>>,
+    mut previous: Local<HashMap<Entity, LayerCollisionState>>,
+    mut collider_owners: Local<HashMap<Entity, Entity>>,
 ) {
     let removed_wall = removed_walls.read().count() != 0;
     let removed_level = removed_levels.read().count() != 0;
+    // Expected retirements clear ownership before the removal event arrives.
+    let mut removed_generated = false;
+    for collider in removed_colliders.read() {
+        if let Some(state) = collider_owners
+            .remove(&collider)
+            .and_then(|layer| previous.get_mut(&layer))
+        {
+            state.needs_repair = true;
+            removed_generated = true;
+        }
+    }
     // Drain both streams even if a wall marker was removed. A tile that
     // lost its marker or was despawned is already covered by removed_walls.
     let removed_tile_input = removed_coords
@@ -218,6 +236,7 @@ fn spawn_wall_collision(
     if !removed_wall
         && !removed_tile_input
         && !removed_level
+        && !removed_generated
         && added_levels.is_empty()
         && changed.is_empty()
         && !layers
@@ -265,44 +284,57 @@ fn spawn_wall_collision(
             offset: IVec2::new(metadata.px_total_offset_x, -metadata.px_total_offset_y),
             cells,
         };
-        if previous.get(&entity) == Some(&snapshot) {
+        if previous
+            .get(&entity)
+            .is_some_and(|state| !state.needs_repair && state.snapshot == snapshot)
+        {
             continue;
         }
         for collider in generated_by_layer.remove(&entity).into_iter().flatten() {
-            commands.entity(collider).despawn();
+            collider_owners.remove(&collider);
+            commands.entity(collider).try_despawn();
         }
         let grid = i64::from(snapshot.grid_size);
         for rect in rectangles(&snapshot.cells, snapshot.width, snapshot.height) {
-            commands.spawn((
-                WallCollision(entity),
-                Collider::cuboid(
-                    (i64::from(rect.right - rect.left + 1) * grid) as f32 / 2.,
-                    (i64::from(rect.top - rect.bottom + 1) * grid) as f32 / 2.,
-                ),
-                RigidBody::Fixed,
-                Friction::coefficient(1.0),
-                Transform::from_xyz(
-                    ((i64::from(rect.left) + i64::from(rect.right) + 1) * grid
-                        + 2 * i64::from(snapshot.offset.x)) as f32
-                        / 2.,
-                    ((i64::from(rect.bottom) + i64::from(rect.top) + 1) * grid
-                        + 2 * i64::from(snapshot.offset.y)) as f32
-                        / 2.,
-                    0.,
-                ),
-                GlobalTransform::default(),
-                ChildOf(snapshot.level),
-            ));
+            let collider = commands
+                .spawn((
+                    WallCollision(entity),
+                    Collider::cuboid(
+                        (i64::from(rect.right - rect.left + 1) * grid) as f32 / 2.,
+                        (i64::from(rect.top - rect.bottom + 1) * grid) as f32 / 2.,
+                    ),
+                    RigidBody::Fixed,
+                    Friction::coefficient(1.0),
+                    Transform::from_xyz(
+                        ((i64::from(rect.left) + i64::from(rect.right) + 1) * grid
+                            + 2 * i64::from(snapshot.offset.x)) as f32
+                            / 2.,
+                        ((i64::from(rect.bottom) + i64::from(rect.top) + 1) * grid
+                            + 2 * i64::from(snapshot.offset.y)) as f32
+                            / 2.,
+                        0.,
+                    ),
+                    GlobalTransform::default(),
+                    ChildOf(snapshot.level),
+                ))
+                .id();
+            collider_owners.insert(collider, entity);
         }
-        previous.insert(entity, snapshot);
+        previous.insert(
+            entity,
+            LayerCollisionState {
+                snapshot,
+                needs_repair: false,
+            },
+        );
     }
     if !cells_by_layer.is_empty() {
         warn!(
             "Unsupported wall cells without source layer metadata; retaining previous collisions"
         );
     }
-    previous.retain(|layer, snapshot| {
-        if levels.contains(snapshot.level)
+    previous.retain(|layer, state| {
+        if levels.contains(state.snapshot.level)
             && layers
                 .get(*layer)
                 .is_ok_and(|(_, _, parent)| levels.contains(parent.parent()))
@@ -310,7 +342,8 @@ fn spawn_wall_collision(
             return true;
         }
         for collider in generated_by_layer.remove(layer).into_iter().flatten() {
-            commands.entity(collider).despawn();
+            collider_owners.remove(&collider);
+            commands.entity(collider).try_despawn();
         }
         false
     });
@@ -672,6 +705,78 @@ mod tests {
         app.update();
         assert_eq!(geometry(&mut app), vec![(32, 0, 48, 16)]);
         assert_eq!(colliders.single(app.world()).unwrap().0, unaffected);
+    }
+
+    #[test]
+    fn missing_generated_wall_collider_is_repaired_without_source_changes() {
+        let (mut app, a, b) = setup(false);
+        tile(&mut app, a, 0);
+        tile(&mut app, a, 2);
+        tile(&mut app, b, 2);
+        app.update();
+        let expected = vec![(3, 0, 11, 8), (19, 0, 27, 8), (32, 0, 48, 16)];
+        assert_eq!(geometry(&mut app), expected);
+        let mut colliders = app.world_mut().query::<(Entity, &WallCollision)>();
+        let unaffected = colliders
+            .iter(app.world())
+            .find(|(_, source)| source.0 == b)
+            .unwrap()
+            .0;
+        let missing = colliders
+            .iter(app.world())
+            .find(|(_, source)| source.0 == a)
+            .unwrap()
+            .0;
+        app.world_mut().despawn(missing);
+        app.update();
+
+        assert_eq!(geometry(&mut app), expected);
+        assert_eq!(app.world().get::<WallCollision>(unaffected).unwrap().0, b);
+        let repaired: HashSet<_> = colliders
+            .iter(app.world())
+            .map(|(entity, _)| entity)
+            .collect();
+        assert_eq!(repaired.len(), expected.len());
+        assert!(!repaired.contains(&missing));
+        SOURCE_PROBES.with(|count| count.set(0));
+        app.update();
+        assert_eq!(SOURCE_PROBES.with(std::cell::Cell::get), 0);
+        assert_eq!(
+            colliders
+                .iter(app.world())
+                .map(|(entity, _)| entity)
+                .collect::<HashSet<_>>(),
+            repaired
+        );
+    }
+
+    #[test]
+    fn missing_generated_wall_collider_is_repaired_after_invalid_edit_is_reverted() {
+        let (mut app, a, _) = setup(false);
+        tile(&mut app, a, 0);
+        tile(&mut app, a, 2);
+        app.update();
+        let expected = vec![(3, 0, 11, 8), (19, 0, 27, 8)];
+        assert_eq!(geometry(&mut app), expected);
+        let mut colliders = app
+            .world_mut()
+            .query_filtered::<Entity, With<WallCollision>>();
+        let incomplete = colliders.iter(app.world()).next().unwrap();
+        app.world_mut().entity_mut(incomplete).remove::<Collider>();
+        app.world_mut()
+            .get_mut::<LayerMetadata>(a)
+            .unwrap()
+            .grid_size = 0;
+        app.update();
+        assert_eq!(geometry(&mut app).len(), 1);
+
+        app.world_mut()
+            .get_mut::<LayerMetadata>(a)
+            .unwrap()
+            .grid_size = 8;
+        app.update();
+        assert_eq!(geometry(&mut app), expected);
+        assert_eq!(colliders.iter(app.world()).count(), expected.len());
     }
 
     #[test]

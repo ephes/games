@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rebuild missing generated wall colliders even when valid layer inputs are
+  unchanged. Defer repairs for malformed layers until their grids are valid.
+
 - Reconcile wall colliders when a layer's parent gains or loses its level
   marker, keeping collider IDs in unaffected layers.
 
