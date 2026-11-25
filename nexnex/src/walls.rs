@@ -198,12 +198,24 @@ fn spawn_wall_collision(
     >,
     layers: Query<(Entity, Ref<LayerMetadata>, Ref<ChildOf>)>,
     levels: Query<(), With<LevelIid>>,
-    mut removed: RemovedComponents<Wall>,
+    wall_markers: Query<(), With<Wall>>,
+    mut removed_walls: RemovedComponents<Wall>,
+    mut removed_coords: RemovedComponents<GridCoords>,
+    mut removed_parents: RemovedComponents<ChildOf>,
     generated: Query<(Entity, &WallCollision)>,
     mut previous: Local<HashMap<Entity, LayerWalls>>,
 ) {
-    let removed_any = removed.read().count() != 0;
-    if !removed_any
+    let removed_wall = removed_walls.read().count() != 0;
+    // Drain both streams even if a wall marker was removed. A tile that
+    // lost its marker or was despawned is already covered by removed_walls.
+    let removed_tile_input = removed_coords
+        .read()
+        .chain(removed_parents.read())
+        .filter(|entity| wall_markers.contains(*entity))
+        .count()
+        != 0;
+    if !removed_wall
+        && !removed_tile_input
         && changed.is_empty()
         && !layers
             .iter()
@@ -520,6 +532,48 @@ mod tests {
             app.update();
             assert_eq!(geometry(&mut app), vec![(11, 0, 19, 8), (32, 0, 48, 16)]);
         }
+    }
+
+    #[test]
+    fn removing_wall_coordinates_or_parent_reconciles_only_its_layer() {
+        let (mut app, a, b) = setup(false);
+        let wall = tile(&mut app, a, 1);
+        tile(&mut app, b, 2);
+        let unrelated = app
+            .world_mut()
+            .spawn((GridCoords::new(0, 0), ChildOf(a)))
+            .id();
+        app.update();
+        let mut colliders = app.world_mut().query::<(Entity, &WallCollision)>();
+        let unaffected = colliders
+            .iter(app.world())
+            .find(|(_, source)| source.0 == b)
+            .unwrap()
+            .0;
+
+        app.world_mut()
+            .entity_mut(unrelated)
+            .remove::<(GridCoords, ChildOf)>();
+        SOURCE_PROBES.with(|count| count.set(0));
+        app.update();
+        assert_eq!(SOURCE_PROBES.with(std::cell::Cell::get), 0);
+
+        app.world_mut().entity_mut(wall).remove::<GridCoords>();
+        app.update();
+        assert_eq!(geometry(&mut app), vec![(32, 0, 48, 16)]);
+        app.world_mut()
+            .entity_mut(wall)
+            .insert(GridCoords::new(1, 0));
+        app.update();
+        assert_eq!(geometry(&mut app), vec![(11, 0, 19, 8), (32, 0, 48, 16)]);
+
+        app.world_mut().entity_mut(wall).remove::<ChildOf>();
+        app.update();
+        assert_eq!(geometry(&mut app), vec![(32, 0, 48, 16)]);
+        app.world_mut().entity_mut(wall).insert(ChildOf(a));
+        app.update();
+        assert_eq!(geometry(&mut app), vec![(11, 0, 19, 8), (32, 0, 48, 16)]);
+        assert_eq!(app.world().get::<WallCollision>(unaffected).unwrap().0, b);
     }
 
     #[test]

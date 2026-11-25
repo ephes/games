@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reconcile wall colliders when a tile loses or regains its grid coordinates or
+  parent, preserving collider IDs in unaffected layers.
+
 - Index generated wall colliders by source layer once per reload pass for
   replacement and retirement. Unchanged or invalid layers retain their
   existing colliders.
