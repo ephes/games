@@ -39,13 +39,25 @@ impl LdtkIntCell for LadderBundle {
 }
 
 pub fn detect_climb_range(
+    mut commands: Commands,
     mut climbers: Query<&mut Climber>,
     climbables: Query<Entity, (With<Climbable>, With<Collider>)>,
+    ladders: Query<(), With<Climbable>>,
     mut removed_colliders: RemovedComponents<Collider>,
     mut collisions: MessageReader<CollisionEvent>,
 ) {
     // Queued collision events identify entities, not collider generations.
     let retired: HashSet<_> = removed_colliders.read().collect();
+    for entity in &retired {
+        // Rapier only notices a missing Collider at backend sync. Retire the
+        // old handle so a replacement inserted before then gets a new Rapier
+        // collider and a fresh Started event while still overlapping.
+        if ladders.contains(*entity) {
+            if let Ok(mut ladder) = commands.get_entity(*entity) {
+                ladder.remove::<RapierColliderHandle>();
+            }
+        }
+    }
     let is_live = |entity| climbables.contains(entity) && !retired.contains(&entity);
 
     for mut climber in &mut climbers {

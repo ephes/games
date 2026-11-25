@@ -1034,3 +1034,91 @@ fn gravity_component_generations_reacquire_only_the_new_base() {
         assert!(app.world().get_entity(body).is_err());
     }
 }
+
+#[test]
+fn replaced_ladder_collider_reopens_contact_with_real_physics() {
+    #[derive(Resource)]
+    struct Replace(Option<Entity>);
+
+    fn replace_ladder_collider(mut commands: Commands, mut replace: ResMut<Replace>) {
+        if let Some(ladder) = replace.0.take() {
+            commands
+                .entity(ladder)
+                .remove::<Collider>()
+                .insert(Collider::cuboid(8., 8.));
+        }
+    }
+
+    // Without GroundDetectionPlugin, so ladder retirement alone must give the
+    // replacement a new Rapier collider. Replace before the update, after the
+    // control systems, and after physics.
+    for when in ["before update", "after control", "after physics"] {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            TransformPlugin,
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
+            climbing::ClimbingPlugin,
+        ))
+        .insert_resource(Replace(None))
+        .insert_resource(TimestepMode::Fixed {
+            dt: 1. / 60.,
+            substeps: 1,
+        });
+        if when == "after control" {
+            app.add_systems(
+                Update,
+                replace_ladder_collider.after(crate::ControlSet::Gravity),
+            );
+        } else if when == "after physics" {
+            app.add_systems(Last, replace_ladder_collider);
+        }
+        let climber = app
+            .world_mut()
+            .spawn((
+                Climber::default(),
+                RigidBody::KinematicVelocityBased,
+                Collider::cuboid(6., 14.),
+                Transform::from_xyz(0., 20., 0.),
+            ))
+            .id();
+        let mut ladder = LadderBundle::default();
+        ladder.sensor_bundle.collider = Collider::cuboid(8., 8.);
+        ladder.sensor_bundle.active_events = ActiveEvents::COLLISION_EVENTS;
+        let ladder = app
+            .world_mut()
+            .spawn((
+                ladder,
+                RigidBody::Fixed,
+                ActiveCollisionTypes::all(),
+                Transform::from_xyz(0., 20., 0.),
+            ))
+            .id();
+        let in_range = |app: &mut App| {
+            app.update();
+            app.world()
+                .get::<Climber>(climber)
+                .unwrap()
+                .intersecting_climbables
+                .contains(&ladder)
+        };
+        for _ in 0..5 {
+            in_range(&mut app);
+        }
+        assert!(in_range(&mut app), "{when}");
+        let old_handle = app.world().get::<RapierColliderHandle>(ladder).unwrap().0;
+        if when == "before update" {
+            app.world_mut()
+                .entity_mut(ladder)
+                .remove::<Collider>()
+                .insert(Collider::cuboid(8., 8.));
+        } else {
+            app.world_mut().resource_mut::<Replace>().0 = Some(ladder);
+            assert!(in_range(&mut app), "{when}");
+        }
+        assert!(!in_range(&mut app), "{when}");
+        assert!(in_range(&mut app), "{when}");
+        let new_handle = app.world().get::<RapierColliderHandle>(ladder).unwrap().0;
+        assert_ne!(new_handle, old_handle, "{when}");
+    }
+}

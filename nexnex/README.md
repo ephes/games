@@ -17,14 +17,15 @@ in Rapier's PostUpdate are consumed on the next Update. Removed ground/ladder
 contacts are pruned even when no stopped message arrives. Removing a ladder
 collider retires its old contacts and queued starts even if the collider is
 reinserted on the same entity before observation. Contacts with other ladders
-remain valid, and a later physics step can report fresh contact with the
-replacement. Climbing owns the zero-gravity override only while active. Leaving
-a ladder or removing `Climber` restores the saved gravity scale before Rapier
-runs, unless another feature has already set a nonzero scale. If a contact
-change reapplies the override after such a write, the new scale becomes the
-base restored on exit. Removing or
-replacing `GravityScale` retires the old base, including removal and reinsertion
-within one frame. A new gravity component on an active climber is suppressed
+remain valid. The ladder also drops its old Rapier collider handle, so the
+replacement gets a new Rapier collider and the next physics step reports fresh
+contact with it while the climber still overlaps. Climbing owns the
+zero-gravity override only while active. Leaving a ladder or removing
+`Climber` restores the saved gravity scale before Rapier runs, unless another
+feature has already set a nonzero scale. If a contact change reapplies the
+override after such a write, the new scale becomes the base restored on exit.
+Removing or replacing `GravityScale` retires the old base, including removal
+and reinsertion within one frame. A new gravity component on an active climber is suppressed
 before Rapier steps and its own base is restored on exit. Removed components
 stay absent and despawn never recreates an entity.
 
