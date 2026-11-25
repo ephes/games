@@ -110,7 +110,8 @@ on failure as described below; retry the loader directly or create a fresh Game.
 accept an optional AbortSignal and a positive finite per-image deadline (default
 10 seconds, maximum 2,147,483,647 ms). Error, timeout, abort and success release
 callbacks, timers and signal listeners. Failed batches abort their remaining
-images; a new batch aborts its predecessor. Game disposal aborts initialization
+images, including when setup throws after some images have started. A new
+batch aborts its predecessor. Game disposal aborts initialization
 images; startup failure remains terminal for that Game.
 An already-aborted signal rejects with `AbortError` before either loader
 creates images or timers, leaving existing requests and cached sprites intact.
@@ -280,7 +281,9 @@ canvas responds; moving focus away releases held keys. Handled, unmodified keys
 cancel native scrolling while focused. Tab, browser shortcuts, unrelated keys,
 text inputs, selects, contenteditable regions, IME composition and already
 prevented events remain available to their native owners; a gameplay key that is
-already held is still released on its keyup, even with a modifier down. Standalone
+already held is still released on its keyup, even with a modifier down. Action
+listeners receive a release only for a held key. After a focus reset, releasing
+a key still cancels native scrolling on the focused canvas. Standalone
 `new InputManager()` retains document delivery with the same editing filters;
 pass a focusable surface to scope it to a game.
 
@@ -488,10 +491,11 @@ level requires one Boss and one Portal; Player
 may be omitted to use the default start at (50, 200). Duplicate Player, Boss or
 Portal entities are rejected. Recognized fields (`LevelName`, enemy `Speed`,
 enemy/boss `PlatformIndex`, coin `IsPowerUp`) must occur at most once on their
-owning level/entity. `IsPowerUp` must be a boolean when present and defaults to
-false when absent. A failed next-level construction leaves the current index,
-objects, projectiles and camera intact and rethrows the error. Direct
-`loadNextLevel()` callers may retry; during normal play the game loop disposes the
+owning level/entity. `LevelName` must be a string when present. If the field is
+absent, the level's string `identifier` supplies the HUD label. `IsPowerUp`
+must be a boolean when present and defaults to false when absent. A failed
+next-level construction leaves the current index, objects, projectiles and
+camera intact and rethrows the error. Direct `loadNextLevel()` callers may retry; during normal play the game loop disposes the
 game on that error, so a live game does not recover by itself.
 
 LDtk Platforms layers require positive safe integer grid size, width and height,
@@ -531,10 +535,11 @@ Coin 20×20 and Portal 128×128. Differing authored dimensions are supported for
 anchor normalization, while the runtime rectangle begins at the resulting
 top-left. Runtime sizes never substitute for missing authored anchor dimensions.
 
-Enemy `Speed` must
-be a finite number (zero stays stationary); enemy and boss `PlatformIndex` must
-be an integer in the final merged platform array. Missing fields default to speed
-2 and platform index 0; present strings, nulls or nonfinite values are rejected.
+Enemy `Speed` must be finite and nonnegative. Zero stays stationary, and
+positive fractional speeds move by that amount per simulation step. Enemy and
+boss `PlatformIndex` must be an integer in the final merged platform array.
+Missing fields default to speed 2 and platform index 0. Present strings, nulls
+and nonfinite values are rejected.
 The referenced merged patrol platform must be at least 44 px wide for an enemy
 or 64 px for a boss, including stationary enemies. Exact-width surfaces are
 valid; narrower surfaces fail conversion with an authoring error naming the

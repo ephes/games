@@ -85,6 +85,49 @@ describe('LDtk patrol surface admission', () => {
     expect(positions).toContain(left + width - actor.width);
   });
 
+  it('refuses a negative speed at the patrol edge before replacing the world', async () => {
+    document.body.innerHTML = '<canvas id="patrol"></canvas>';
+    const game = new Game('patrol');
+    const fromURL = mockWorldFetch();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const withSpeed = speed => {
+      const candidate = source('Enemy', 80);
+      candidate.layerInstances[0].entityInstances[0].fieldInstances.push({
+        __identifier: 'Speed',
+        __value: speed
+      });
+      fromURL.mockResolvedValue({ levels: [candidate] });
+      return game.loadLDtkLevels('synthetic.ldtk');
+    };
+
+    try {
+      for (const speed of [0, 0.5]) {
+        expect(await withSpeed(speed)).toBe(true);
+        const [enemy] = game.enemies;
+        expect(enemy.x).toBe(game.platforms[enemy.platformIndex].x);
+        enemy.update(game.platforms, 1000 / 60);
+        expect(enemy.x).toBe(100 + speed);
+      }
+
+      const world = game.ldtkLoader.world;
+      const { levels, player, enemies, platforms } = game;
+      expect(await withSpeed(-0.5)).toBe(false);
+      expect(game.ldtkLoader.world).toBe(world);
+      expect(game.levels).toBe(levels);
+      expect(game.player).toBe(player);
+      expect(game.enemies).toBe(enemies);
+      expect(game.platforms).toBe(platforms);
+      expect(console.error).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ message: expect.stringContaining('speed') })
+      );
+    } finally {
+      game.dispose();
+    }
+  });
+
   it.each(['Enemy', 'Boss'])(
     'retains the playable world when an imported %s surface is too narrow',
     async kind => {

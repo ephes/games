@@ -108,6 +108,62 @@ describe('Future level admission and publication', () => {
     expect(() => game.update(16)).not.toThrow();
   });
 
+  it.each([
+    [
+      'structured LevelName',
+      'Broken',
+      [{ __identifier: 'LevelName', __value: { text: 'Broken' } }]
+    ],
+    [
+      'null LevelName',
+      'Broken',
+      [{ __identifier: 'LevelName', __value: null }]
+    ],
+    ['non-string identifier fallback', 42, []],
+    ['missing identifier fallback', undefined, []]
+  ])(
+    'refuses %s and keeps the previous HUD label',
+    async (_label, identifier, fieldInstances) => {
+      const authored = level('First');
+      authored.fieldInstances.push({
+        __identifier: 'LevelName',
+        __value: 'Authored title'
+      });
+      source.mockResolvedValue({ levels: [authored, level('Second')] });
+      expect(await game.loadLDtkLevels('valid.ldtk')).toBe(true);
+
+      const drawText = vi.fn();
+      game.renderer = { drawText };
+      game.drawUI();
+      expect(drawText).toHaveBeenCalledWith('Level 1: Authored title', 20, 90, {
+        color: 'yellow'
+      });
+      game.loadNextLevel();
+      game.drawUI();
+      expect(drawText).toHaveBeenCalledWith('Level 2: Second', 20, 90, {
+        color: 'yellow'
+      });
+
+      const before = snapshot();
+      source.mockResolvedValue({
+        levels: [{ ...level(identifier), fieldInstances }]
+      });
+      expect(await game.loadLDtkLevels('invalid.ldtk')).toBe(false);
+      expectUnchanged(before);
+      expect(console.error).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          message: expect.stringMatching(/LevelName.*string/)
+        })
+      );
+      drawText.mockClear();
+      game.drawUI();
+      expect(drawText).toHaveBeenCalledWith('Level 2: Second', 20, 90, {
+        color: 'yellow'
+      });
+    }
+  );
+
   it('preserves play on a late next-level construction failure and allows retry', () => {
     const before = snapshot();
     const failure = new Error('Synthetic portal sprite failure');

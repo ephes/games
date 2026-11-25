@@ -349,6 +349,41 @@ describe('Real sprite loading', () => {
     expect(loader.requests.size).toBe(0);
   });
 
+  it('retires partially started batches after a synchronous setup error', async () => {
+    vi.useFakeTimers();
+    const direct = loader.loadSprite('player.jump', 'direct.png');
+    const error = new Error('synthetic batch setup failure');
+    const loadImage = loader.loadImage.bind(loader);
+    const replacement = vi
+      .spyOn(loader, 'loadImage')
+      .mockImplementationOnce(loadImage)
+      .mockImplementationOnce(() => {
+        throw error;
+      });
+
+    await expect(loader.loadAll()).rejects.toBe(error);
+    expect(images).toHaveLength(2);
+    expect(images[1].src).toBeUndefined();
+    expect(images[1].onload).toBeNull();
+    expect(loader.batchController).toBeNull();
+    expect(loader.loadPromises).toEqual([]);
+    expect([...loader.requests.keys()]).toEqual(['player.jump']);
+    expect(loader.loaded).toBe(false);
+
+    images[0].onload();
+    await direct;
+    expect(loader.getSprite('player.jump')).toBe(images[0]);
+    replacement.mockRestore();
+    const retry = loader.loadAll();
+    images.slice(2).forEach(image => image.onload());
+    await expect(retry).resolves.toBeUndefined();
+    expect(loader.loaded).toBe(true);
+    for (const [key, path] of requestedSprites) {
+      expect(loader.getSprite(key)?.src).toBe(path);
+    }
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('can retry a failed batch without retaining its rejected promises', async () => {
     const first = loader.loadAll().catch(error => error);
     images[0].onerror();

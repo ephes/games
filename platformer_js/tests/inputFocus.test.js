@@ -52,6 +52,39 @@ describe('Keyboard focus lifecycle', () => {
     expect(shoot).toHaveBeenCalledTimes(3);
   });
 
+  it('emits releases only for held keys across focus loss and modifier changes', () => {
+    input.dispose();
+    document.body.innerHTML = '<canvas tabindex="0"></canvas><input>';
+    const canvas = document.querySelector('canvas');
+    input = new InputManager(canvas);
+    const events = [];
+    input.on('moveRight:down', () => events.push('down'));
+    input.on('moveRight:up', () => events.push('up'));
+    const dispatch = (type, options) => {
+      const event = new KeyboardEvent(type, {
+        key: 'ArrowRight',
+        bubbles: true,
+        cancelable: true,
+        ...options
+      });
+      canvas.dispatchEvent(event);
+      return event;
+    };
+
+    canvas.focus();
+    expect(dispatch('keyup').defaultPrevented).toBe(true);
+    dispatch('keydown');
+    document.querySelector('input').focus();
+    canvas.focus();
+    expect(dispatch('keyup').defaultPrevented).toBe(true);
+    dispatch('keydown');
+    dispatch('keyup');
+    dispatch('keydown');
+    expect(dispatch('keyup', { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(input.isActionActive('moveRight')).toBe(false);
+    expect(events).toEqual(['down', 'down', 'up', 'down', 'up']);
+  });
+
   it('removes all DOM listeners when disposed and allows a replacement', () => {
     const documentRemove = vi.spyOn(document, 'removeEventListener');
     const windowRemove = vi.spyOn(window, 'removeEventListener');
