@@ -137,6 +137,23 @@ describe('Real sprite loading', () => {
     });
   });
 
+  it('preserves the cached sprite when aborted after the replacement image loads', async () => {
+    const initial = loader.loadSprite('single', 'valid.png');
+    images[0].onload();
+    await initial;
+
+    const controller = new AbortController();
+    const replacement = loader.loadSprite('single', 'replacement.png', {
+      signal: controller.signal
+    });
+    images[1].onload();
+    controller.abort(new Error('synthetic cancellation'));
+
+    await expect(replacement).rejects.toMatchObject({ name: 'AbortError' });
+    expect(loader.getSprite('single')).toBe(images[0]);
+    expect(loader.requests.has('single')).toBe(false);
+  });
+
   it.each(['loadSprite', 'loadAll'])(
     'rejects pre-aborted %s before allocating or superseding requests',
     async method => {

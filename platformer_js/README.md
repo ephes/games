@@ -102,7 +102,9 @@ including when retired images finish late. Direct `loadSprite` requests retain
 per-key ownership. Superseding one batch key prevents the entire batch from
 publishing.
 Each sprite key belongs to its latest request: retired completions cannot replace the cache, and failed
-replacements retain the last valid image. Game initialization remains terminal
+replacements retain the last valid image. `loadSprite()` rejects with an
+`AbortError` if cancelled before publication, even after the image finishes
+loading. Game initialization remains terminal
 on failure as described below; retry the loader directly or create a fresh Game.
 `loadSprite(name, path, { signal, timeoutMs })` and `loadAll({ signal, timeoutMs })`
 accept an optional AbortSignal and a positive finite per-image deadline (default

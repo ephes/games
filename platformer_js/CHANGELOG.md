@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep the cached sprite when a single-image replacement is cancelled after
+  loading and before publication.
+
 - Frame the player spawn within the new level bounds before the first render
   after initialization, transitions, resets and LDtk replacement.
 
