@@ -550,7 +550,7 @@ describe('World transfer admission', () => {
       const body = new ReadableStream({ cancel });
       const fetch = vi.fn().mockResolvedValue(response(body));
       vi.stubGlobal('fetch', fetch);
-      const parse = vi.spyOn(JSON, 'parse');
+      const decode = vi.spyOn(TextDecoder.prototype, 'decode');
       const player = game.player;
       const pending = game.loadLDtkLevels('stalled');
       await vi.waitFor(() => expect(body.locked).toBe(true));
@@ -568,12 +568,99 @@ describe('World transfer admission', () => {
       expect(await pending).toBe(false);
       expect(signal.aborted).toBe(true);
       expect(cancel).toHaveBeenCalledOnce();
-      expect(parse).not.toHaveBeenCalled();
+      expect(decode).not.toHaveBeenCalled();
       expect(game.player).toBe(player);
       expect(game.ldtkLoader.world).toBeNull();
       expect(vi.getTimerCount()).toBe(0);
     }
   );
+
+  it.each(['cancel', 'deadline'])(
+    'settles a noncooperative read on %s',
+    async kind => {
+      vi.useFakeTimers();
+      const loader = new LDtkLoader();
+      const previous = { levels: [] };
+      loader.world = previous;
+      let rejectRead;
+      const reader = {
+        read: vi.fn(
+          () =>
+            new Promise((_, reject) => {
+              rejectRead = reject;
+            })
+        ),
+        cancel: vi.fn(() => new Promise(() => {})),
+        releaseLock: vi.fn()
+      };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(response({ getReader: () => reader }))
+      );
+      const settled = vi.fn();
+      const pending = loader.loadWorld('stalled').catch(settled);
+      await vi.waitFor(() => expect(reader.read).toHaveBeenCalledOnce());
+
+      if (kind === 'cancel') {
+        loader.cancelLoad();
+      }
+      await vi.advanceTimersByTimeAsync(
+        kind === 'deadline' ? WORLD_LIMITS.timeoutMs : 0
+      );
+
+      const message =
+        kind === 'cancel'
+          ? 'LDtk load cancelled'
+          : 'LDtk transfer deadline exceeded';
+      expect(settled).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ message })
+      );
+      expect(reader.cancel).toHaveBeenCalledExactlyOnceWith(
+        settled.mock.calls[0][0]
+      );
+      expect(reader.releaseLock).toHaveBeenCalledOnce();
+      expect(loader.loadController).toBeNull();
+      expect(loader.world).toBe(previous);
+      expect(vi.getTimerCount()).toBe(0);
+
+      rejectRead(new Error('late read failure'));
+      await pending;
+    }
+  );
+
+  it('settles a superseded fetch before retiring its late response', async () => {
+    const loader = new LDtkLoader();
+    let deliver;
+    const late = new Promise(resolve => {
+      deliver = resolve;
+    });
+    const latest = { levels: [level()] };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockReturnValueOnce(late)
+        .mockResolvedValueOnce(response(stream(bytes(latest))))
+    );
+    const settled = vi.fn();
+    const first = loader.loadWorld('late').catch(settled);
+    const current = await loader.loadWorld('latest');
+
+    expect(settled).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: 'LDtk load cancelled' })
+    );
+    const cancel = vi.fn();
+    const body = new ReadableStream({ cancel });
+    const getReader = vi.spyOn(body, 'getReader');
+    deliver(response(body));
+    await late;
+    await first;
+
+    expect(cancel).toHaveBeenCalledExactlyOnceWith(settled.mock.calls[0][0]);
+    expect(getReader).not.toHaveBeenCalled();
+    expect(current).toEqual(latest);
+    expect(loader.world).toBe(current);
+  });
 
   it('aborts a stalled header fetch at the total deadline', async () => {
     vi.useFakeTimers();

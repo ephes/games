@@ -136,7 +136,9 @@ const ldtkLevels = loader.getAllLevels(world);
 
 Standalone `loadWorld(url, { publish: false })` returns a candidate without
 changing the published `loader.world`. By default, only the latest requested
-load publishes; superseded calls still return their own candidate. Pass that
+load publishes. Superseded or cancelled pending loads reject promptly,
+even when the transport leaves a fetch or read pending. A response that
+arrives after cancellation has its body cancelled. Pass a successfully
 returned world to `getAllLevels(world)` to convert the intended request.
 The loader retires the finished transfer even if releasing its stream reader
 fails. The published result or the original transfer error still reaches the
