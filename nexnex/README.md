@@ -86,22 +86,27 @@ translated/scaled worlds, independent layer and camera offsets, level crossings
 and restart without duplicating the player.
 
 Wall colliders use each tile's source `LayerMetadata`, including its grid size
-and pixel offsets. Layers are merged independently. ECS tile additions, grid or
-parent changes, removals, and layer changes replace that layer's generated
-colliders from its complete current cell set. Level/layer removal retires the
-colliders. Each reload pass indexes existing generated colliders once by
-source layer, then looks up only the layers it replaces or retires. Unchanged
-layers retain their collider IDs. Invalid grids produce a warning and retain
-previous geometry until corrected. Cells without source layer metadata are
-refused with a warning. Live layer metadata allows collision state to survive
-temporary project-asset unavailability.
+and pixel offsets. Layers are merged independently. Tile additions, changes
+to grid coordinates or the parent, and layer changes rebuild the affected
+colliders from the current cell set. A tile stops contributing as soon as its
+`Wall`, `GridCoords`, or `ChildOf` component is removed. Restoring the missing
+component brings the tile back on the next update. Removing a level or layer
+retires its colliders. Each reload pass indexes existing generated colliders
+once by source layer, then looks up only the layers it replaces or retires.
+Unchanged layers retain their collider IDs. Invalid grids produce a warning and
+retain previous geometry until corrected. Cells without source layer metadata
+are refused with a warning. Live layer metadata allows collision state to
+survive temporary project-asset unavailability.
 
 A wall layer admits at most 1,000,000 cells (`width * height`, including empty
-cells), positive grid dimensions/size, valid cell coordinates, and pixel extents
-and shifted edges representable as signed 32-bit integers. Negating the authored
-Y offset must also fit. Admission runs before scanning cells or retiring live
-colliders; refusal warns and retains the last good geometry until corrected.
-Centers and half-extents use widened integer arithmetic before float conversion.
+cells), positive grid dimensions and size, and valid cell coordinates. On each
+axis, both edges of the full layer must be within −8,388,608 to +8,388,608
+pixels, inclusive, in level-local coordinates. The starting edge is the
+authored X offset or the negated Y offset. The ending edge adds the axis cell
+count times the grid size. This range keeps half-pixel centers and half-extents
+exact in the generated `f32` collider geometry, even for one-pixel cells.
+Admission runs before scanning the grid or retiring live colliders. Refusal warns
+and retains the last good geometry until corrected.
 The merger consumes wall plates one row at a time and retains at most two plate
 rows, even at the layer height limit. Per-row hashed membership keeps merge
 work linear in the number of plates on average, and row order preserves

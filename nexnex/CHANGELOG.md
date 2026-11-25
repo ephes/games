@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Refuse wall grids outside the level-local coordinate range that preserves
+  half-pixel collider precision. Rejected reloads keep the last good geometry.
+
+- Reconcile wall colliders when a tile loses or regains its grid coordinates or
+  parent, preserving collider IDs in unaffected layers.
+
 - Index generated wall colliders by source layer once per reload pass for
   replacement and retirement. Unchanged or invalid layers retain their
   existing colliders.
