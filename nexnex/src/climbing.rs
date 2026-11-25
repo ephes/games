@@ -39,10 +39,38 @@ impl LdtkIntCell for LadderBundle {
 }
 
 pub fn detect_climb_range(
+    mut commands: Commands,
     mut climbers: Query<&mut Climber>,
-    climbables: Query<Entity, With<Climbable>>,
+    climbables: Query<Entity, (With<Climbable>, With<Collider>)>,
+    ladders: Query<(), With<Climbable>>,
+    mut removed_colliders: RemovedComponents<Collider>,
     mut collisions: MessageReader<CollisionEvent>,
 ) {
+    // Queued collision events identify entities, not collider generations.
+    let retired: HashSet<_> = removed_colliders.read().collect();
+    for entity in &retired {
+        // Rapier only notices a missing Collider at backend sync. Retire the
+        // old handle so a replacement inserted before then gets a new Rapier
+        // collider and a fresh Started event while still overlapping.
+        if ladders.contains(*entity) {
+            if let Ok(mut ladder) = commands.get_entity(*entity) {
+                ladder.remove::<RapierColliderHandle>();
+            }
+        }
+    }
+    let is_live = |entity| climbables.contains(entity) && !retired.contains(&entity);
+
+    for mut climber in &mut climbers {
+        if climber
+            .intersecting_climbables
+            .iter()
+            .any(|entity| !is_live(*entity))
+        {
+            climber
+                .intersecting_climbables
+                .retain(|entity| is_live(*entity));
+        }
+    }
     for collision in collisions.read() {
         let (a, b, started) = match *collision {
             CollisionEvent::Started(a, b, _) => (a, b, true),
@@ -53,22 +81,11 @@ pub fn detect_climb_range(
                 continue;
             };
             let already_in_range = climber.intersecting_climbables.contains(&contact);
-            if started && !already_in_range && climbables.contains(contact) {
+            if started && !already_in_range && is_live(contact) {
                 climber.intersecting_climbables.insert(contact);
             } else if !started && already_in_range {
                 climber.intersecting_climbables.remove(&contact);
             }
-        }
-    }
-    for mut climber in &mut climbers {
-        if climber
-            .intersecting_climbables
-            .iter()
-            .any(|entity| !climbables.contains(*entity))
-        {
-            climber
-                .intersecting_climbables
-                .retain(|entity| climbables.contains(*entity));
         }
     }
 }

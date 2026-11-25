@@ -14,13 +14,18 @@ R restarts loaded levels.
 Collision observations run before grounded state, player movement, and climbing
 gravity, in that order, at the existing Update cadence. Physics messages produced
 in Rapier's PostUpdate are consumed on the next Update. Removed ground/ladder
-contacts are pruned even when no stopped message arrives. Climbing owns the
-zero-gravity override only while active. Leaving a ladder or removing `Climber`
-restores the saved gravity scale before Rapier runs, unless another feature has
-already set a nonzero scale. If a contact change reapplies the override after
-such a write, the new scale becomes the base restored on exit. Removing or
-replacing `GravityScale` retires the old base, including removal and reinsertion
-within one frame. A new gravity component on an active climber is suppressed
+contacts are pruned even when no stopped message arrives. Removing a ladder
+collider retires its old contacts and queued starts even if the collider is
+reinserted on the same entity before observation. Contacts with other ladders
+remain valid. The ladder also drops its old Rapier collider handle, so the
+replacement gets a new Rapier collider and the next physics step reports fresh
+contact with it while the climber still overlaps. Climbing owns the
+zero-gravity override only while active. Leaving a ladder or removing
+`Climber` restores the saved gravity scale before Rapier runs, unless another
+feature has already set a nonzero scale. If a contact change reapplies the
+override after such a write, the new scale becomes the base restored on exit.
+Removing or replacing `GravityScale` retires the old base, including removal
+and reinsertion within one frame. A new gravity component on an active climber is suppressed
 before Rapier steps and its own base is restored on exit. Removed components
 stay absent and despawn never recreates an entity.
 
@@ -120,13 +125,15 @@ identity/hash operations and check exact non-overlapping coverage for every
 3 by 3 grid.
 
 R resets the surviving Worldly player to the project's sole authored Player
-spawn and respawns the loaded levels. Velocity, ground contacts, climb contacts,
-and climbing gravity are cleared. The spawn's level becomes selected, including
-when the player restarts from a neighboring level. LDtk's Worldly identity
-prevents a second player during level respawn. Restart scans authored entities
-in project order once and stops at the second Player. Missing project data or a
-missing or duplicate Player spawn leaves restart unavailable until valid data
-returns. Restart checks that level, entity and definition dimensions are positive,
+spawn and respawns the loaded levels. Restart runs after movement, clears
+velocity and both sets of contacts, and exits climbing. Before Rapier runs, the
+climbing system restores any gravity scale it still owns. Standing gravity and
+gravity already set by another feature are preserved. The spawn's level becomes
+selected, including when the player restarts from a neighboring level. LDtk's
+Worldly identity prevents a second player during level respawn. Restart scans
+authored entities in project order once and stops at the second Player. Missing
+project data or a missing or duplicate Player spawn leaves restart unavailable
+until valid data returns. Restart checks that level, entity and definition dimensions are positive,
 that signed 32-bit coordinate conversions fit and that the full spawn transform
 is finite, including scale and parent conversion. Invalid geometry
 emits one authoring warning per restart attempt and leaves the player's pose,

@@ -1,7 +1,7 @@
 use bevy_rapier2d::rapier::geometry::CollisionEventFlags;
 
 use super::*;
-use climbing::{Climbable, Climber};
+use climbing::{Climber, LadderBundle};
 use ground_detection::{GroundDetection, GroundSensor};
 use player::Player;
 use std::collections::HashSet;
@@ -39,8 +39,8 @@ fn climb_contacts_only_mark_changes_when_membership_changes() {
                 .chain(),
         );
     let climber = app.world_mut().spawn(Climber::default()).id();
-    let ladder = app.world_mut().spawn(Climbable).id();
-    let other = app.world_mut().spawn(Climbable).id();
+    let ladder = app.world_mut().spawn(LadderBundle::default()).id();
+    let other = app.world_mut().spawn(LadderBundle::default()).id();
     let flags = CollisionEventFlags::empty();
     let check = |app: &mut App, changed, contacts: &[Entity]| {
         app.update();
@@ -82,6 +82,54 @@ fn climb_contacts_only_mark_changes_when_membership_changes() {
 }
 
 #[test]
+fn replaced_ladder_collider_retires_old_contacts_and_queued_starts() {
+    let mut app = app();
+    let climber = app.world_mut().spawn(Climber::default()).id();
+    let ladder = app.world_mut().spawn(LadderBundle::default()).id();
+    let other = app.world_mut().spawn(LadderBundle::default()).id();
+    let start = |app: &mut App, contact| {
+        app.world_mut().write_message(CollisionEvent::Started(
+            climber,
+            contact,
+            CollisionEventFlags::empty(),
+        ));
+    };
+    let check_contacts = |app: &App, expected: &[Entity]| {
+        assert_eq!(
+            app.world()
+                .get::<Climber>(climber)
+                .unwrap()
+                .intersecting_climbables,
+            expected.iter().copied().collect(),
+        );
+    };
+
+    start(&mut app, ladder);
+    start(&mut app, other);
+    app.update();
+    check_contacts(&app, &[ladder, other]);
+
+    for queued_old_start in [false, true] {
+        let new_contact = app.world_mut().spawn(LadderBundle::default()).id();
+        app.world_mut()
+            .entity_mut(ladder)
+            .remove::<Collider>()
+            .insert(Collider::cuboid(8., 8.));
+        if queued_old_start {
+            start(&mut app, ladder);
+        }
+        start(&mut app, new_contact);
+        app.update();
+        check_contacts(&app, &[other, new_contact]);
+
+        start(&mut app, ladder);
+        app.update();
+        check_contacts(&app, &[ladder, other, new_contact]);
+        app.world_mut().despawn(new_contact);
+    }
+}
+
+#[test]
 fn player_movement_marks_climber_changed_only_when_climbing_changes() {
     #[derive(Resource, Default)]
     struct ClimberChanged(bool);
@@ -94,7 +142,7 @@ fn player_movement_marks_climber_changed_only_when_climbing_changes() {
             observed.0 = !changed.is_empty();
         },
     );
-    let ladder = app.world_mut().spawn(Climbable).id();
+    let ladder = app.world_mut().spawn(LadderBundle::default()).id();
     let player = app
         .world_mut()
         .spawn((
@@ -151,7 +199,7 @@ fn removed_contacts_clear_ground_climbing_and_gravity() {
         app.update();
         let sensor = assert_sensor(&mut app, player, Vec2::new(3., 2.), -14.);
         let ground = app.world_mut().spawn(Collider::cuboid(8., 8.)).id();
-        let ladder = app.world_mut().spawn(Climbable).id();
+        let ladder = app.world_mut().spawn(LadderBundle::default()).id();
         app.world_mut().write_message(CollisionEvent::Started(
             ground,
             sensor,
@@ -247,7 +295,7 @@ fn ladder_up_keys_share_climb_precedence_and_space_exits() {
         for up in [KeyCode::KeyW, KeyCode::ArrowUp] {
             for jump in [false, true] {
                 let mut app = app();
-                let ladder = app.world_mut().spawn(Climbable).id();
+                let ladder = app.world_mut().spawn(LadderBundle::default()).id();
                 let player = app
                     .world_mut()
                     .spawn((
@@ -737,8 +785,8 @@ fn assert_sensor(app: &mut App, player: Entity, half_extents: Vec2, y: f32) -> E
 fn contact_changes_do_not_republish_climbing_gravity() {
     for base in [2.5, 0.] {
         let mut app = app();
-        let ladder = app.world_mut().spawn(Climbable).id();
-        let other = app.world_mut().spawn(Climbable).id();
+        let ladder = app.world_mut().spawn(LadderBundle::default()).id();
+        let other = app.world_mut().spawn(LadderBundle::default()).id();
         let body = app
             .world_mut()
             .spawn((
@@ -787,7 +835,7 @@ fn contact_changes_do_not_republish_climbing_gravity() {
 #[test]
 fn contact_change_preserves_an_intervening_gravity_base() {
     let mut app = app();
-    let ladder = app.world_mut().spawn(Climbable).id();
+    let ladder = app.world_mut().spawn(LadderBundle::default()).id();
     let body = app
         .world_mut()
         .spawn((
@@ -984,5 +1032,93 @@ fn gravity_component_generations_reacquire_only_the_new_base() {
         app.world_mut().despawn(body);
         app.update();
         assert!(app.world().get_entity(body).is_err());
+    }
+}
+
+#[test]
+fn replaced_ladder_collider_reopens_contact_with_real_physics() {
+    #[derive(Resource)]
+    struct Replace(Option<Entity>);
+
+    fn replace_ladder_collider(mut commands: Commands, mut replace: ResMut<Replace>) {
+        if let Some(ladder) = replace.0.take() {
+            commands
+                .entity(ladder)
+                .remove::<Collider>()
+                .insert(Collider::cuboid(8., 8.));
+        }
+    }
+
+    // Without GroundDetectionPlugin, so ladder retirement alone must give the
+    // replacement a new Rapier collider. Replace before the update, after the
+    // control systems, and after physics.
+    for when in ["before update", "after control", "after physics"] {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            TransformPlugin,
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.),
+            climbing::ClimbingPlugin,
+        ))
+        .insert_resource(Replace(None))
+        .insert_resource(TimestepMode::Fixed {
+            dt: 1. / 60.,
+            substeps: 1,
+        });
+        if when == "after control" {
+            app.add_systems(
+                Update,
+                replace_ladder_collider.after(crate::ControlSet::Gravity),
+            );
+        } else if when == "after physics" {
+            app.add_systems(Last, replace_ladder_collider);
+        }
+        let climber = app
+            .world_mut()
+            .spawn((
+                Climber::default(),
+                RigidBody::KinematicVelocityBased,
+                Collider::cuboid(6., 14.),
+                Transform::from_xyz(0., 20., 0.),
+            ))
+            .id();
+        let mut ladder = LadderBundle::default();
+        ladder.sensor_bundle.collider = Collider::cuboid(8., 8.);
+        ladder.sensor_bundle.active_events = ActiveEvents::COLLISION_EVENTS;
+        let ladder = app
+            .world_mut()
+            .spawn((
+                ladder,
+                RigidBody::Fixed,
+                ActiveCollisionTypes::all(),
+                Transform::from_xyz(0., 20., 0.),
+            ))
+            .id();
+        let in_range = |app: &mut App| {
+            app.update();
+            app.world()
+                .get::<Climber>(climber)
+                .unwrap()
+                .intersecting_climbables
+                .contains(&ladder)
+        };
+        for _ in 0..5 {
+            in_range(&mut app);
+        }
+        assert!(in_range(&mut app), "{when}");
+        let old_handle = app.world().get::<RapierColliderHandle>(ladder).unwrap().0;
+        if when == "before update" {
+            app.world_mut()
+                .entity_mut(ladder)
+                .remove::<Collider>()
+                .insert(Collider::cuboid(8., 8.));
+        } else {
+            app.world_mut().resource_mut::<Replace>().0 = Some(ladder);
+            assert!(in_range(&mut app), "{when}");
+        }
+        assert!(!in_range(&mut app), "{when}");
+        assert!(in_range(&mut app), "{when}");
+        let new_handle = app.world().get::<RapierColliderHandle>(ladder).unwrap().0;
+        assert_ne!(new_handle, old_handle, "{when}");
     }
 }

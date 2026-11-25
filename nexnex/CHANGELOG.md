@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Restore gravity held at zero by climbing to its saved scale on restart.
+  Preserve standing gravity and gravity already set by another feature.
+
+- Retire ladder contacts and queued starts when the ladder's collider is
+  removed, including removal and reinsertion within one update. Give the
+  replacement a new Rapier collider so an overlapping climber gets fresh contact
+  on the next physics step.
+
 - Rebuild missing generated wall colliders even when valid layer inputs are
   unchanged. Defer repairs for malformed layers until their grids are valid.
 
