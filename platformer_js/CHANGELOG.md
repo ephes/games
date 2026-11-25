@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refuse negative LDtk enemy patrol speeds before replacing the active world.
+
 - Abort started sprite requests and clear batch ownership if sprite setup throws.
 
 - Emit keyboard release actions only for keys still held by the platformer.

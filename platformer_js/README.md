@@ -534,10 +534,11 @@ Coin 20×20 and Portal 128×128. Differing authored dimensions are supported for
 anchor normalization, while the runtime rectangle begins at the resulting
 top-left. Runtime sizes never substitute for missing authored anchor dimensions.
 
-Enemy `Speed` must
-be a finite number (zero stays stationary); enemy and boss `PlatformIndex` must
-be an integer in the final merged platform array. Missing fields default to speed
-2 and platform index 0; present strings, nulls or nonfinite values are rejected.
+Enemy `Speed` must be finite and nonnegative. Zero stays stationary, and
+positive fractional speeds move by that amount per simulation step. Enemy and
+boss `PlatformIndex` must be an integer in the final merged platform array.
+Missing fields default to speed 2 and platform index 0. Present strings, nulls
+and nonfinite values are rejected.
 The referenced merged patrol platform must be at least 44 px wide for an enemy
 or 64 px for a boss, including stationary enemies. Exact-width surfaces are
 valid; narrower surfaces fail conversion with an authoring error naming the

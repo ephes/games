@@ -299,8 +299,8 @@ export class LDtkLoader {
 
   /**
    * Convert LDtk level to game format, validating geometry, singletons and fields.
-   * Coordinates and enemy speeds must be finite numbers; enemy/boss platform
-   * indices must reference the completed collision mesh with at least 44 px
+   * Coordinates must be finite and enemy speeds must be finite and nonnegative.
+   * Enemy/boss platform indices must reference the completed collision mesh with at least 44 px
    * patrol width for enemies or 64 px for bosses. Only absent fields
    * use defaults (Speed: 2, PlatformIndex: 0, IsPowerUp: false).
    * Optional total layer offsets must be signed safe integers (absent: zero).
@@ -485,8 +485,13 @@ export class LDtkLoader {
         entity.__identifier === 'Enemy'
           ? this.getFieldValue(entity, 'Speed', 2)
           : null;
-      if (entity.__identifier === 'Enemy' && !Number.isFinite(speed)) {
-        throw new Error('Invalid LDtk enemy speed');
+      if (
+        entity.__identifier === 'Enemy' &&
+        (!Number.isFinite(speed) || speed < 0)
+      ) {
+        throw new Error(
+          'Invalid LDtk enemy speed: expected a finite nonnegative number'
+        );
       }
       const isPowerUp =
         entity.__identifier === 'Coin'
