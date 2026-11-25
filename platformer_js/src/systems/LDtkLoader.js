@@ -165,12 +165,27 @@ export class LDtkLoader {
       if (response.status !== 200 || response.headers.has('content-range')) {
         throw new Error('LDtk transfer failed');
       }
+      const declaredLength = response.headers.get('content-length');
+      if (
+        declaredLength !== null &&
+        (!declaredLength || /[^0-9]/.test(declaredLength))
+      ) {
+        throw new Error('Invalid LDtk Content-Length');
+      }
+      // CORS can hide Content-Encoding while still exposing Content-Length.
+      const encoding = response.headers.get('content-encoding');
+      const identity =
+        encoding === null
+          ? response.type !== 'cors'
+          : encoding.toLowerCase() === 'identity';
+      const expectedBytes =
+        identity && declaredLength !== null ? Number(declaredLength) : null;
+      if (expectedBytes !== null && expectedBytes > WORLD_LIMITS.bytes) {
+        throw new Error('LDtk byte budget exceeded');
+      }
       reader = body?.getReader();
       if (!reader) {
         throw new Error('LDtk response requires a streamed body');
-      }
-      if (Number(response.headers.get('content-length')) > WORLD_LIMITS.bytes) {
-        throw new Error('LDtk byte budget exceeded');
       }
       const chunks = [];
       let bytes = 0;
@@ -180,11 +195,17 @@ export class LDtkLoader {
         );
         signal.throwIfAborted();
         if (done) {
+          if (expectedBytes !== null && bytes !== expectedBytes) {
+            throw new Error('LDtk body length does not match Content-Length');
+          }
           break;
         }
         bytes += value.byteLength;
         if (bytes > WORLD_LIMITS.bytes) {
           throw new Error('LDtk byte budget exceeded');
+        }
+        if (expectedBytes !== null && bytes > expectedBytes) {
+          throw new Error('LDtk body length does not match Content-Length');
         }
         chunks.push(value);
       }

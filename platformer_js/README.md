@@ -437,7 +437,10 @@ pending transfers. A cancelled load settles even if fetch or a body reader
 remains pending. Each load has a 10-second monotonic deadline covering the
 transfer, UTF-8 decoding, JSON parsing and world preflight. A candidate must
 finish these steps before the deadline to be accepted. The streamed response
-limit is 16 MiB (actual bytes, even without an accurate Content-Length).
+limit is 16 MiB of delivered bytes. A present `Content-Length` must be a single
+unsigned decimal integer. For identity encoding, the delivered byte count must
+match that length. Compressed responses, CORS responses with hidden encoding,
+and responses without a declared length use the delivered byte limit.
 The loader requires HTTP 200 without a `Content-Range` header for a world
 download. It cancels the unread body if the response fails that check or
 arrives after cancellation, preserving the previous world.

@@ -438,15 +438,102 @@ describe('World transfer admission', () => {
             )
           )
       );
-      const parse = vi.spyOn(JSON, 'parse');
+      const decode = vi.spyOn(TextDecoder.prototype, 'decode');
       const player = game.player,
         levels = game.levels;
       expect(await game.loadLDtkLevels('synthetic')).toBe(false);
-      expect(parse).not.toHaveBeenCalled();
+      expect(decode).not.toHaveBeenCalled();
       expect(cancel).toHaveBeenCalledOnce();
       expect(game.player).toBe(player);
       expect(game.levels).toBe(levels);
       expect(game.ldtkLoader.world).toBeNull();
+    }
+  );
+
+  it.each([
+    [undefined, 1],
+    ['IdEnTiTy', -1]
+  ])(
+    'rejects an identity length mismatch (%s, %s bytes)',
+    async (encoding, delta) => {
+      const loader = new LDtkLoader();
+      const previous = { levels: [] };
+      loader.world = previous;
+      const world = { levels: [level()] };
+      const wire = bytes(world);
+      const mismatched = response(stream(wire), wire.byteLength + delta);
+      const exact = response(stream(wire), wire.byteLength);
+      if (encoding) {
+        mismatched.headers.set('Content-Encoding', encoding);
+        exact.headers.set('Content-Encoding', encoding);
+      }
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValueOnce(mismatched).mockResolvedValueOnce(exact)
+      );
+
+      await expect(loader.loadWorld('mismatched')).rejects.toThrow(
+        'LDtk body length does not match Content-Length'
+      );
+      expect(loader.world).toBe(previous);
+
+      const loaded = await loader.loadWorld('exact');
+      expect(loaded).toEqual(world);
+      expect(loader.world).toBe(loaded);
+    }
+  );
+
+  it.each(['', '+1', '1e3', '0x20', '12, 12'])(
+    'rejects a malformed Content-Length (%j)',
+    async length => {
+      const loader = new LDtkLoader();
+      const body = stream(bytes({ levels: [] }));
+      const cancel = vi.spyOn(body, 'cancel');
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body, length)));
+
+      await expect(loader.loadWorld('malformed')).rejects.toThrow(
+        'Invalid LDtk Content-Length'
+      );
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(loader.world).toBeNull();
+    }
+  );
+
+  it.each(['gzip', null])(
+    'uses the delivered byte cap when encoding %s is compressed or hidden by CORS',
+    async encoding => {
+      const loader = new LDtkLoader();
+      const world = { levels: [level()] };
+      const valid = response(stream(bytes(world)), 1);
+      const cancel = vi.fn();
+      const oversized = response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array(WORLD_LIMITS.bytes + 1));
+          },
+          cancel
+        }),
+        1
+      );
+      for (const reply of [valid, oversized]) {
+        if (encoding) {
+          reply.headers.set('Content-Encoding', encoding);
+        } else {
+          reply.type = 'cors';
+        }
+      }
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValueOnce(valid).mockResolvedValueOnce(oversized)
+      );
+
+      const loaded = await loader.loadWorld('within-cap');
+      expect(loaded).toEqual(world);
+      await expect(loader.loadWorld('over-cap')).rejects.toThrow(
+        'LDtk byte budget exceeded'
+      );
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(loader.world).toBe(loaded);
     }
   );
 
