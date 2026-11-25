@@ -100,10 +100,12 @@ and shifted edges representable as signed 32-bit integers. Negating the authored
 Y offset must also fit. Admission runs before scanning cells or retiring live
 colliders; refusal warns and retains the last good geometry until corrected.
 Centers and half-extents use widened integer arithmetic before float conversion.
-Per-row hashed plate membership keeps merge work linear in the number of plates
-on average while ordered row vectors preserve deterministic rectangle assembly.
-Tests count cell probes and plate identity/hash operations instead of elapsed
-time and check exact non-overlapping coverage for every 3 by 3 grid.
+The merger consumes wall plates one row at a time and retains at most two plate
+rows, even at the layer height limit. Per-row hashed membership keeps merge
+work linear in the number of plates on average, and row order preserves
+deterministic rectangle assembly. Tests count live rows, cell probes and plate
+identity/hash operations and check exact non-overlapping coverage for every
+3 by 3 grid.
 
 R resets the surviving Worldly player to the project's sole authored Player
 spawn and respawns the loaded levels. Velocity, ground contacts, climb contacts,

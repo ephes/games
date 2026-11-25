@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Stream wall plates through the rectangle merger one row at a time, retaining
+  at most two rows and preserving collider geometry and order.
+
 - Skip building the loaded-transform index while the player remains inside the
   selected level.
 
