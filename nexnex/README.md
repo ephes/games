@@ -90,9 +90,11 @@ and pixel offsets. Layers are merged independently. Tile additions, changes
 to grid coordinates or the parent, and layer changes rebuild the affected
 colliders from the current cell set. A tile stops contributing as soon as its
 `Wall`, `GridCoords`, or `ChildOf` component is removed. Restoring the missing
-component brings the tile back on the next update. Removing a level or layer
-retires its colliders. Each reload pass indexes existing generated colliders
-once by source layer, then looks up only the layers it replaces or retires.
+component brings the tile back on the next update. Adding `LevelIid` to a
+layer's parent makes its existing wall tiles eligible on the next update.
+Removing the marker, level, or layer retires the affected colliders. Each
+reload pass indexes existing generated colliders once by source layer, then
+looks up only the layers it replaces or retires.
 Unchanged layers retain their collider IDs. Invalid grids produce a warning and
 retain previous geometry until corrected. Cells without source layer metadata
 are refused with a warning. Live layer metadata allows collision state to

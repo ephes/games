@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reconcile wall colliders when a layer's parent gains or loses its level
+  marker, keeping collider IDs in unaffected layers.
+
 - Refuse wall grids outside the level-local coordinate range that preserves
   half-pixel collider precision. Rejected reloads keep the last good geometry.
 

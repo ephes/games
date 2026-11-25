@@ -196,14 +196,17 @@ fn spawn_wall_collision(
     >,
     layers: Query<(Entity, Ref<LayerMetadata>, Ref<ChildOf>)>,
     levels: Query<(), With<LevelIid>>,
+    added_levels: Query<(), Added<LevelIid>>,
     wall_markers: Query<(), With<Wall>>,
     mut removed_walls: RemovedComponents<Wall>,
     mut removed_coords: RemovedComponents<GridCoords>,
     mut removed_parents: RemovedComponents<ChildOf>,
+    mut removed_levels: RemovedComponents<LevelIid>,
     generated: Query<(Entity, &WallCollision)>,
     mut previous: Local<HashMap<Entity, LayerWalls>>,
 ) {
     let removed_wall = removed_walls.read().count() != 0;
+    let removed_level = removed_levels.read().count() != 0;
     // Drain both streams even if a wall marker was removed. A tile that
     // lost its marker or was despawned is already covered by removed_walls.
     let removed_tile_input = removed_coords
@@ -214,6 +217,8 @@ fn spawn_wall_collision(
         != 0;
     if !removed_wall
         && !removed_tile_input
+        && !removed_level
+        && added_levels.is_empty()
         && changed.is_empty()
         && !layers
             .iter()
@@ -241,13 +246,15 @@ fn spawn_wall_collision(
         if cells.is_empty() && !previous.contains_key(&entity) {
             continue;
         }
-        if !levels.contains(parent.parent())
-            || !admitted_grid(&metadata)
+        if !levels.contains(parent.parent()) {
+            continue;
+        }
+        if !admitted_grid(&metadata)
             || cells.iter().any(|cell| {
                 cell.x < 0 || cell.x >= metadata.c_wid || cell.y < 0 || cell.y >= metadata.c_hei
             })
         {
-            warn!("Unsupported wall layer {entity:?}: invalid grid dimensions, cell coordinates, pixel range or level parent. Retaining previous collisions");
+            warn!("Unsupported wall layer {entity:?}: invalid grid dimensions, cell coordinates or pixel range. Retaining previous collisions");
             continue;
         }
         let snapshot = LayerWalls {
@@ -294,14 +301,19 @@ fn spawn_wall_collision(
             "Unsupported wall cells without source layer metadata; retaining previous collisions"
         );
     }
-    for layer in previous.keys().copied().collect::<Vec<_>>() {
-        if !layers.contains(layer) {
-            for collider in generated_by_layer.remove(&layer).into_iter().flatten() {
-                commands.entity(collider).despawn();
-            }
-            previous.remove(&layer);
+    previous.retain(|layer, snapshot| {
+        if levels.contains(snapshot.level)
+            && layers
+                .get(*layer)
+                .is_ok_and(|(_, _, parent)| levels.contains(parent.parent()))
+        {
+            return true;
         }
-    }
+        for collider in generated_by_layer.remove(layer).into_iter().flatten() {
+            commands.entity(collider).despawn();
+        }
+        false
+    });
 }
 
 pub struct WallPlugin;
@@ -634,6 +646,32 @@ mod tests {
         app.update();
         assert_eq!(geometry(&mut app), vec![(11, 0, 19, 8), (32, 0, 48, 16)]);
         assert_eq!(app.world().get::<WallCollision>(unaffected).unwrap().0, b);
+    }
+
+    #[test]
+    fn level_marker_changes_reconcile_existing_wall_layers() {
+        let (mut app, a, b) = setup(false);
+        let pending_level = app.world_mut().spawn_empty().id();
+        app.world_mut().entity_mut(a).insert(ChildOf(pending_level));
+        tile(&mut app, a, 1);
+        tile(&mut app, b, 2);
+        app.update();
+        assert_eq!(geometry(&mut app), vec![(32, 0, 48, 16)]);
+        let mut colliders = app.world_mut().query::<(Entity, &WallCollision)>();
+        let unaffected = colliders.single(app.world()).unwrap().0;
+
+        app.world_mut()
+            .entity_mut(pending_level)
+            .insert(LevelIid::new("pending"));
+        app.update();
+        assert_eq!(geometry(&mut app), vec![(11, 0, 19, 8), (32, 0, 48, 16)]);
+
+        app.world_mut()
+            .entity_mut(pending_level)
+            .remove::<LevelIid>();
+        app.update();
+        assert_eq!(geometry(&mut app), vec![(32, 0, 48, 16)]);
+        assert_eq!(colliders.single(app.world()).unwrap().0, unaffected);
     }
 
     #[test]
