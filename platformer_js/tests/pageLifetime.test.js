@@ -83,6 +83,70 @@ describe('Entry-point page lifetime', () => {
     );
   }
 
+  it('releases partial input and retries with one listener per event', async () => {
+    const canvas = document.getElementById('gameCanvas');
+    const canvasEvents = vi.spyOn(canvas, 'addEventListener');
+    const failure = new Error('synthetic keyup registration failure');
+    const add = (type, callback, options) =>
+      EventTarget.prototype.addEventListener.call(
+        document,
+        type,
+        callback,
+        options
+      );
+    domEvents.mockImplementation((type, callback, options) => {
+      if (type === 'keyup') {
+        throw failure;
+      }
+      add(type, callback, options);
+    });
+    const removeDocument = vi.spyOn(document, 'removeEventListener');
+    const removeCanvas = vi.spyOn(canvas, 'removeEventListener');
+    try {
+      await enter();
+      expect(errors).toHaveBeenCalledExactlyOnceWith(
+        'Failed to initialize game:',
+        failure
+      );
+      expect(load).not.toHaveBeenCalled();
+      const keydown = domEvents.mock.calls.find(([type]) => type === 'keydown');
+      const pointer = canvasEvents.mock.calls.find(
+        ([type]) => type === 'pointerdown'
+      );
+      expect(removeDocument).toHaveBeenCalledWith(...keydown);
+      expect(removeCanvas).toHaveBeenCalledWith(...pointer);
+
+      domEvents.mockImplementation(add).mockClear();
+      canvasEvents.mockClear();
+      transition('pagehide');
+      transition('pageshow');
+      await settle();
+      expectOwners(1);
+      for (const [events, types] of [
+        [domEvents, ['keydown', 'keyup', 'focusin', 'compositionstart']],
+        [canvasEvents, ['pointerdown']]
+      ]) {
+        for (const type of types) {
+          expect(
+            events.mock.calls.filter(([event]) => event === type)
+          ).toHaveLength(1);
+        }
+      }
+    } finally {
+      // Isolate the old constructor when proving the regression.
+      for (const [events, target, event] of [
+        [domEvents, document, 'keydown'],
+        [canvasEvents, canvas, 'pointerdown']
+      ]) {
+        for (const [type, callback] of events.mock.calls) {
+          if (type === event) {
+            target.removeEventListener(type, callback);
+          }
+        }
+      }
+    }
+  });
+
   it.each([false, true])(
     'retires a running page (persisted=%s)',
     async persisted => {

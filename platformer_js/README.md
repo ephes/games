@@ -308,6 +308,10 @@ replace the current game. Vite hot replacement calls
 that same terminal cleanup to release its DOM/page listeners and Game.
 Both retirement paths report disposal failures to the console and return normally.
 
+If listener registration fails during construction, the game releases partially
+registered DOM listeners before propagating the startup error. A fresh Game can
+then claim the same canvas.
+
 Concurrent and later `init()` calls share one initialization and register controls
 once. Failed initialization disposes input; every later `init()` call rejects
 with the same startup error. Create a fresh Game to retry. Disposal during sprite

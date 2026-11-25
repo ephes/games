@@ -2,6 +2,8 @@
  * @module systems/InputManager
  */
 
+import { reportDiagnostic } from '../utils/reportDiagnostic.js';
+
 /**
  * Manages keyboard input for the game
  */
@@ -49,32 +51,56 @@ export class InputManager {
         this.reset();
       }
     };
-    document.addEventListener('keydown', this.onKeyDown);
-    document.addEventListener('keyup', this.onKeyUp);
-    window.addEventListener('blur', this.onBlur);
+    this.domListeners = [
+      [document, 'keydown', this.onKeyDown],
+      [document, 'keyup', this.onKeyUp],
+      [window, 'blur', this.onBlur],
+      [document, 'focusin', this.onFocusIn],
+      [document, 'compositionstart', this.onCompositionStart],
+      [document, 'visibilitychange', this.onVisibilityChange]
+    ];
     if (this.surface !== document) {
-      this.surface.addEventListener('blur', this.onBlur);
+      this.domListeners.push([this.surface, 'blur', this.onBlur]);
     }
-    document.addEventListener('focusin', this.onFocusIn);
-    document.addEventListener('compositionstart', this.onCompositionStart);
-    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    try {
+      for (const [target, type, callback] of this.domListeners) {
+        target.addEventListener(type, callback);
+      }
+    } catch (error) {
+      try {
+        this.dispose();
+      } catch (cleanupError) {
+        reportDiagnostic(() =>
+          console.error(
+            'Failed to dispose input after a registration error:',
+            cleanupError
+          )
+        );
+      }
+      throw error;
+    }
   }
 
   /**
    * Release DOM and action listeners when this input manager is replaced.
    */
   dispose() {
-    document.removeEventListener('keydown', this.onKeyDown);
-    document.removeEventListener('keyup', this.onKeyUp);
-    window.removeEventListener('blur', this.onBlur);
-    if (this.surface !== document) {
-      this.surface.removeEventListener('blur', this.onBlur);
-    }
-    document.removeEventListener('focusin', this.onFocusIn);
-    document.removeEventListener('compositionstart', this.onCompositionStart);
-    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.disable();
     this.listeners.clear();
+    const errors = [];
+    for (const [target, type, callback] of this.domListeners) {
+      try {
+        target.removeEventListener(type, callback);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, 'Failed to dispose input listeners');
+    }
   }
 
   /**
