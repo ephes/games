@@ -1,5 +1,6 @@
 //! Headless swept circle/AABB simulation. Collider centers are at tick start.
 use bevy::prelude::*;
+use std::collections::HashSet;
 
 const MAX_CONTACT_PASSES: usize = 32;
 const CONTACT_TOLERANCE: f32 = 1.0e-4;
@@ -136,14 +137,15 @@ pub(super) fn advance_ball(
     obstacles: &[Obstacle],
 ) -> Vec<Entity> {
     let mut impacts = Vec::new();
-    let mut removed = Vec::new();
+    let mut emitted = HashSet::new();
+    let mut removed = vec![false; obstacles.len()];
     let mut elapsed = 0.;
     let mut remaining = duration;
     for _ in 0..MAX_CONTACT_PASSES {
         let mut contacts = Vec::new();
         let mut earliest = remaining;
         for (index, obstacle) in obstacles.iter().enumerate() {
-            if removed.contains(&index) {
+            if removed[index] {
                 continue;
             }
             let center = obstacle.center + obstacle.velocity * elapsed;
@@ -218,11 +220,11 @@ pub(super) fn advance_ball(
                     *position += penetration.normal * (penetration.penetration + CONTACT_TOLERANCE);
                 }
             }
-            if !impacts.contains(&obstacle.entity) {
+            if emitted.insert(obstacle.entity) {
                 impacts.push(obstacle.entity);
             }
             if obstacle.brick {
-                removed.push(index);
+                removed[index] = true;
             }
             // Duplicate faces reflect once; separating simultaneous faces cannot
             // reverse a response just made against another collider.
@@ -301,6 +303,77 @@ mod tests {
             assert!(advance_ball(&mut position, &mut velocity, 2., 0., &obstacles).is_empty());
             assert_eq!(velocity, Vec2::ZERO);
         }
+    }
+
+    // Every brick in the row touches the same ball face at the same time.
+    // Distinct centers give a geometry order opposite to the input order.
+    fn simultaneous_brick_row(count: u32) -> Vec<Obstacle> {
+        (0..count)
+            .rev()
+            .map(|index| Obstacle {
+                entity: Entity::from_raw(index / 2),
+                center: Vec2::new(index as f32 / count as f32, 0.),
+                half_size: Vec2::ONE,
+                velocity: Vec2::ZERO,
+                brick: true,
+            })
+            .chain([Obstacle {
+                entity: Entity::from_raw(count),
+                center: Vec2::new(0., 6.),
+                half_size: Vec2::ONE,
+                velocity: Vec2::ZERO,
+                brick: false,
+            }])
+            .collect()
+    }
+
+    #[test]
+    fn simultaneous_bricks_emit_each_entity_in_order_and_leave_the_sweep() {
+        let count = 2048;
+        let obstacles = simultaneous_brick_row(count);
+        let mut position = Vec2::new(0., 3.);
+        let mut velocity = Vec2::NEG_Y;
+        let impacts = advance_ball(&mut position, &mut velocity, 1., 6., &obstacles);
+
+        let expected: Vec<_> = (0..count / 2)
+            .chain([count])
+            .map(Entity::from_raw)
+            .collect();
+        assert_eq!(impacts, expected);
+        // After bouncing off the ceiling, the ball crosses the retired row.
+        assert_eq!(position, Vec2::Y);
+        assert_eq!(velocity, Vec2::NEG_Y);
+    }
+
+    #[test]
+    #[ignore = "timing check for the contact solver; run on an otherwise idle machine"]
+    fn brick_membership_scales_with_row_size() {
+        use std::time::Instant;
+
+        let measure = |count| {
+            let obstacles = simultaneous_brick_row(count);
+            (0..3)
+                .map(|_| {
+                    let mut position = Vec2::new(0., 3.);
+                    let mut velocity = Vec2::NEG_Y;
+                    let start = Instant::now();
+                    let impacts = advance_ball(&mut position, &mut velocity, 1., 6., &obstacles);
+                    let elapsed = start.elapsed();
+                    assert_eq!(impacts.len(), count as usize / 2 + 1);
+                    elapsed
+                })
+                .min()
+                .unwrap()
+        };
+
+        let small = measure(8_192);
+        let large = measure(65_536);
+        // Eight times as many bricks should cost far less than the 64-fold
+        // growth of repeated linear membership scans.
+        assert!(
+            large < small * 24,
+            "small row: {small:?}, large row: {large:?}"
+        );
     }
 
     #[test]

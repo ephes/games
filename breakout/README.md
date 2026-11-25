@@ -15,6 +15,13 @@ cargo clippy --locked --all-targets
 cargo test --locked
 ```
 
+The optional solver scaling regression compares two synthetic brick rows by
+elapsed time. Run it on an otherwise idle machine:
+
+```sh
+cargo test --locked brick_membership_scales_with_row_size -- --ignored
+```
+
 The round-106 macOS validation used rustc/Cargo 1.99.0, resolving Bevy 0.13.2
 and 416 packages. The system Rust 1.100 fails compiling the old macOS dependency
 `objc2 0.4.1`; when using rustup, put its shims ahead of Homebrew so Cargo also
@@ -70,8 +77,10 @@ brick still removes/scores it once. Headless regressions keep recovered balls
 nonpenetrating and finite across later ticks and verify quiet tangent motion.
 
 Each hit brick scores once and is retired immediately from the remaining sweep,
-then despawned before the next fixed tick. A brick behind a reflecting wall is
-not hit. Impact events are coalesced by the sound consumer per fixed tick.
+then despawned before the next fixed tick. The solver tracks retired colliders
+by index and deduplicates impact entities while preserving first-contact order.
+A brick behind a reflecting wall is not hit. Impact events are coalesced by the
+sound consumer per fixed tick.
 Headless regressions compare large ticks with equivalent step partitions,
 including multiple wall bounces and moving-paddle contacts, and exercise rounded
 corner misses and contact-budget exhaustion.

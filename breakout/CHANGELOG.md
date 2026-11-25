@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Use indexed flags for retired bricks and set membership for emitted impacts
+  during a tick, preserving impact order and ball response.
+
 - Skip paddle, ball and scoreboard updates when their entity is missing or
   duplicated, and tolerate a scoreboard without its score text section.
 - Label Space as continuing the frame and verify that S advances one system
