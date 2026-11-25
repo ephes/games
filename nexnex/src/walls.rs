@@ -155,9 +155,11 @@ fn rectangles(level_walls: &HashSet<GridCoords>, width: i32, height: i32) -> Vec
 
 // Scanning a layer, including empty cells, must remain practical for live reload.
 const MAX_WALL_CELLS: i32 = 1_000_000;
+// Collider centers and half-extents are cast to f32 in doubled pixels.
+// With both edges in this range, every such numerator fits f32 exactly.
+const MAX_WALL_EDGE: i64 = 1 << (f32::MANTISSA_DIGITS - 1);
 
-/// Admit the entire layer before any scan, offset negation or collider retirement.
-/// Pixel edges must fit i32; center/extent calculations below use widened math.
+/// Admit the entire layer before scanning cells or replacing any colliders.
 fn admitted_grid(metadata: &LayerMetadata) -> bool {
     let width = metadata.c_wid;
     let height = metadata.c_hei;
@@ -171,17 +173,13 @@ fn admitted_grid(metadata: &LayerMetadata) -> bool {
     if cells > MAX_WALL_CELLS {
         return false;
     }
-    let Some(y) = metadata.px_total_offset_y.checked_neg() else {
-        return false;
-    };
-    width
-        .checked_mul(grid)
-        .and_then(|extent| metadata.px_total_offset_x.checked_add(extent))
-        .is_some()
-        && height
-            .checked_mul(grid)
-            .and_then(|extent| y.checked_add(extent))
-            .is_some()
+    let grid = i64::from(grid);
+    let x = i64::from(metadata.px_total_offset_x);
+    let y = -i64::from(metadata.px_total_offset_y);
+    x >= -MAX_WALL_EDGE
+        && x + i64::from(width) * grid <= MAX_WALL_EDGE
+        && y >= -MAX_WALL_EDGE
+        && y + i64::from(height) * grid <= MAX_WALL_EDGE
 }
 
 /// Replace generated colliders from each affected layer's complete live grid.
@@ -249,7 +247,7 @@ fn spawn_wall_collision(
                 cell.x < 0 || cell.x >= metadata.c_wid || cell.y < 0 || cell.y >= metadata.c_hei
             })
         {
-            warn!("Unsupported wall layer {entity:?}: invalid/over-budget grid, coordinates or level parent; retaining previous collisions");
+            warn!("Unsupported wall layer {entity:?}: invalid grid dimensions, cell coordinates, pixel range or level parent. Retaining previous collisions");
             continue;
         }
         let snapshot = LayerWalls {
@@ -535,6 +533,68 @@ mod tests {
     }
 
     #[test]
+    fn wall_grid_preserves_unit_cells_at_precision_limit_and_refuses_imprecise_reloads() {
+        const LIMIT: i32 = 8_388_608;
+        let mut app = App::new();
+        app.add_systems(Update, spawn_wall_collision);
+        let level = app.world_mut().spawn(LevelIid::new("synthetic")).id();
+        let valid = LayerInstance {
+            c_wid: 2,
+            c_hei: 2,
+            grid_size: 1,
+            px_total_offset_x: LIMIT - 2,
+            px_total_offset_y: LIMIT,
+            ..default()
+        };
+        let layer = app
+            .world_mut()
+            .spawn((LayerMetadata::from(&valid), ChildOf(level)))
+            .id();
+        tile(&mut app, layer, 0);
+        app.world_mut()
+            .spawn((Wall, GridCoords::new(1, 1), ChildOf(layer)));
+        app.update();
+
+        let expected = vec![
+            (LIMIT - 2, -LIMIT, LIMIT - 1, -LIMIT + 1),
+            (LIMIT - 1, -LIMIT + 1, LIMIT, -LIMIT + 2),
+        ];
+        assert_eq!(geometry(&mut app), expected);
+        let mut colliders = app
+            .world_mut()
+            .query_filtered::<Entity, With<WallCollision>>();
+        let original: HashSet<_> = colliders.iter(app.world()).collect();
+        let probes = CELL_PROBES.with(std::cell::Cell::get);
+        for (offset_x, offset_y) in [
+            (2 * LIMIT - 1, LIMIT), // Both X centers round to the same f32.
+            (LIMIT - 1, LIMIT),     // Right edge exceeds the limit by one.
+            (-LIMIT - 1, LIMIT),    // Left edge exceeds the limit by one.
+            (LIMIT - 2, LIMIT + 1), // Y after negating the authored offset.
+            (LIMIT - 2, 1 - LIMIT),
+        ] {
+            let invalid = LayerInstance {
+                px_total_offset_x: offset_x,
+                px_total_offset_y: offset_y,
+                ..valid.clone()
+            };
+            app.world_mut()
+                .entity_mut(layer)
+                .insert(LayerMetadata::from(&invalid));
+            app.update();
+            assert_eq!(
+                geometry(&mut app),
+                expected,
+                "offsets ({offset_x}, {offset_y})"
+            );
+            assert_eq!(
+                colliders.iter(app.world()).collect::<HashSet<_>>(),
+                original
+            );
+            assert_eq!(CELL_PROBES.with(std::cell::Cell::get), probes);
+        }
+    }
+
+    #[test]
     fn removing_wall_coordinates_or_parent_reconciles_only_its_layer() {
         let (mut app, a, b) = setup(false);
         let wall = tile(&mut app, a, 1);
@@ -621,7 +681,7 @@ mod lifecycle_tests {
     use super::*;
 
     #[test]
-    fn grid_admission_accepts_budget_and_checked_coordinate_boundaries() {
+    fn grid_admission_accepts_budget_and_rejects_extreme_coordinates() {
         let metadata = |layer: LayerInstance| LayerMetadata::from(&layer);
         assert!(admitted_grid(&metadata(LayerInstance {
             c_wid: 1000,
@@ -629,7 +689,7 @@ mod lifecycle_tests {
             grid_size: 1,
             ..default()
         })));
-        assert!(admitted_grid(&metadata(LayerInstance {
+        assert!(!admitted_grid(&metadata(LayerInstance {
             c_wid: 1,
             c_hei: 1,
             grid_size: i32::MAX,

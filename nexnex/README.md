@@ -99,11 +99,14 @@ are refused with a warning. Live layer metadata allows collision state to
 survive temporary project-asset unavailability.
 
 A wall layer admits at most 1,000,000 cells (`width * height`, including empty
-cells), positive grid dimensions/size, valid cell coordinates, and pixel extents
-and shifted edges representable as signed 32-bit integers. Negating the authored
-Y offset must also fit. Admission runs before scanning cells or retiring live
-colliders; refusal warns and retains the last good geometry until corrected.
-Centers and half-extents use widened integer arithmetic before float conversion.
+cells), positive grid dimensions and size, and valid cell coordinates. On each
+axis, both edges of the full layer must be within −8,388,608 to +8,388,608
+pixels, inclusive, in level-local coordinates. The starting edge is the
+authored X offset or the negated Y offset. The ending edge adds the axis cell
+count times the grid size. This range keeps half-pixel centers and half-extents
+exact in the generated `f32` collider geometry, even for one-pixel cells.
+Admission runs before scanning the grid or retiring live colliders. Refusal warns
+and retains the last good geometry until corrected.
 The merger consumes wall plates one row at a time and retains at most two plate
 rows, even at the layer height limit. Per-row hashed membership keeps merge
 work linear in the number of plates on average, and row order preserves
