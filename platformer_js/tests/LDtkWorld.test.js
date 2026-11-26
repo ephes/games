@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockWorldFetch } from './worldFetch.js';
 import starterWorld from '../assets/levels/platformer.ldtk?raw';
-import { LDtkLoader } from '../src/systems/LDtkLoader.js';
+import { LDtkLoader, WORLD_LIMITS } from '../src/systems/LDtkLoader.js';
 
 const emptyLevel = name => ({
   name,
@@ -35,6 +35,7 @@ describe('LDtk world conversion', () => {
 
   it('stores the loaded world and converts ordered, named and fallback levels', async () => {
     const world = {
+      data: { note: 'Ignored metadata in a raw LDtk world' },
       levels: [
         {
           identifier: 'Level_B',
@@ -92,6 +93,47 @@ describe('LDtk world conversion', () => {
     expect(levels[0].playerStart).toEqual({ x: 48, y: 192 });
     expect(levels[0].platforms).toEqual([]);
     expect(fromURL).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid dimensions in a later level before replacing the world', async () => {
+    const playable = {
+      identifier: 'Playable',
+      fieldInstances: [],
+      layerInstances: []
+    };
+    const invalid = { ...playable, identifier: 'Broken', pxWid: 16, pxHei: 0 };
+    fromURL.mockResolvedValueOnce({ levels: [playable] });
+    const previous = await loader.loadWorld('playable.ldtk');
+    fromURL.mockResolvedValue({ levels: [playable, invalid] });
+
+    await expect(loader.loadWorld('broken.ldtk')).rejects.toThrow(
+      'Invalid LDtk level dimensions'
+    );
+    expect(loader.world).toBe(previous);
+    expect(loader.getLevel(0)).toEqual(emptyLevel('Playable'));
+    expect(loader.getLevel(1)).toBeNull();
+  });
+
+  it('checks the deadline after converting a direct load', async () => {
+    const level = {
+      identifier: 'Playable',
+      fieldInstances: [],
+      layerInstances: []
+    };
+    fromURL.mockResolvedValue({ levels: [level] });
+    const previous = await loader.loadWorld('playable.ldtk');
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+    const convertLevel = loader.convertLevel.bind(loader);
+    vi.spyOn(loader, 'convertLevel').mockImplementation(candidate => {
+      const converted = convertLevel(candidate);
+      now.mockReturnValue(WORLD_LIMITS.timeoutMs);
+      return converted;
+    });
+
+    await expect(loader.loadWorld('late.ldtk')).rejects.toThrow(
+      'LDtk transfer deadline exceeded'
+    );
+    expect(loader.world).toBe(previous);
   });
 
   it.each([false, true])(

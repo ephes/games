@@ -475,6 +475,12 @@ pass checks decoded key identities per object before conversion or
 publication. Wire refusal keeps the current playable world. Legal Unicode and
 names repeated in separate objects remain supported. The loader uses raw LDtk records, including modern `intGridCsv`.
 
+Direct `loadWorld(url)` also converts every level within the load deadline to
+check geometry and the cumulative platform budget. It resolves with the raw
+world after publication. Any conversion failure or expired deadline rejects the
+load and retains the previous world. Game stages the raw candidate with
+`loadWorld(url, { publish: false })` and converts it during import.
+
 `ldtkLoader.getLevel(index)` accepts a published world with `levels` directly
 or under `data`. It returns `null` when no world is loaded or the index is
 outside the range of zero-based integer indices. Errors converting a selected
