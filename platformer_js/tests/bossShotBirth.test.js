@@ -82,3 +82,62 @@ it('retains opposing-motion sweeps for established shots without final overlap',
   expect(shot.active).toBe(false);
   expect(game.boss.projectiles).toEqual([]);
 });
+
+function setUpContactFrame() {
+  game.boss.canShoot = false;
+  game.boss.x = 2000;
+  game.player.x = 400;
+  game.player.respawnPoint = { x: 100, y: 200 };
+}
+
+it.each([false, true])(
+  'retires the earliest fireball in either array order (reversed: %s)',
+  reversed => {
+    setUpContactFrame();
+    const early = new BossProjectile(250, 200, 1, 200, game.camera.bounds);
+    const late = new BossProjectile(200, 200, 1, 200, game.camera.bounds);
+    game.boss.projectiles = reversed ? [late, early] : [early, late];
+    const damage = vi.spyOn(game.player, 'takeDamage');
+
+    game.update(16);
+
+    expect(game.lives).toBe(2);
+    expect(game.player.x).toBe(100);
+    expect(damage).toHaveBeenCalledTimes(1);
+    expect(early.active).toBe(false);
+    expect(game.boss.projectiles).toEqual([late]);
+  }
+);
+
+it('checks only the remaining flight against the respawn pose', () => {
+  setUpContactFrame();
+  const hit = new BossProjectile(250, 200, 1, 200, game.camera.bounds);
+  const passedSpawn = new BossProjectile(0, 200, 1, 200, game.camera.bounds);
+  const inTeleportGap = new BossProjectile(250, 200, 1, 0, game.camera.bounds);
+  const reachesSpawn = new BossProjectile(0, 200, 1, 120, game.camera.bounds);
+  game.boss.projectiles = [hit, passedSpawn, inTeleportGap, reachesSpawn];
+  const damage = vi.spyOn(game.player, 'takeDamage');
+
+  game.update(16);
+
+  expect(game.lives).toBe(2);
+  expect(game.player.isInvulnerable).toBe(true);
+  expect(damage).toHaveBeenCalledTimes(2);
+  expect(game.boss.projectiles).toEqual([passedSpawn, inTeleportGap]);
+});
+
+it('breaks simultaneous fireball ties in array order and stops on a lethal hit', () => {
+  setUpContactFrame();
+  game.lives = 1;
+  const first = new BossProjectile(334, 200, 1, 100, game.camera.bounds);
+  const tied = new BossProjectile(284, 200, 1, 200, game.camera.bounds);
+  game.boss.projectiles = [first, tied];
+  const damage = vi.spyOn(game.player, 'takeDamage');
+
+  game.update(16);
+
+  expect(game.gameOver).toBe(true);
+  expect(damage).toHaveBeenCalledTimes(1);
+  expect(first.active).toBe(false);
+  expect(tied.active).toBe(true);
+});

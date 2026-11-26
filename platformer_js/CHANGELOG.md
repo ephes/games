@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Resolve boss fireball hits by contact time and check only the remaining part
+  of the step against the respawn position after a hit.
+
 - Group same-X static platforms and coins by height to prune narrow rendering
   and collision queries while preserving level order.
 
