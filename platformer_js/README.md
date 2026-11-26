@@ -506,7 +506,9 @@ and conversion stops at the first level that takes the candidate over the cap.
 Append also checks the combined platform count including the existing table.
 `addLDtkLevels(url)` returns true on publication and false on refusal, empty input,
 supersession or disposal. Over-budget imports report the exceeded budget and retain
-the current playable world.
+the current playable world. After victory, a successful append resumes play at
+the first appended level with initial lives, carrying over the score and shot
+state. If construction of that level fails, the won campaign stays intact.
 
 Replacement and append imports validate every candidate level, including future
 levels, before publishing. Each level admits at most one `Platforms` layer and

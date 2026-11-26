@@ -950,9 +950,17 @@ export class Game {
         ) {
           throw new Error('LDtk world platform budget exceeded');
         }
+        const resumesCampaign = this.gameWon;
+        if (resumesCampaign) {
+          // Victory already advanced currentLevel to the first appended slot.
+          this.createLevel(ldtkLevels[0]);
+        }
         this.ldtkLoader.world = world;
         this.levels = combined;
         this.totalLevels = this.levels.length;
+        if (resumesCampaign) {
+          this.restorePlayableLevel();
+        }
 
         reportDiagnostic(() =>
           console.log(`Added ${ldtkLevels.length} levels from LDtk`)

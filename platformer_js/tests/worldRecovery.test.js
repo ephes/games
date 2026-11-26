@@ -87,6 +87,56 @@ describe('Repeated world admission', () => {
 });
 
 describe('Terminal level recovery', () => {
+  it('continues a won campaign at the first appended level', async () => {
+    expect(await game.loadLDtkLevels('original')).toBe(true);
+    game.score = 125;
+    game.canShoot = true;
+    game.lastShotTime = 12;
+    game.loadNextLevel();
+    const winner = game.player;
+    expect(game.gameWon).toBe(true);
+    expect(winner.disposed).toBe(true);
+
+    const appended = world();
+    appended.levels[0].identifier = 'Appended';
+    mockWorldFetch().mockResolvedValue(appended);
+    expect(await game.addLDtkLevels('extension')).toBe(true);
+    expect(game.totalLevels).toBe(2);
+    expect(game.currentLevel).toBe(1);
+    expect(game.levels[game.currentLevel].name).toBe('Appended');
+    expect(game.gameWon).toBe(false);
+    expect(game.player).not.toBe(winner);
+    expect(game.player.disposed).toBe(false);
+    expect([game.score, game.canShoot, game.lastShotTime]).toEqual([
+      125,
+      true,
+      12
+    ]);
+    const update = vi.spyOn(game.player, 'update');
+    game.update(16);
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  it('retains the won campaign when constructing an appended level fails', async () => {
+    expect(await game.loadLDtkLevels('original')).toBe(true);
+    game.loadNextLevel();
+    const previousWorld = game.ldtkLoader.world;
+    const { levels, player } = game;
+    vi.spyOn(game.spriteLoader, 'getSprite').mockImplementationOnce(() => {
+      throw new Error('Synthetic portal sprite failure');
+    });
+
+    expect(await game.addLDtkLevels('extension')).toBe(false);
+    expect(game.ldtkLoader.world).toBe(previousWorld);
+    expect(game.levels).toBe(levels);
+    expect(game.totalLevels).toBe(1);
+    expect(game.currentLevel).toBe(1);
+    expect(game.player).toBe(player);
+    expect(game.gameWon).toBe(true);
+    expect(await game.addLDtkLevels('extension')).toBe(true);
+    expect(game.gameWon).toBe(false);
+  });
+
   it.each(['won', 'lost'])(
     'restores play after %s via replacement and reset',
     async terminal => {

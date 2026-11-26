@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Resume a completed campaign at the first appended LDtk level, preserving score
+  and shot progress.
+
 - Resolve boss fireball hits by contact time and check only the remaining part
   of the step against the respawn position after a hit.
 
