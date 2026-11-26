@@ -95,3 +95,63 @@ export async function checkBrokenPortalSprite(page) {
     labels: ['LOCKED']
   });
 }
+
+/** Check that the flash changes sprite pixels while terrain shows through. */
+export async function checkBossHitFlash(page) {
+  const results = await page.evaluate(async () => {
+    const { Renderer } = await import('/src/rendering/Renderer.js');
+    const sprite = document.createElement('canvas');
+    sprite.width = 12;
+    sprite.height = 6;
+    const spriteCtx = sprite.getContext('2d');
+    spriteCtx.fillStyle = 'blue';
+    spriteCtx.fillRect(0, 0, 3, 3);
+    spriteCtx.fillRect(6, 3, 3, 3);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 20;
+    canvas.height = 16;
+    const renderer = new Renderer(canvas, {
+      getAnimationConfig: () => ({ boss: { frameWidth: 6, frameHeight: 6 } }),
+      getSprite: () => sprite
+    });
+    const ctx = canvas.getContext('2d');
+    ctx.translate(-10, 0); // World-to-screen offset.
+    const pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
+    return [1, -1].map((direction, frameX) => {
+      ctx.fillStyle = 'lime';
+      ctx.fillRect(10, 0, 20, 16);
+      const boss = {
+        x: 14,
+        y: 2,
+        width: 12,
+        height: 12,
+        direction,
+        frameX,
+        alive: true,
+        getHealthPercentage: () => 1,
+        isHit: true,
+        simulationTime: 0,
+        hitTimer: 0,
+        hitDuration: 400
+      };
+      renderer.drawBoss(boss);
+      const left = 6;
+      const right = 13;
+      return {
+        tinted: pixel(direction === 1 ? left : right, frameX ? 11 : 4),
+        transparent: [
+          pixel(direction === 1 ? right : left, 4),
+          pixel(direction === 1 ? left : right, frameX ? 4 : 11)
+        ]
+      };
+    });
+  });
+  for (const { tinted, transparent } of results) {
+    assert.deepEqual(transparent, [
+      [0, 255, 0, 255],
+      [0, 255, 0, 255]
+    ]);
+    assert.ok(tinted[0] > 0 && tinted[2] > 0, `untinted boss pixel: ${tinted}`);
+  }
+}

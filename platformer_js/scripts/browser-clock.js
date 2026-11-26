@@ -5,6 +5,7 @@ import { checkInputOwnership } from './browser-input.js';
 import { checkPageLifetime } from './browser-page-lifetime.js';
 import { checkPauseLifecycle } from './browser-pause.js';
 import {
+  checkBossHitFlash,
   checkBrokenPortalSprite,
   checkSpriteCancellation
 } from './browser-sprites.js';
@@ -212,6 +213,7 @@ try {
   await checkPauseLifecycle(page, server.resolvedUrls.local[0]);
   await checkSpriteCancellation(page, server.resolvedUrls.local[0]);
   await checkBrokenPortalSprite(page);
+  await checkBossHitFlash(page);
   assert.deepEqual(errors, []);
   for (const { hz, positions, renders } of results) {
     assert.deepEqual(positions, [350, -9085, 2120, 1180]);

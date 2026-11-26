@@ -48,22 +48,22 @@ it('renders hit fading from the same simulation clock', () => {
   target.takeDamage();
   target.update([], 200);
   now.mockReturnValue(-1_000_000);
-  const styles = [];
-  const ctx = {
-    save() {},
-    restore() {},
-    drawImage() {},
-    fillRect() {
-      styles.push(this.fillStyle);
-    }
+  const renderer = new Renderer(document.createElement('canvas'), {
+    getAnimationConfig: () => ({ boss: { frameWidth: 64, frameHeight: 80 } }),
+    getSprite: () => ({})
+  });
+  const hitCtx = {
+    clearRect: vi.fn(),
+    drawImage: vi.fn(),
+    fillRect: vi.fn()
   };
-  const renderer = new Renderer(
-    { getContext: () => ctx },
-    {
-      getAnimationConfig: () => ({ boss: { frameWidth: 64, frameHeight: 80 } }),
-      getSprite: () => ({})
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+    function () {
+      hitCtx.canvas = this;
+      return hitCtx;
     }
   );
   renderer.drawBoss(target);
-  expect(styles[0]).toBe('rgba(255, 100, 100, 0.3)');
+  expect(hitCtx.fillRect).toHaveBeenCalledOnce();
+  expect(hitCtx.fillStyle).toBe('rgba(255, 100, 100, 0.3)');
 });

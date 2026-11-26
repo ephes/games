@@ -106,6 +106,34 @@ describe('Owned game lifecycle and simulation clock', () => {
     expect(frames.size).toBe(0);
     expect(game.update).toHaveBeenCalledTimes(1);
   });
+  it('keeps stepping the boss when its debug log throws', async () => {
+    vi.spyOn(game.spriteLoader, 'loadAll').mockResolvedValue();
+    await game.init();
+    vi.stubGlobal('DEBUG_BOSS', true);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {
+      throw new Error('synthetic boss debug logging failure');
+    });
+
+    game.start();
+    const step = 1000 / 60;
+    for (let index = 1; index <= 12; index++) {
+      frame(index * step);
+    }
+    expect(log).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('Boss animation: Frame 1, Sequence 1')
+    );
+    expect(game.boss.frameX).toBe(1);
+    expect(game.boss.simulationTime).toBeCloseTo(200);
+    expect(game.disposed).toBe(false);
+    expect(frames.size).toBe(1);
+
+    frame(13 * step);
+    expect(game.boss.simulationTime).toBeCloseTo(200 + step);
+    expect(game.boss.frameTimer).toBeCloseTo(step);
+    expect(game.render).toHaveBeenCalledTimes(14);
+    expect(frames.size).toBe(1);
+  });
+
   it('reports standalone cleanup errors after attempting every retirement once', async () => {
     vi.spyOn(game.spriteLoader, 'loadAll').mockResolvedValue();
     await game.init();

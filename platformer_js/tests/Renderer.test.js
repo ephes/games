@@ -145,8 +145,14 @@ describe('Renderer sprite geometry', () => {
   it.each([1, -1])(
     'isolates the hit boss composite and transform facing %i',
     direction => {
-      vi.useFakeTimers();
-      vi.setSystemTime(1100);
+      const hitCtx = recordingContext();
+      hitCtx.clearRect = vi.fn();
+      const getHitContext = vi
+        .spyOn(HTMLCanvasElement.prototype, 'getContext')
+        .mockImplementation(function () {
+          hitCtx.canvas = this;
+          return hitCtx;
+        });
       const boss = {
         x: 100,
         y: 80,
@@ -163,29 +169,35 @@ describe('Renderer sprite geometry', () => {
       };
       renderer.drawBoss(boss);
       expect(sprites.getSprite).toHaveBeenCalledWith('boss');
+      expect(hitCtx.clearRect).toHaveBeenCalledWith(0, 0, 64, 80);
+      expect(hitCtx.drawImage).toHaveBeenCalledWith(
+        sprite,
+        256,
+        0,
+        64,
+        80,
+        0,
+        0,
+        64,
+        80
+      );
+      expect(hitCtx.fillRect.mock.results[0].value).toEqual({
+        args: [0, 0, 64, 80],
+        scaleX: 1,
+        scaleY: 1,
+        composite: 'source-atop'
+      });
+      const frame = getHitContext.mock.contexts[0];
+      expect(frame).toMatchObject({ width: 64, height: 80 });
       expect(ctx.drawImage.mock.results[0].value).toEqual({
-        args: [
-          sprite,
-          256,
-          0,
-          64,
-          80,
-          direction === -1 ? -196 : 100,
-          80,
-          96,
-          96
-        ],
+        args: [frame, 0, 0, 64, 80, direction === -1 ? -196 : 100, 80, 96, 96],
         scaleX: direction,
         scaleY: 1,
         composite: 'source-over'
       });
+      expect(ctx.imageSmoothingEnabled).toBe(true);
+      expect(ctx.imageSmoothingQuality).toBe('high');
       expect(ctx.fillRect.mock.results.map(result => result.value)).toEqual([
-        {
-          args: [direction === -1 ? -196 : 100, 80, 96, 96],
-          scaleX: direction,
-          scaleY: 1,
-          composite: 'source-atop'
-        },
         {
           args: [100, 64, 96, 10],
           scaleX: 1,
@@ -217,6 +229,16 @@ describe('Renderer sprite geometry', () => {
       expect(ctx.depth).toBe(0);
       expect(ctx.save).toHaveBeenCalledTimes(2);
       expect(ctx.restore).toHaveBeenCalledTimes(2);
+
+      boss.frameX++;
+      renderer.drawBoss(boss);
+      expect(getHitContext).toHaveBeenCalledTimes(1);
+      expect(hitCtx.clearRect).toHaveBeenCalledTimes(2);
+      expect(hitCtx.drawImage.mock.results[1].value).toMatchObject({
+        args: [sprite, 320, 0, 64, 80, 0, 0, 64, 80],
+        composite: 'source-over'
+      });
+      expect(ctx.drawImage.mock.calls[2][0]).toBe(frame);
     }
   );
 });
