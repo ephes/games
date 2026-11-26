@@ -4,6 +4,7 @@
 
 import { Enemy } from './Enemy.js';
 import { BossProjectile } from './BossProjectile.js';
+import { reportDiagnostic } from '../utils/reportDiagnostic.js';
 
 /**
  * Boss enemy class
@@ -168,8 +169,10 @@ export class Boss extends Enemy {
     this.frameX = this.animationSequence[this.sequenceIndex];
 
     if (frames > 0 && window.DEBUG_BOSS) {
-      console.log(
-        `Boss animation: Frame ${this.frameX}, Sequence ${this.sequenceIndex}, Time: ${this.simulationTime}`
+      reportDiagnostic(() =>
+        console.log(
+          `Boss animation: Frame ${this.frameX}, Sequence ${this.sequenceIndex}, Time: ${this.simulationTime}`
+        )
       );
     }
   }

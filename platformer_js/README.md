@@ -369,9 +369,12 @@ Boss frames and hit fading use accumulated simulation elapsed time: the eight-fr
 ping-pong sequence advances every 200 ms, retaining fractional time, and each
 accepted hit renews a 400 ms visual. Wall-clock jumps and discarded suspension
 time do not advance or freeze these visuals; defeated bosses still disappear
-immediately. Player hit visuals and invulnerability both advance on simulation
-steps. Renewing protection restarts both counters. The hit visual lasts 500 ms
-and protection lasts the requested duration (2,000 ms by default). Expiry takes
+immediately. With `window.DEBUG_BOSS` enabled, boss animation logs are best
+effort. A console error leaves animation timing and the game loop running.
+
+Player hit visuals and invulnerability both advance on simulation steps.
+Renewing protection restarts both counters. The hit visual lasts 500 ms and
+protection lasts the requested duration (2,000 ms by default). Expiry takes
 effect before that step’s animation selection and collision checks.
 Action delivery uses the subscribers present at the start of each edge; changes
 to subscriptions take effect on the next edge.

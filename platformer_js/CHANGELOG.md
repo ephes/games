@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep boss animation and the game loop running if debug logging throws.
+
 - Limit the boss hit flash to the sprite silhouette, preserving scenery visible
   through transparent pixels.
 
