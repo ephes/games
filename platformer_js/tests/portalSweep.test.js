@@ -4,6 +4,7 @@ import { Coin } from '../src/objects/Coin.js';
 import { Enemy } from '../src/entities/Enemy.js';
 import { BossProjectile } from '../src/entities/BossProjectile.js';
 import { Projectile } from '../src/entities/Projectile.js';
+import { CollisionSystem } from '../src/systems/CollisionSystem.js';
 
 let game, next;
 beforeEach(() => {
@@ -26,6 +27,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   game.dispose();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -153,13 +155,82 @@ it('treats rounding-adjacent shot and portal times as a shot-first tie', () => {
   expect(next).not.toHaveBeenCalled();
 });
 
+it.each([
+  { shotX: 80, bossShot: true, score: 50 },
+  { shotX: 10, bossShot: true, score: 0 },
+  { shotX: 10, bossShot: false, score: 0 }
+])(
+  'settles player shot scoring through open portal entry ($shotX, $bossShot)',
+  ({ shotX, bossShot, score }) => {
+    game.portal.unlock();
+    const enemy = new Enemy({ x: 100, y: 40, speed: 0 });
+    game.enemies = [enemy];
+    const shot = new Projectile(shotX, 50, 1);
+    shot.speed = 100;
+    game.projectiles = [shot];
+    if (bossShot) {
+      game.boss.projectiles = [
+        new BossProjectile(149, 240, 1, 0, game.camera.bounds)
+      ];
+    }
+
+    game.update(16);
+
+    expect(game.currentLevel).toBe(1);
+    expect(game.lives).toBe(3);
+    expect(game.score).toBe(score);
+    expect(enemy.alive).toBe(score === 0);
+  }
+);
+
+it.each([
+  { offset: 5e-10, score: 50 },
+  { offset: 1e-6, score: 0 }
+])(
+  'treats a rounding-adjacent player shot at portal entry as a tie ($offset)',
+  ({ offset, score }) => {
+    game.portal.unlock();
+    const enemy = new Enemy({ x: 100, y: 40, speed: 0 });
+    game.enemies = [enemy];
+    const shot = new Projectile(80, 50, 1);
+    shot.speed = 100;
+    game.projectiles = [shot];
+    let portalTime = null;
+    const portalEntryTime =
+      CollisionSystem.portalEntryTime.bind(CollisionSystem);
+    vi.spyOn(CollisionSystem, 'portalEntryTime').mockImplementation(
+      (...args) => (portalTime = portalEntryTime(...args))
+    );
+    const checkProjectileCollisions =
+      CollisionSystem.checkProjectileCollisions.bind(CollisionSystem);
+    vi.spyOn(CollisionSystem, 'checkProjectileCollisions').mockImplementation(
+      (...args) => {
+        const hit = checkProjectileCollisions(...args);
+        return hit && portalTime !== null
+          ? { ...hit, time: portalTime + offset }
+          : hit;
+      }
+    );
+
+    game.update(16);
+
+    expect(portalTime).not.toBeNull();
+    expect(game.currentLevel).toBe(1);
+    expect(game.score).toBe(score);
+    expect(enemy.alive).toBe(score === 0);
+  }
+);
+
 it.each([false, true])(
   'ignores body contact with an enemy a player shot retires first (shot: %s)',
   withShot => {
     game.portal.unlock();
     game.enemies = [new Enemy({ x: 149, y: 40, speed: 0 })];
     if (withShot) {
-      game.projectiles = [new Projectile(140, 50, -1)];
+      // The blocking body contact defers entry, even for this late shot.
+      const shot = new Projectile(80, 50, 1);
+      shot.speed = 75;
+      game.projectiles = [shot];
     }
     game.boss.projectiles = [
       new BossProjectile(149, 240, 1, 0, game.camera.bounds)
@@ -180,7 +251,7 @@ it('drops a body-deferred boss shot cleared by a boss-defeating player shot', ()
   const coin = new Coin(149, 180);
   game.coins = [coin];
   Object.assign(game.boss, { x: 500, y: 0, health: 1 });
-  game.projectiles = [new Projectile(480, 10, 1)];
+  game.projectiles = [new Projectile(481, 10, 1)];
   game.boss.projectiles = [
     new BossProjectile(149, 240, 1, 0, game.camera.bounds)
   ];
@@ -198,7 +269,7 @@ it('drops a body-deferred boss shot cleared by a boss-defeating player shot', ()
 it('keeps a lethal boss shot that precedes a boss-defeating player shot', () => {
   game.lives = 1;
   Object.assign(game.boss, { x: 500, y: 0, health: 1 });
-  game.projectiles = [new Projectile(480, 10, 1)];
+  game.projectiles = [new Projectile(481, 10, 1)];
   game.boss.projectiles = [
     new BossProjectile(149, 40, 1, 0, game.camera.bounds)
   ];

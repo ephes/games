@@ -388,20 +388,41 @@ export class Game {
     );
     this.boss.update(this.platforms, deltaTime, this.player, true);
 
+    const portalTime = this.#sweptPortalEntryTime(
+      previousPlayer,
+      portalOpenAtStart
+    );
     const bossProjectiles = this.boss.getProjectiles();
     const bossShots = this.#resolveBossProjectileContacts(
       bossProjectiles,
       previousPlayer,
       previousTargets,
-      portalOpenAtStart
+      portalTime
     );
     let bossShotStep = bossShots.next();
     if (this.gameOver) {
       return;
     }
 
-    // Update projectiles
-    this.updateProjectiles(deltaTime, previousTargets);
+    // Only a confirmed entry on the original sweep cuts off player shots.
+    let shotCutoff = Infinity;
+    if (
+      portalTime !== null &&
+      bossShotStep.done &&
+      bossShotStep.value === previousPlayer
+    ) {
+      const body = CollisionSystem.checkBodyContacts(
+        this.player,
+        this.enemies,
+        this.boss,
+        previousPlayer,
+        previousTargets
+      );
+      if (portalTime < (body?.time ?? Infinity)) {
+        shotCutoff = portalTime;
+      }
+    }
+    this.updateProjectiles(deltaTime, previousTargets, shotCutoff);
 
     if (!bossShotStep.done) {
       // A body contact blocked an earlier portal entry; player shots may have
@@ -441,7 +462,7 @@ export class Game {
     projectiles,
     previousPlayer,
     previousTargets,
-    portalOpenAtStart
+    portalTime
   ) {
     let startTime = 0;
     let contacts = this.#bossProjectileContacts(
@@ -449,9 +470,6 @@ export class Game {
       previousPlayer,
       startTime
     );
-    let portalTime = contacts.length
-      ? this.#sweptPortalEntryTime(previousPlayer, portalOpenAtStart)
-      : null;
     let deferred = false;
     while (contacts.length) {
       const { projectile, time } = contacts.pop();
@@ -561,8 +579,10 @@ export class Game {
    * Update projectiles
    * @param {number} deltaTime - Time since last update
    * @param {Map} [previousTargets] - Target positions before this step
+   * @param {number} [cutoff] - Latest contact fraction to resolve, inclusive
+   *   within CONTACT_TIME_TOLERANCE
    */
-  updateProjectiles(deltaTime, previousTargets) {
+  updateProjectiles(deltaTime, previousTargets, cutoff = Infinity) {
     if (this.projectiles.length === 0) {
       return;
     }
@@ -624,6 +644,10 @@ export class Game {
     while (pending.length) {
       const step = pending.shift();
       const { hit, projectile } = step;
+      // A shot within CONTACT_TIME_TOLERANCE of the cutoff is a tie and scores.
+      if (hit.time > cutoff + CONTACT_TIME_TOLERANCE) {
+        break;
+      }
       if (!hit.target.alive) {
         // An earlier shot retired this target. Re-query the same swept path
         // and reinsert its next live contact into the remaining chronology.

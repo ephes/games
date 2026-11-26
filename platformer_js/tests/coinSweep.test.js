@@ -80,3 +80,22 @@ it('does not collect a tangent coin', () => {
   game.update(16);
   expect(game.score).toBe(0);
 });
+
+it('collects a power-up only once the player moves past edge contact', () => {
+  const coin = new Coin(100, 230, true);
+  game.coins = [coin];
+
+  game.update(16);
+
+  expect(game.player.y + game.player.height).toBe(coin.y);
+  expect(coin.collected).toBe(false);
+  expect(game.score).toBe(0);
+  expect(game.canShoot).toBe(false);
+
+  game.player.velocityY = 0.25;
+  game.update(16);
+
+  expect(coin.collected).toBe(true);
+  expect(game.score).toBe(10);
+  expect(game.canShoot).toBe(true);
+});

@@ -149,9 +149,11 @@ x/y/width/height order; identical trajectories are interchangeable and retain
 storage order. The earliest live contact takes one hit;
 contacts are resolved before off-screen culling. Equal-time contacts use target
 x/y/width/height order, then enemy before boss; identical enemy rectangles keep
-level order. Stationary edge touches and tangential grazing do not hit. Drawing subtracts
-cameraX once without moving world coordinates. Camera tests use translated
-bounds and a recording canvas to check follow/clamp, touching-edge visibility,
+level order. Swept rectangle contacts require positive overlap within the step.
+Stationary edge touches, tangential grazing and a first touch at the endpoint
+do not count. Initial overlap or movement immediately into overlap has contact
+time zero. Drawing subtracts cameraX once without moving world coordinates.
+Camera tests use translated bounds and a recording canvas to check follow/clamp, touching-edge visibility,
 coordinate conversion, transforms and reset, without changing camera policy.
 Game rendering integration tests record boss-shot fallback arcs and sprite frame
 coordinates under the parent camera transform: each path translates world space
@@ -404,6 +406,10 @@ Large collision meshes are reduced without spreading into function arguments.
 Coins, enemy/boss body contacts and already-open portal entry resolve in
 earliest-contact order within a step. Exact ties resolve coins first, then
 body contact, then portal entry. A transition keeps coin awards up to entry.
+When entry on the original sweep precedes any body contact and survives boss-shot
+arbitration, only player-shot hits through the entry time score (a hit
+within the same rounding tolerance as boss shots counts as a tie and scores). If a body contact
+blocks entry, player shots still resolve across the step before rechecking entry.
 An already-open portal also takes precedence over a later boss shot when no
 body contact has priority over entry. A boss shot at the entry time (within a
 rounding tolerance) still resolves first.

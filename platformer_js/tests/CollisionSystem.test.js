@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { CollisionSystem } from '../src/systems/CollisionSystem.js';
 
+describe('Swept contact boundaries', () => {
+  const target = { x: 2, y: 0, width: 1, height: 1 };
+
+  it.each([
+    ['touches at the end', 0, 1, null],
+    ['overlaps just before the end', 0, 1.01, 1 / 1.01],
+    ['enters immediately', 1, 2, 0],
+    ['starts overlapped', 1.5, 1, 0],
+    ['moves away from initial touch', 1, 0, null]
+  ])('%s', (_label, startX, endX, expected) => {
+    const end = { ...target, x: endX };
+    expect(
+      CollisionSystem.sweptContactTime(end, target, { x: startX, y: 0 }, target)
+    ).toBe(expected);
+  });
+});
+
 describe('Platform contact boundaries', () => {
   const platform = { x: 0, y: 100, width: 100, height: 20 };
   const noContact = { isGrounded: false, platform: null, side: null };

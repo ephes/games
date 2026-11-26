@@ -167,12 +167,13 @@ export class CollisionSystem {
 
   /**
    * Earliest overlap time for linearly moving rectangles in one step.
-   * Stationary touching edges and tangential grazing do not count as overlap.
+   * The open overlap interval must extend into the step. Starting overlapped
+   * or touching and moving inward gives time zero.
    * @param {Object} projectile - Current projectile rectangle
    * @param {Object} target - Current target rectangle
    * @param {Object} previousProjectile - Previous projectile position
    * @param {Object} previousTarget - Previous target position
-   * @returns {number|null} Contact fraction in [0, 1], or null
+   * @returns {number|null} Contact fraction in [0, 1), or null
    */
   static sweptContactTime(
     projectile,
@@ -199,7 +200,7 @@ export class CollisionSystem {
       entry = Math.max(entry, Math.min(first, last));
       exit = Math.min(exit, Math.max(first, last));
     }
-    return entry < exit && exit > 0 && entry <= 1 ? Math.max(0, entry) : null;
+    return entry < exit && exit > 0 && entry < 1 ? Math.max(0, entry) : null;
   }
 
   /** Build one balanced swept-bounds tree for all player shots in a step. */
