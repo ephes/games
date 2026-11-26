@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Check every LDtk level and the cumulative platform budget before a direct
   load replaces the published world. Failed conversions retain the previous world.
 
+- Reject sprite batches with undersized animation sheets before replacing the
+  previous complete set.
+
 - Stop LDtk transfers before decoding when the deadline elapses or the reader
   delivers too many consecutive empty chunks.
 

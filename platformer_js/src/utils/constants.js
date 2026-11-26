@@ -26,6 +26,13 @@ export const PLAYER_CONFIG = {
   JUMP_FORCE: 12
 };
 
+/** Source rectangles for the boss fireball's horizontal sprite sheet. */
+export const BOSS_FIREBALL_SHEET = {
+  frameWidth: 16,
+  frameHeight: 16,
+  frames: 4
+};
+
 /**
  * Level data - Array of levels
  */

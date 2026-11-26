@@ -2,17 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SpriteLoader } from '../src/systems/SpriteLoader.js';
 
 const requestedSprites = [
-  ['player.idle', 'assets/sprites/pink-man-idle.png'],
-  ['player.run', 'assets/sprites/pink-man-run.png'],
-  ['player.jump', 'assets/sprites/pink-man-jump.png'],
-  ['player.fall', 'assets/sprites/pink-man-fall.png'],
-  ['player.hit', 'assets/sprites/pink-man-hit.png'],
-  ['enemy.run', 'assets/sprites/slime-run.png'],
-  ['enemy.hit', 'assets/sprites/slime-hit.png'],
-  ['boss', 'assets/sprites/boss_kobra_64x96-sheet.png'],
-  ['portal', 'assets/sprites/level_portal_128.png'],
-  ['boss.fireball', 'assets/sprites/boss-fireball.png']
+  ['player.idle', 'assets/sprites/pink-man-idle.png', 352, 32],
+  ['player.run', 'assets/sprites/pink-man-run.png', 384, 32],
+  ['player.jump', 'assets/sprites/pink-man-jump.png', 32, 32],
+  ['player.fall', 'assets/sprites/pink-man-fall.png', 32, 32],
+  ['player.hit', 'assets/sprites/pink-man-hit.png', 224, 32],
+  ['enemy.run', 'assets/sprites/slime-run.png', 440, 30],
+  ['enemy.hit', 'assets/sprites/slime-hit.png', 220, 30],
+  ['boss', 'assets/sprites/boss_kobra_64x96-sheet.png', 320, 96],
+  ['portal', 'assets/sprites/level_portal_128.png', 128, 128],
+  ['boss.fireball', 'assets/sprites/boss-fireball.png', 64, 16]
 ];
+const spriteDimensions = new Map(
+  requestedSprites.map(([, path, width, height]) => [path, { width, height }])
+);
 
 describe('Real sprite loading', () => {
   let loader;
@@ -25,6 +28,18 @@ describe('Real sprite loading', () => {
       class {
         constructor() {
           images.push(this);
+        }
+
+        get naturalWidth() {
+          return (
+            this.decodedWidth ?? spriteDimensions.get(this.src)?.width ?? 1
+          );
+        }
+
+        get naturalHeight() {
+          return (
+            this.decodedHeight ?? spriteDimensions.get(this.src)?.height ?? 1
+          );
         }
 
         removeAttribute(name) {
@@ -136,6 +151,40 @@ describe('Real sprite loading', () => {
       expect(loader.getSprite(name)).toBe(images[index]);
     });
   });
+
+  it.each([
+    ['player.run', 352, 32, '384×32'],
+    ['player.run', 384, 31, '384×32'],
+    ['boss.fireball', 63, 16, '64×16']
+  ])(
+    'rejects a decoded %s sheet at %i×%i and keeps the published batch',
+    async (sprite, width, height, minimum) => {
+      const initial = loader.loadAll();
+      images.forEach(image => image.onload());
+      await initial;
+
+      const replacement = loader.loadAll();
+      const candidates = images.slice(requestedSprites.length);
+      const index = requestedSprites.findIndex(([name]) => name === sprite);
+      candidates[index].decodedWidth = width;
+      candidates[index].decodedHeight = height;
+      candidates.forEach(image => image.onload());
+
+      await expect(replacement).rejects.toThrow(
+        `Sprite sheet too small: ${sprite} needs at least ${minimum}`
+      );
+      expect(loader.loaded).toBe(true);
+      requestedSprites.forEach(([name], index) => {
+        expect(loader.getSprite(name)).toBe(images[index]);
+      });
+
+      const retry = loader.loadAll();
+      const fullSheets = images.slice(2 * requestedSprites.length);
+      fullSheets.forEach(image => image.onload());
+      await retry;
+      expect(loader.getSprite(sprite)).toBe(fullSheets[index]);
+    }
+  );
 
   it('preserves the cached sprite when aborted after the replacement image loads', async () => {
     const initial = loader.loadSprite('single', 'valid.png');

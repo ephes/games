@@ -1,4 +1,4 @@
-import { GAME_CONFIG } from '../utils/constants.js';
+import { BOSS_FIREBALL_SHEET, GAME_CONFIG } from '../utils/constants.js';
 
 export class BossProjectile {
   constructor(
@@ -27,7 +27,7 @@ export class BossProjectile {
     this.currentFrame = 0;
     this.animationSpeed = 0.2;
     this.animationTimer = 0;
-    this.frameCount = 4;
+    this.frameCount = BOSS_FIREBALL_SHEET.frames;
   }
 
   update(_deltaTime, deferCulling = false) {
@@ -127,7 +127,7 @@ export class BossProjectile {
     const screenY = this.y;
 
     // Draw sprite frame
-    const frameWidth = 16;
+    const { frameWidth, frameHeight } = BOSS_FIREBALL_SHEET;
     const sourceX = this.currentFrame * frameWidth;
 
     ctx.drawImage(
@@ -135,7 +135,7 @@ export class BossProjectile {
       sourceX,
       0,
       frameWidth,
-      this.height,
+      frameHeight,
       screenX,
       screenY,
       this.width,

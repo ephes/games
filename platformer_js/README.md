@@ -93,6 +93,11 @@ SpriteLoader batches can be retried after failure. Only the newest complete batc
 publishes its images together. `loaded` starts false and becomes true with the
 first successful publication. It stays true while a replacement is pending and
 if that replacement fails, is cancelled or is superseded.
+Before publication, `loadAll()` checks the intrinsic dimensions of player,
+enemy, boss and boss fireball sheets. Each sheet must cover a full horizontal
+row of its configured frames, including the last frame. Wider or taller sheets
+are accepted. An undersized sheet rejects the batch and retains the previous
+complete set.
 `loadAll()` resolves only after its own batch publishes. Cancellation or
 supersession before publication rejects with an `AbortError`, even if every
 image has finished loading. Game initialization then fails before creating a
