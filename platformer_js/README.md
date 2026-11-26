@@ -108,7 +108,9 @@ loading. Game initialization remains terminal
 on failure as described below; retry the loader directly or create a fresh Game.
 `loadSprite(name, path, { signal, timeoutMs })` and `loadAll({ signal, timeoutMs })`
 accept an optional AbortSignal and a positive finite per-image deadline (default
-10 seconds, maximum 2,147,483,647 ms). Error, timeout, abort and success release
+10 seconds, maximum 2,147,483,647 ms). A load event at or after the monotonic
+deadline times out even if its timer callback is still queued.
+Error, timeout, abort and success release
 callbacks, timers and signal listeners. Failed batches abort their remaining
 images, including when setup throws after some images have started. A new
 batch aborts its predecessor. Game disposal aborts initialization

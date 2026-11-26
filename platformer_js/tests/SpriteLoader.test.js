@@ -259,6 +259,44 @@ describe('Real sprite loading', () => {
     }
   );
 
+  it('rejects a late load event before its timeout callback runs', async () => {
+    vi.useFakeTimers();
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const options = { timeoutMs: 10 };
+    const first = loader.loadSprite('single', 'first.png', options);
+    const [previous] = images;
+    now += 9;
+    previous.onload();
+    await expect(first).resolves.toBe(previous);
+
+    const settled = vi.fn();
+    const pending = loader
+      .loadSprite('single', 'replacement.png', options)
+      .then(settled, settled);
+    const image = images[1];
+    const lateLoad = image.onload;
+    const removeSource = vi.spyOn(image, 'removeAttribute');
+    // Move only the monotonic clock, leaving the scheduled timer pending.
+    now += 11;
+    expect(vi.getTimerCount()).toBe(1);
+    lateLoad();
+    await pending;
+    lateLoad();
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(settled).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        message: 'Sprite load timed out: replacement.png'
+      })
+    );
+    expect(removeSource).toHaveBeenCalledExactlyOnceWith('src');
+    expect(image.onload).toBeNull();
+    expect(image.onerror).toBeNull();
+    expect(loader.getSprite('single')).toBe(previous);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it.each(['abort', 'timeout'])(
     'settles a sprite on %s even when removing its source throws',
     async reason => {
