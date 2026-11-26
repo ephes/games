@@ -765,6 +765,79 @@ describe('World transfer admission', () => {
     expect(await pending).toBe(false);
   });
 
+  it.each(['empty reads', 'elapsed deadline'])(
+    'cancels a transfer before decoding on %s',
+    async reason => {
+      const loader = new LDtkLoader();
+      const previous = { levels: [] };
+      loader.world = previous;
+      const candidate = bytes({ levels: [level()] });
+      const empty = new Uint8Array(0);
+      let now = 100;
+      let reads = 0;
+      vi.spyOn(performance, 'now').mockImplementation(() => now);
+      const reader = {
+        read: vi.fn(async () => {
+          reads++;
+          if (reason === 'elapsed deadline' && reads === 2) {
+            now += WORLD_LIMITS.timeoutMs;
+            return { done: true };
+          }
+          // End naturally if the guard regresses, so the test cannot hang.
+          if (reads === 101) {
+            return { done: true };
+          }
+          return { done: false, value: reads === 1 ? candidate : empty };
+        }),
+        cancel: vi.fn(),
+        releaseLock: vi.fn()
+      };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(response({ getReader: () => reader }))
+      );
+      const decode = vi.spyOn(TextDecoder.prototype, 'decode');
+
+      await expect(loader.loadWorld('replacement')).rejects.toThrow(
+        reason === 'elapsed deadline'
+          ? 'LDtk transfer deadline exceeded'
+          : 'LDtk empty read budget exceeded'
+      );
+      expect(reader.read).toHaveBeenCalledTimes(
+        reason === 'elapsed deadline' ? 2 : 66
+      );
+      expect(reader.cancel).toHaveBeenCalledOnce();
+      expect(reader.releaseLock).toHaveBeenCalledOnce();
+      expect(decode).not.toHaveBeenCalled();
+      expect(loader.world).toBe(previous);
+    }
+  );
+
+  it('accepts empty chunks and resets their budget after a nonempty read', async () => {
+    const candidate = { levels: [level()] };
+    const payload = bytes(candidate);
+    const empty = new Uint8Array(0);
+    const body = new ReadableStream({
+      start(controller) {
+        for (const chunk of [payload.subarray(0, 1), payload.subarray(1)]) {
+          for (let count = 0; count < 64; count++) {
+            controller.enqueue(empty);
+          }
+          controller.enqueue(chunk);
+        }
+        controller.close();
+      }
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(response(body, payload.byteLength))
+    );
+
+    await expect(
+      new LDtkLoader().loadWorld('with-empty-chunks')
+    ).resolves.toEqual(candidate);
+  });
+
   it('rejects a world when synchronous admission reaches the deadline', async () => {
     const loader = new LDtkLoader();
     const previous = { levels: [] };

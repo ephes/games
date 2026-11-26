@@ -108,7 +108,9 @@ loading. Game initialization remains terminal
 on failure as described below; retry the loader directly or create a fresh Game.
 `loadSprite(name, path, { signal, timeoutMs })` and `loadAll({ signal, timeoutMs })`
 accept an optional AbortSignal and a positive finite per-image deadline (default
-10 seconds, maximum 2,147,483,647 ms). Error, timeout, abort and success release
+10 seconds, maximum 2,147,483,647 ms). A load event at or after the monotonic
+deadline times out even if its timer callback is still queued.
+Error, timeout, abort and success release
 callbacks, timers and signal listeners. Failed batches abort their remaining
 images, including when setup throws after some images have started. A new
 batch aborts its predecessor. Game disposal aborts initialization
@@ -449,10 +451,12 @@ levels. Superseded replacements return false, even if the newer request fails;
 imports completed after disposal do not publish. Supersession and disposal abort
 pending transfers. A cancelled load settles even if fetch or a body reader
 remains pending. Each load has a 10-second monotonic deadline covering the
-transfer, UTF-8 decoding, JSON parsing and world preflight. A candidate must
-finish these steps before the deadline to be accepted. The streamed response
-limit is 16 MiB of delivered bytes. A present `Content-Length` must be a single
-unsigned decimal integer. For identity encoding, the delivered byte count must
+transfer, UTF-8 decoding, JSON parsing and world preflight. The loader checks the
+deadline after each read, including end of stream, and again before publication.
+It skips empty chunks and cancels the reader if more than 64 consecutive reads
+deliver no bytes. The streamed response limit is 16 MiB of delivered bytes.
+A present `Content-Length` must be a single unsigned decimal integer.
+For identity encoding, the delivered byte count must
 match that length. Compressed responses, CORS responses with hidden encoding,
 and responses without a declared length use the delivered byte limit.
 The loader requires HTTP 200 without a `Content-Range` header for a world

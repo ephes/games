@@ -89,11 +89,19 @@ export class SpriteLoader {
         }
       };
       const abort = () => finish(spriteAbortError(), true);
-      const timer = setTimeout(
-        () => finish(new Error(`Sprite load timed out: ${path}`), true),
-        timeoutMs
-      );
-      img.onload = () => finish();
+      const timeout = () =>
+        finish(new Error(`Sprite load timed out: ${path}`), true);
+      const deadline = performance.now() + timeoutMs;
+      const timer = setTimeout(timeout, timeoutMs);
+      img.onload = () => {
+        if (signal?.aborted) {
+          abort();
+        } else if (performance.now() >= deadline) {
+          timeout();
+        } else {
+          finish();
+        }
+      };
       img.onerror = () => finish(new Error(`Failed to load sprite: ${path}`));
       signal?.addEventListener('abort', abort, { once: true });
       if (signal?.aborted) {
