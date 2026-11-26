@@ -15,7 +15,7 @@ export function buildStaticWorldIndex(platforms, coins) {
       minY: object.y,
       maxY: object.y + object.height
     }))
-    .sort((a, b) => a.minX - b.minX || a.order - b.order);
+    .sort((a, b) => a.minX - b.minX || a.minY - b.minY || a.order - b.order);
   const build = (start, end) => {
     if (start === end) {
       return null;

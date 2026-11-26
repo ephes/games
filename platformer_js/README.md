@@ -157,6 +157,7 @@ Game rendering integration tests record boss-shot fallback arcs and sprite frame
 coordinates under the parent camera transform: each path translates world space
 once, leaves shot coordinates unchanged and balances context save/restore.
 Level creation snapshots platform and coin bounds into a balanced static tree.
+The tree groups same-X objects by Y so narrow queries can prune vertical columns.
 Rendering queries the camera's world-space viewport with a two-pixel margin
 (including the power-up coin stroke) and draws only intersecting candidates in
 original painter order: platforms, then coins. Touching edges are included;
