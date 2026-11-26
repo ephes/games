@@ -276,12 +276,13 @@ Shooting requires successful initialization and a playable game. Both direct
 `game.shoot()` calls and input actions ignore win, death, disposal and pending or
 failed initialization without allocating projectiles or consuming cooldown.
 Live resets, same-level retries after death, level transitions and LDtk
-replacements preserve score, shooting ability and cooldown. A successful reset
-or replacement after win/death restores initial lives and a playable player.
-Reset after winning starts a new run at level zero with zero score and no shooting
-power-up or cooldown from the previous run. The first shot is available as soon
-as the player collects a new shooting power-up. Failed construction retains the
-previous run state and objects. A disposed Game cannot reset.
+replacements during play or after death preserve score, shooting ability and
+cooldown. A successful reset or replacement after win/death restores initial
+lives and a playable player. After winning, a reset or replacement starts a new
+run at level zero with zero score, shooting locked, and the cooldown reset.
+The first shot is available as soon as the player collects a new shooting
+power-up. Failed construction retains the previous run state and objects.
+A disposed Game cannot reset.
 Win and game-over screens keep rendering while simulation is stopped. A
 successful reset starts with a fresh simulation clock.
 Successful resets/replacements clear both sides' projectiles, held input and
@@ -450,11 +451,13 @@ preserves the central 40% head zone and top 20% stomp restriction.
 
 `await game.loadLDtkLevels(url)` returns `true` when replacement succeeds or
 `false` on an empty world, load/conversion error, or object construction failure.
-It retains the current level index if available, otherwise starts at index zero.
+It starts at index zero after victory or when the current index is unavailable.
+In other cases it retains the current index.
 Replacement objects are constructed before publishing the new levels; failure
 keeps the previous level table, objects, camera and loaded world intact. Success
-clears player projectiles and resets the camera, preserving score, lives and
-shooting ability. Replacement and append imports share latest-request ownership:
+clears player projectiles and resets the camera. It preserves run progress and
+lives during play, restores initial lives after death, and starts a fresh run
+after victory. Replacement and append imports share latest-request ownership:
 only the most recently requested import can publish its candidate world and
 levels. Superseded replacements return false, even if the newer request fails;
 imports completed after disposal do not publish. Supersession and disposal abort
@@ -506,7 +509,9 @@ and conversion stops at the first level that takes the candidate over the cap.
 Append also checks the combined platform count including the existing table.
 `addLDtkLevels(url)` returns true on publication and false on refusal, empty input,
 supersession or disposal. Over-budget imports report the exceeded budget and retain
-the current playable world.
+the current playable world. After victory, a successful append resumes play at
+the first appended level with initial lives, carrying over the score and shot
+state. If construction of that level fails, the won campaign stays intact.
 
 Replacement and append imports validate every candidate level, including future
 levels, before publishing. Each level admits at most one `Platforms` layer and

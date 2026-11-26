@@ -87,9 +87,60 @@ describe('Repeated world admission', () => {
 });
 
 describe('Terminal level recovery', () => {
+  it('continues a won campaign at the first appended level', async () => {
+    expect(await game.loadLDtkLevels('original')).toBe(true);
+    game.score = 125;
+    game.canShoot = true;
+    game.lastShotTime = 12;
+    game.loadNextLevel();
+    const winner = game.player;
+    expect(game.gameWon).toBe(true);
+    expect(winner.disposed).toBe(true);
+
+    const appended = world();
+    appended.levels[0].identifier = 'Appended';
+    mockWorldFetch().mockResolvedValue(appended);
+    expect(await game.addLDtkLevels('extension')).toBe(true);
+    expect(game.totalLevels).toBe(2);
+    expect(game.currentLevel).toBe(1);
+    expect(game.levels[game.currentLevel].name).toBe('Appended');
+    expect(game.gameWon).toBe(false);
+    expect(game.player).not.toBe(winner);
+    expect(game.player.disposed).toBe(false);
+    expect([game.score, game.canShoot, game.lastShotTime]).toEqual([
+      125,
+      true,
+      12
+    ]);
+    const update = vi.spyOn(game.player, 'update');
+    game.update(16);
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  it('retains the won campaign when constructing an appended level fails', async () => {
+    expect(await game.loadLDtkLevels('original')).toBe(true);
+    game.loadNextLevel();
+    const previousWorld = game.ldtkLoader.world;
+    const { levels, player } = game;
+    vi.spyOn(game.spriteLoader, 'getSprite').mockImplementationOnce(() => {
+      throw new Error('Synthetic portal sprite failure');
+    });
+
+    expect(await game.addLDtkLevels('extension')).toBe(false);
+    expect(game.ldtkLoader.world).toBe(previousWorld);
+    expect(game.levels).toBe(levels);
+    expect(game.totalLevels).toBe(1);
+    expect(game.currentLevel).toBe(1);
+    expect(game.player).toBe(player);
+    expect(game.gameWon).toBe(true);
+    expect(await game.addLDtkLevels('extension')).toBe(true);
+    expect(game.gameWon).toBe(false);
+  });
+
   it.each(['won', 'lost'])(
     'restores play after %s via replacement and reset',
     async terminal => {
+      expect(await game.loadLDtkLevels('original')).toBe(true);
       for (const action of ['replace', 'reset']) {
         game.score = 125;
         game.canShoot = true;
@@ -107,10 +158,15 @@ describe('Terminal level recovery', () => {
           player.dispose();
         }
         if (action === 'replace') {
+          const replacement = world();
+          replacement.levels.push({
+            ...replacement.levels[0],
+            identifier: 'Second'
+          });
+          mockWorldFetch().mockResolvedValue(replacement);
           expect(await game.loadLDtkLevels('synthetic')).toBe(true);
         } else {
           expect(game.resetLevel()).toBe(true);
-          expect(game.currentLevel).toBe(0);
         }
         expect(game.gameOver || game.gameWon).toBe(false);
         expect(game.lives).toBe(GAME_CONFIG.INITIAL_LIVES);
@@ -119,10 +175,11 @@ describe('Terminal level recovery', () => {
         expect(game.projectiles).toEqual([]);
         expect(game.boss.projectiles).toEqual([]);
         expect(vi.getTimerCount()).toBe(0);
-        const newRun = terminal === 'won' && action === 'reset';
+        const newRun = terminal === 'won';
         expect([game.score, game.canShoot, game.lastShotTime]).toEqual(
           newRun ? [0, false, -GAME_CONFIG.SHOT_COOLDOWN] : [125, true, 12]
         );
+        expect(game.currentLevel).toBe(0);
         const update = vi.spyOn(game.player, 'update');
         game.update(16);
         expect(update).toHaveBeenCalledOnce();
@@ -130,6 +187,18 @@ describe('Terminal level recovery', () => {
       }
     }
   );
+
+  it('preserves score and shooting progress on replacement during active play', async () => {
+    game.score = 125;
+    game.canShoot = true;
+    game.lastShotTime = 12;
+    expect(await game.loadLDtkLevels('synthetic')).toBe(true);
+    expect([game.score, game.canShoot, game.lastShotTime]).toEqual([
+      125,
+      true,
+      12
+    ]);
+  });
   it('requires a new power-up and allows an immediate shot after earning it again', () => {
     vi.spyOn(performance, 'now').mockReturnValue(1000);
     game.levels = [
