@@ -157,6 +157,7 @@ Game rendering integration tests record boss-shot fallback arcs and sprite frame
 coordinates under the parent camera transform: each path translates world space
 once, leaves shot coordinates unchanged and balances context save/restore.
 Level creation snapshots platform and coin bounds into a balanced static tree.
+The tree groups same-X objects by Y so narrow queries can prune vertical columns.
 Rendering queries the camera's world-space viewport with a two-pixel margin
 (including the power-up coin stroke) and draws only intersecting candidates in
 original painter order: platforms, then coins. Touching edges are included;
@@ -429,7 +430,10 @@ with a 200 px horizontal and 100 px vertical off-world margin. Recreating a leve
 replaces its boss and projectile collection.
 
 Established boss shots sweep relative to the player's pre-step position, resolving
-contact before off-world culling. Boss shots created during an update are born
+contacts in time order before off-world culling. Simultaneous hits retain the
+projectile array order. After a nonfatal hit, remaining shots are checked from
+that instant against the stationary respawn pose. A lethal hit ends the update.
+Boss shots created during an update are born
 at the end-of-step muzzle position: they do not move or animate until the next
 step, and only overlap with the player's current pose can hit at birth. Earlier
 player movement cannot collide retroactively with a newborn shot. From the next

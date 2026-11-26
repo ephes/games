@@ -385,34 +385,13 @@ export class Game {
     );
     this.boss.update(this.platforms, deltaTime, this.player, true);
 
-    // Get boss projectiles and check collisions
     const bossProjectiles = this.boss.getProjectiles();
-    for (const projectile of bossProjectiles) {
-      if (
-        projectile.active &&
-        (projectile.previousPosition
-          ? CollisionSystem.sweptContactTime(
-              projectile,
-              this.player,
-              projectile.previousPosition,
-              previousPlayer
-            ) !== null
-          : CollisionSystem.checkCollision(projectile, this.player))
-      ) {
-        projectile.active = false;
-        const livesBefore = this.lives;
-        this.lives = this.player.takeDamage(this.lives);
-        if (this.lives <= 0) {
-          this.gameOver = true;
-          this.player.dispose();
-          this.camera.follow(this.player, true);
-          return;
-        }
-        if (this.lives < livesBefore) {
-          // A respawn is a teleport, not a path later shots may sweep.
-          previousPlayer = { x: this.player.x, y: this.player.y };
-        }
-      }
+    previousPlayer = this.#resolveBossProjectileContacts(
+      bossProjectiles,
+      previousPlayer
+    );
+    if (this.gameOver) {
+      return;
     }
 
     for (const projectile of bossProjectiles) {
@@ -435,6 +414,74 @@ export class Game {
     ) {
       this.camera.follow(this.player, true);
     }
+  }
+
+  #resolveBossProjectileContacts(projectiles, previousPlayer) {
+    let startTime = 0;
+    let contacts = this.#bossProjectileContacts(
+      projectiles,
+      previousPlayer,
+      startTime
+    );
+    while (contacts.length) {
+      const { projectile, time } = contacts.pop();
+      projectile.active = false;
+      const livesBefore = this.lives;
+      this.lives = this.player.takeDamage(this.lives);
+      if (this.lives <= 0) {
+        this.gameOver = true;
+        this.player.dispose();
+        this.camera.follow(this.player, true);
+        break;
+      }
+      if (this.lives < livesBefore) {
+        // Convert the interval-relative time to a fraction of the full step.
+        // The player stays at the respawn point for the rest of this step.
+        startTime += time * (1 - startTime);
+        previousPlayer = { x: this.player.x, y: this.player.y };
+        contacts = this.#bossProjectileContacts(
+          projectiles,
+          previousPlayer,
+          startTime
+        );
+      }
+    }
+    return previousPlayer;
+  }
+
+  #bossProjectileContacts(projectiles, previousPlayer, startTime) {
+    const contacts = [];
+    const remaining = 1 - startTime;
+    for (const [order, projectile] of projectiles.entries()) {
+      if (!projectile.active) {
+        continue;
+      }
+      let time = null;
+      const previous = projectile.previousPosition;
+      if (previous && remaining > 0) {
+        const start =
+          startTime === 0
+            ? previous
+            : {
+                x: projectile.x - (projectile.x - previous.x) * remaining,
+                y: projectile.y - (projectile.y - previous.y) * remaining
+              };
+        time = CollisionSystem.sweptContactTime(
+          projectile,
+          this.player,
+          start,
+          previousPlayer
+        );
+      } else if (CollisionSystem.checkCollision(projectile, this.player)) {
+        // Newborn shots and a zero-length remainder only have an endpoint.
+        time = 1;
+      }
+      if (time !== null) {
+        contacts.push({ projectile, time, order });
+      }
+    }
+    // Pop the earliest contact, using the original order for simultaneous hits.
+    return contacts.sort((a, b) => b.time - a.time || b.order - a.order);
   }
 
   /**

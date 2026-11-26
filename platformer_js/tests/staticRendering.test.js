@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game } from '../src/Game.js';
 import { Portal } from '../src/objects/Portal.js';
+import {
+  buildStaticWorldIndex,
+  visibleStaticObjects
+} from '../src/rendering/staticWorld.js';
 
 const MARGIN = 2; // Covers the power-up coin's one-pixel stroke.
 const visible = (object, camera) =>
@@ -8,6 +12,26 @@ const visible = (object, camera) =>
   object.x <= camera.x + camera.width + MARGIN &&
   object.y + object.height >= camera.y - MARGIN &&
   object.y <= camera.y + camera.height + MARGIN;
+
+function countVisits(index) {
+  let visits = 0;
+  const instrument = node => {
+    if (!node) {
+      return;
+    }
+    const minX = node.minX;
+    Object.defineProperty(node, 'minX', {
+      get: () => {
+        visits++;
+        return minX;
+      }
+    });
+    instrument(node.left);
+    instrument(node.right);
+  };
+  instrument(index);
+  return () => visits;
+}
 
 const level = (platforms = [], coins = []) => ({
   name: 'Synthetic static world',
@@ -17,6 +41,27 @@ const level = (platforms = [], coins = []) => ({
   enemies: [],
   boss: { x: 20000, y: 200, speed: 0 },
   portal: { x: 21000, y: 100 }
+});
+
+it('prunes a shuffled same-X column while returning candidates in level order', () => {
+  const platforms = Array.from({ length: 4096 }, (_, i) => ({
+    x: 100,
+    y: ((i * 2043) % 4096) * 32,
+    width: 16,
+    height: 8
+  }));
+  const coins = [{ x: 100, y: 32 * 2048, width: 8, height: 8 }];
+  const index = buildStaticWorldIndex(platforms, coins);
+  const visits = countVisits(index);
+
+  const camera = { x: 99, y: 32 * 2047, width: 20, height: 40 };
+  const expected = [...platforms, ...coins].filter(object =>
+    visible(object, camera)
+  );
+  expect(expected).toHaveLength(3);
+  expect(expected[0].y).toBeGreaterThan(expected[1].y);
+  expect(visibleStaticObjects(index, camera)).toEqual(expected);
+  expect(visits()).toBeLessThan(100);
 });
 
 describe('static world rendering', () => {
@@ -56,24 +101,9 @@ describe('static world rendering', () => {
     const draws = [...game.platforms, ...game.coins].map(object =>
       vi.spyOn(object, 'draw')
     );
-    let boundReads = 0;
-    const instrument = node => {
-      if (!node) {
-        return;
-      }
-      const minX = node.minX;
-      Object.defineProperty(node, 'minX', {
-        get: () => {
-          boundReads++;
-          return minX;
-        }
-      });
-      instrument(node.left);
-      instrument(node.right);
-    };
-    instrument(game.staticWorldIndex);
+    const visits = countVisits(game.staticWorldIndex);
     game.render();
-    expect(boundReads).toBeLessThan(100);
+    expect(visits()).toBeLessThan(100);
     expect(draws.reduce((sum, spy) => sum + spy.mock.calls.length, 0)).toBe(2);
     expect(game.ctx.fillRect).toHaveBeenCalledWith(20, 30, 50, 10);
     expect(game.ctx.arc).toHaveBeenCalledWith(50, 30, 10, 0, Math.PI * 2);
