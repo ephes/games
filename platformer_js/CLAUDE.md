@@ -87,6 +87,14 @@ exact ties go coins, then body, then portal, and bounce/respawn replaces unused
 sweeps. Unlocked portal entry sweeps the admitted post-platform motion with the
 existing center threshold only when the portal was unlocked at step start; a
 mid-step unlock (player shot defeating the boss, or stomp) is endpoint-only.
+A boss shot yields to swept portal entry only when entry precedes both the shot
+and any body contact. A shot/portal tie, including times that differ only by
+rounding (1e-9), still resolves the shot first. Boss shots resolve before player shots; only
+when a body contact blocks an earlier entry does that decision wait for player
+shots (modelled as earlier than that contact), so targets they retire do not
+block entry and a boss defeat clears the waiting shot.
+Before damaging the player, a boss shot settles coins through its contact time.
+After a nonfatal shot, the coin sweep reduces to overlap at the respawn point.
 Enemy draw calls use inclusive camera bounds (run and hit sprites fit their
 destination rectangle), while offscreen simulation continues. Enemies retire
 from the level after their 300 ms hit visual finishes. Keep these fixtures synthetic, dispose each Game and

@@ -3,6 +3,7 @@ import { Game } from '../src/Game.js';
 import { Coin } from '../src/objects/Coin.js';
 import { Enemy } from '../src/entities/Enemy.js';
 import { BossProjectile } from '../src/entities/BossProjectile.js';
+import { Projectile } from '../src/entities/Projectile.js';
 
 let game, next;
 beforeEach(() => {
@@ -105,6 +106,108 @@ it('excludes boss-shot respawn teleports', () => {
   ];
   game.update(16);
   expect(game.lives).toBe(2);
+  expect(next).not.toHaveBeenCalled();
+});
+
+it.each([
+  { shotY: 240, level: 1, lives: 3 },
+  { shotY: 80, level: 0, lives: 2 }
+])(
+  'resolves an open portal and a boss shot in sweep order ($shotY)',
+  ({ shotY, level, lives }) => {
+    game.portal.unlock();
+    game.boss.projectiles = [
+      new BossProjectile(149, shotY, 1, 0, game.camera.bounds)
+    ];
+
+    game.update(16);
+
+    expect(game.currentLevel).toBe(level);
+    expect(game.lives).toBe(lives);
+  }
+);
+
+it('gives a boss shot priority at simultaneous portal entry', () => {
+  game.portal.unlock();
+  game.player.y = 149;
+  game.boss.projectiles = [
+    new BossProjectile(149, 149, 1, 0, game.camera.bounds)
+  ];
+
+  game.update(16);
+
+  expect(game.lives).toBe(2);
+  expect(next).not.toHaveBeenCalled();
+});
+
+it('treats rounding-adjacent shot and portal times as a shot-first tie', () => {
+  game.portal.unlock();
+  game.portal.y = 0;
+  game.boss.projectiles = [
+    new BossProjectile(149, 40.6, 1, 0, game.camera.bounds)
+  ];
+
+  game.update(16);
+
+  expect(game.lives).toBe(2);
+  expect(next).not.toHaveBeenCalled();
+});
+
+it.each([false, true])(
+  'ignores body contact with an enemy a player shot retires first (shot: %s)',
+  withShot => {
+    game.portal.unlock();
+    game.enemies = [new Enemy({ x: 149, y: 40, speed: 0 })];
+    if (withShot) {
+      game.projectiles = [new Projectile(140, 50, -1)];
+    }
+    game.boss.projectiles = [
+      new BossProjectile(149, 240, 1, 0, game.camera.bounds)
+    ];
+
+    game.update(16);
+
+    expect(game.currentLevel).toBe(withShot ? 1 : 0);
+    expect(game.lives).toBe(withShot ? 3 : 2);
+    expect(game.score).toBe(withShot ? 50 : 0);
+  }
+);
+
+it('drops a body-deferred boss shot cleared by a boss-defeating player shot', () => {
+  game.portal.unlock();
+  game.enemies = [new Enemy({ x: 149, y: 40, speed: 0 })];
+  // A stale fireball would settle this coin through its later contact time.
+  const coin = new Coin(149, 180);
+  game.coins = [coin];
+  Object.assign(game.boss, { x: 500, y: 0, health: 1 });
+  game.projectiles = [new Projectile(480, 10, 1)];
+  game.boss.projectiles = [
+    new BossProjectile(149, 240, 1, 0, game.camera.bounds)
+  ];
+
+  game.update(16);
+
+  expect(game.boss.alive).toBe(false);
+  // Boss defeat plus the blocking stomp; the cleared fireball never hits.
+  expect(game.score).toBe(250);
+  expect(game.lives).toBe(3);
+  expect(coin.collected).toBe(false);
+  expect(game.currentLevel).toBe(0);
+});
+
+it('keeps a lethal boss shot that precedes a boss-defeating player shot', () => {
+  game.lives = 1;
+  Object.assign(game.boss, { x: 500, y: 0, health: 1 });
+  game.projectiles = [new Projectile(480, 10, 1)];
+  game.boss.projectiles = [
+    new BossProjectile(149, 40, 1, 0, game.camera.bounds)
+  ];
+
+  game.update(16);
+
+  expect(game.boss.alive).toBe(true);
+  expect(game.gameOver).toBe(true);
+  expect(game.lives).toBe(0);
   expect(next).not.toHaveBeenCalled();
 });
 

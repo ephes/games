@@ -25,6 +25,9 @@ import { GAME_CONFIG, LEVELS } from './utils/constants.js';
 import { reportDiagnostic } from './utils/reportDiagnostic.js';
 import { LDtkLoader, WORLD_LIMITS } from './systems/LDtkLoader.js';
 
+// Contact times from different sweeps that differ by less than this are equal.
+const CONTACT_TIME_TOLERANCE = 1e-9;
+
 /**
  * Main game class that coordinates all game systems
  */
@@ -386,13 +389,29 @@ export class Game {
     this.boss.update(this.platforms, deltaTime, this.player, true);
 
     const bossProjectiles = this.boss.getProjectiles();
-    previousPlayer = this.#resolveBossProjectileContacts(
+    const bossShots = this.#resolveBossProjectileContacts(
       bossProjectiles,
-      previousPlayer
+      previousPlayer,
+      previousTargets,
+      portalOpenAtStart
     );
+    let bossShotStep = bossShots.next();
     if (this.gameOver) {
       return;
     }
+
+    // Update projectiles
+    this.updateProjectiles(deltaTime, previousTargets);
+
+    if (!bossShotStep.done) {
+      // A body contact blocked an earlier portal entry; player shots may have
+      // retired its target, so resume boss-shot arbitration now.
+      bossShotStep = bossShots.next();
+      if (this.gameOver) {
+        return;
+      }
+    }
+    previousPlayer = bossShotStep.value;
 
     for (const projectile of bossProjectiles) {
       projectile.cull();
@@ -400,9 +419,6 @@ export class Game {
     this.boss.projectiles = bossProjectiles.filter(
       projectile => projectile.active
     );
-
-    // Update projectiles
-    this.updateProjectiles(deltaTime, previousTargets);
 
     // Check collisions
     this.checkCollisions(previousPlayer, previousTargets, portalOpenAtStart);
@@ -416,16 +432,61 @@ export class Game {
     }
   }
 
-  #resolveBossProjectileContacts(projectiles, previousPlayer) {
+  /**
+   * Resolve boss shot contacts in time order. Yields once, before player shots
+   * resolve, when a body contact precedes an otherwise earlier portal entry;
+   * Game resumes it after player shots and receives the final player pose.
+   */
+  *#resolveBossProjectileContacts(
+    projectiles,
+    previousPlayer,
+    previousTargets,
+    portalOpenAtStart
+  ) {
     let startTime = 0;
     let contacts = this.#bossProjectileContacts(
       projectiles,
       previousPlayer,
       startTime
     );
+    let portalTime = contacts.length
+      ? this.#sweptPortalEntryTime(previousPlayer, portalOpenAtStart)
+      : null;
+    let deferred = false;
     while (contacts.length) {
       const { projectile, time } = contacts.pop();
+      // Separately rounded contact times within CONTACT_TIME_TOLERANCE are a
+      // tie, and a tie still resolves the shot first.
+      if (portalTime !== null && portalTime < time - CONTACT_TIME_TOLERANCE) {
+        const bodyContact = () =>
+          CollisionSystem.checkBodyContacts(
+            this.player,
+            this.enemies,
+            this.boss,
+            previousPlayer,
+            previousTargets
+          );
+        let body = bodyContact();
+        if (body && !(portalTime < body.time) && !deferred) {
+          // checkCollisions ignores targets retired by this step's player shots.
+          deferred = true;
+          yield;
+          if (!projectile.active) {
+            // A player shot defeated the boss and cleared its shots.
+            break;
+          }
+          body = bodyContact();
+        }
+        if (portalTime < (body?.time ?? Infinity)) {
+          // Leave the sweep intact so checkCollisions awards coins through entry.
+          break;
+        }
+        portalTime = null;
+      }
       projectile.active = false;
+      if (!this.player.isInvulnerable) {
+        this.#collectCoinsThrough(previousPlayer, time);
+      }
       const livesBefore = this.lives;
       this.lives = this.player.takeDamage(this.lives);
       if (this.lives <= 0) {
@@ -438,6 +499,7 @@ export class Game {
         // Convert the interval-relative time to a fraction of the full step.
         // The player stays at the respawn point for the rest of this step.
         startTime += time * (1 - startTime);
+        portalTime = null;
         previousPlayer = { x: this.player.x, y: this.player.y };
         contacts = this.#bossProjectileContacts(
           projectiles,
@@ -447,6 +509,17 @@ export class Game {
       }
     }
     return previousPlayer;
+  }
+
+  #sweptPortalEntryTime(previousPlayer, portalOpenAtStart) {
+    return portalOpenAtStart && !this.portal.isLocked && previousPlayer
+      ? CollisionSystem.portalEntryTime(
+          this.player,
+          this.portal,
+          0.6,
+          previousPlayer
+        )
+      : null;
   }
 
   #bossProjectileContacts(projectiles, previousPlayer, startTime) {
@@ -581,6 +654,40 @@ export class Game {
     );
   }
 
+  #collectCoinsThrough(previousPlayer, cutoff) {
+    const coins =
+      this.coins === this.indexedCoins
+        ? queryStaticWorld(
+            this.staticWorldIndex,
+            sweptBounds(this.player, previousPlayer),
+            'coins'
+          )
+        : this.coins;
+    const contacts = coins
+      .filter(coin => !coin.collected)
+      .map(coin => ({
+        coin,
+        time: CollisionSystem.sweptContactTime(
+          this.player.getBounds(),
+          coin.getBounds(),
+          previousPlayer ?? this.player,
+          coin
+        )
+      }))
+      .filter(contact => contact.time !== null && contact.time <= cutoff)
+      .sort((a, b) => a.time - b.time);
+    for (const { coin } of contacts) {
+      const result = coin.collect();
+      if (result.collected) {
+        retireStaticCoin(this.staticWorldIndex, coin);
+        this.score += result.points;
+        if (result.powerUp) {
+          this.canShoot = true;
+        }
+      }
+    }
+  }
+
   /**
    * Check all collisions
    * @param {{x: number, y: number}} [previousPlayer] - Player pose at step start
@@ -610,48 +717,13 @@ export class Game {
         previousTargets
       );
       const bodyTime = hit?.time ?? Infinity;
-      const portalTime =
-        portalOpenAtStart && !this.portal.isLocked && previousPlayer
-          ? CollisionSystem.portalEntryTime(
-              this.player,
-              this.portal,
-              0.6,
-              previousPlayer
-            )
-          : null;
+      const portalTime = this.#sweptPortalEntryTime(
+        previousPlayer,
+        portalOpenAtStart
+      );
       const entersPortal = portalTime !== null && portalTime < bodyTime;
       const cutoff = entersPortal ? portalTime : bodyTime;
-      const coins =
-        this.coins === this.indexedCoins
-          ? queryStaticWorld(
-              this.staticWorldIndex,
-              sweptBounds(this.player, previousPlayer),
-              'coins'
-            )
-          : this.coins;
-      const contacts = coins
-        .filter(coin => !coin.collected)
-        .map(coin => ({
-          coin,
-          time: CollisionSystem.sweptContactTime(
-            this.player.getBounds(),
-            coin.getBounds(),
-            previousPlayer ?? this.player,
-            coin
-          )
-        }))
-        .filter(contact => contact.time !== null && contact.time <= cutoff)
-        .sort((a, b) => a.time - b.time);
-      for (const { coin } of contacts) {
-        const result = coin.collect();
-        if (result.collected) {
-          retireStaticCoin(this.staticWorldIndex, coin);
-          this.score += result.points;
-          if (result.powerUp) {
-            this.canShoot = true;
-          }
-        }
-      }
+      this.#collectCoinsThrough(previousPlayer, cutoff);
       if (entersPortal) {
         this.loadNextLevel();
         return;

@@ -404,6 +404,9 @@ Large collision meshes are reduced without spreading into function arguments.
 Coins, enemy/boss body contacts and already-open portal entry resolve in
 earliest-contact order within a step. Exact ties resolve coins first, then
 body contact, then portal entry. A transition keeps coin awards up to entry.
+An already-open portal also takes precedence over a later boss shot when no
+body contact has priority over entry. A boss shot at the entry time (within a
+rounding tolerance) still resolves first.
 Stomps and respawns replace unused motion with current-pose overlaps, where
 coins and open portals can still trigger. Unlocked portals test the player's
 center along the movement admitted by platform resolution, using the usual
@@ -581,17 +584,24 @@ while retaining the previous playable state, including the loaded world.
 Lethal enemy, boss or boss-projectile contact ends the update immediately
 when resolved. Coins sweep the
 player's pre-step pose to its current pose, awarding each ordinary
-or power-up coin once even without endpoint overlap. Tangent edges do not collect;
-a boss-shot respawn retires the old pose so the teleport collects nothing in between.
+or power-up coin once even without endpoint overlap. Tangent edges do not collect.
+Coin pickups through the first damaging boss shot, including exact ties, are
+awarded before damage. For the rest of the step, a surviving player can collect
+coins overlapping the respawn point.
 Body contacts choose the earliest relative contact across enemies and boss, with
 the same geometric ties as player shots. The game saves pre-movement target
 poses for both. Invulnerability filters damaging body contacts out of that
 order, so an earlier side contact cannot prevent a later valid enemy or boss
 stomp.
 After bounce/respawn, checks restart at current poses rather than continuing
-the retired sweep. Coins are checked
-before enemy/boss contact, while boss projectiles are checked before player
-projectiles and other collisions. Surviving contact still permits portal entry.
+the retired sweep. Boss projectile contacts resolve before player projectiles.
+When a body contact precedes an otherwise earlier portal entry, that boss shot
+waits until player shots resolve, so a target they retire in the step does not
+block entry, and a boss defeat by those shots clears the waiting shot. As in
+body-contact resolution, the step's player shots count as earlier than the
+blocking contact and the waiting shot. An earlier valid entry into an already-open portal ends the boss shot sweep;
+shot and entry times within a rounding tolerance (1e-9 of the step) count as a
+tie, which the shot wins.
 
 ## 🚀 GitHub Pages Deployment
 
