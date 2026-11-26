@@ -108,6 +108,37 @@ it('excludes boss-shot respawn teleports', () => {
   expect(next).not.toHaveBeenCalled();
 });
 
+it.each([
+  { shotY: 240, level: 1, lives: 3 },
+  { shotY: 80, level: 0, lives: 2 }
+])(
+  'resolves an open portal and a boss shot in sweep order ($shotY)',
+  ({ shotY, level, lives }) => {
+    game.portal.unlock();
+    game.boss.projectiles = [
+      new BossProjectile(149, shotY, 1, 0, game.camera.bounds)
+    ];
+
+    game.update(16);
+
+    expect(game.currentLevel).toBe(level);
+    expect(game.lives).toBe(lives);
+  }
+);
+
+it('gives a boss shot priority at simultaneous portal entry', () => {
+  game.portal.unlock();
+  game.player.y = 149;
+  game.boss.projectiles = [
+    new BossProjectile(149, 149, 1, 0, game.camera.bounds)
+  ];
+
+  game.update(16);
+
+  expect(game.lives).toBe(2);
+  expect(next).not.toHaveBeenCalled();
+});
+
 it('does not replay a locked crossing after a later stomp unlocks the portal', () => {
   Object.assign(game.boss, { x: 132, y: 300, health: 1 });
   Object.assign(game.player, { x: 149, y: 500, velocityY: 500 });

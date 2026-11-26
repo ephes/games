@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve entry into an already-open portal before a later boss fireball hit.
+
 - Start a new run at level zero with reset score, shot unlock and cooldown when
   replacing the LDtk campaign after victory.
 

@@ -388,7 +388,9 @@ export class Game {
     const bossProjectiles = this.boss.getProjectiles();
     previousPlayer = this.#resolveBossProjectileContacts(
       bossProjectiles,
-      previousPlayer
+      previousPlayer,
+      previousTargets,
+      portalOpenAtStart
     );
     if (this.gameOver) {
       return;
@@ -416,15 +418,37 @@ export class Game {
     }
   }
 
-  #resolveBossProjectileContacts(projectiles, previousPlayer) {
+  #resolveBossProjectileContacts(
+    projectiles,
+    previousPlayer,
+    previousTargets,
+    portalOpenAtStart
+  ) {
     let startTime = 0;
     let contacts = this.#bossProjectileContacts(
       projectiles,
       previousPlayer,
       startTime
     );
+    let portalTime = contacts.length
+      ? this.#sweptPortalEntryTime(previousPlayer, portalOpenAtStart)
+      : null;
     while (contacts.length) {
       const { projectile, time } = contacts.pop();
+      if (portalTime !== null && portalTime < time) {
+        const body = CollisionSystem.checkBodyContacts(
+          this.player,
+          this.enemies,
+          this.boss,
+          previousPlayer,
+          previousTargets
+        );
+        if (portalTime < (body?.time ?? Infinity)) {
+          // Leave the sweep intact so checkCollisions awards coins through entry.
+          break;
+        }
+        portalTime = null;
+      }
       projectile.active = false;
       const livesBefore = this.lives;
       this.lives = this.player.takeDamage(this.lives);
@@ -438,6 +462,7 @@ export class Game {
         // Convert the interval-relative time to a fraction of the full step.
         // The player stays at the respawn point for the rest of this step.
         startTime += time * (1 - startTime);
+        portalTime = null;
         previousPlayer = { x: this.player.x, y: this.player.y };
         contacts = this.#bossProjectileContacts(
           projectiles,
@@ -447,6 +472,17 @@ export class Game {
       }
     }
     return previousPlayer;
+  }
+
+  #sweptPortalEntryTime(previousPlayer, portalOpenAtStart) {
+    return portalOpenAtStart && !this.portal.isLocked && previousPlayer
+      ? CollisionSystem.portalEntryTime(
+          this.player,
+          this.portal,
+          0.6,
+          previousPlayer
+        )
+      : null;
   }
 
   #bossProjectileContacts(projectiles, previousPlayer, startTime) {
@@ -610,15 +646,10 @@ export class Game {
         previousTargets
       );
       const bodyTime = hit?.time ?? Infinity;
-      const portalTime =
-        portalOpenAtStart && !this.portal.isLocked && previousPlayer
-          ? CollisionSystem.portalEntryTime(
-              this.player,
-              this.portal,
-              0.6,
-              previousPlayer
-            )
-          : null;
+      const portalTime = this.#sweptPortalEntryTime(
+        previousPlayer,
+        portalOpenAtStart
+      );
       const entersPortal = portalTime !== null && portalTime < bodyTime;
       const cutoff = entersPortal ? portalTime : bodyTime;
       const coins =

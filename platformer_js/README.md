@@ -404,6 +404,9 @@ Large collision meshes are reduced without spreading into function arguments.
 Coins, enemy/boss body contacts and already-open portal entry resolve in
 earliest-contact order within a step. Exact ties resolve coins first, then
 body contact, then portal entry. A transition keeps coin awards up to entry.
+An already-open portal also takes precedence over a later boss shot when no
+body contact has priority over entry. A boss shot at the entry time still
+resolves first.
 Stomps and respawns replace unused motion with current-pose overlaps, where
 coins and open portals can still trigger. Unlocked portals test the player's
 center along the movement admitted by platform resolution, using the usual
@@ -589,9 +592,8 @@ poses for both. Invulnerability filters damaging body contacts out of that
 order, so an earlier side contact cannot prevent a later valid enemy or boss
 stomp.
 After bounce/respawn, checks restart at current poses rather than continuing
-the retired sweep. Coins are checked
-before enemy/boss contact, while boss projectiles are checked before player
-projectiles and other collisions. Surviving contact still permits portal entry.
+the retired sweep. Boss projectile contacts resolve before player projectiles.
+An earlier valid entry into an already-open portal ends the boss shot sweep.
 
 ## 🚀 GitHub Pages Deployment
 
