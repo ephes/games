@@ -25,6 +25,9 @@ import { GAME_CONFIG, LEVELS } from './utils/constants.js';
 import { reportDiagnostic } from './utils/reportDiagnostic.js';
 import { LDtkLoader, WORLD_LIMITS } from './systems/LDtkLoader.js';
 
+// Contact times from different sweeps that differ by less than this are equal.
+const CONTACT_TIME_TOLERANCE = 1e-9;
+
 /**
  * Main game class that coordinates all game systems
  */
@@ -385,6 +388,11 @@ export class Game {
     );
     this.boss.update(this.platforms, deltaTime, this.player, true);
 
+    // Player shots retire their targets before boss-shot arbitration, so the
+    // portal-versus-body comparison there sees the same targets as
+    // checkCollisions.
+    this.updateProjectiles(deltaTime, previousTargets);
+
     const bossProjectiles = this.boss.getProjectiles();
     previousPlayer = this.#resolveBossProjectileContacts(
       bossProjectiles,
@@ -402,9 +410,6 @@ export class Game {
     this.boss.projectiles = bossProjectiles.filter(
       projectile => projectile.active
     );
-
-    // Update projectiles
-    this.updateProjectiles(deltaTime, previousTargets);
 
     // Check collisions
     this.checkCollisions(previousPlayer, previousTargets, portalOpenAtStart);
@@ -435,7 +440,9 @@ export class Game {
       : null;
     while (contacts.length) {
       const { projectile, time } = contacts.pop();
-      if (portalTime !== null && portalTime < time) {
+      // Separately rounded contact times within CONTACT_TIME_TOLERANCE are a
+      // tie, and a tie still resolves the shot first.
+      if (portalTime !== null && portalTime < time - CONTACT_TIME_TOLERANCE) {
         const body = CollisionSystem.checkBodyContacts(
           this.player,
           this.enemies,

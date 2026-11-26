@@ -3,6 +3,7 @@ import { Game } from '../src/Game.js';
 import { Coin } from '../src/objects/Coin.js';
 import { Enemy } from '../src/entities/Enemy.js';
 import { BossProjectile } from '../src/entities/BossProjectile.js';
+import { Projectile } from '../src/entities/Projectile.js';
 
 let game, next;
 beforeEach(() => {
@@ -138,6 +139,39 @@ it('gives a boss shot priority at simultaneous portal entry', () => {
   expect(game.lives).toBe(2);
   expect(next).not.toHaveBeenCalled();
 });
+
+it('treats rounding-adjacent shot and portal times as a shot-first tie', () => {
+  game.portal.unlock();
+  game.portal.y = 0;
+  game.boss.projectiles = [
+    new BossProjectile(149, 40.6, 1, 0, game.camera.bounds)
+  ];
+
+  game.update(16);
+
+  expect(game.lives).toBe(2);
+  expect(next).not.toHaveBeenCalled();
+});
+
+it.each([false, true])(
+  'ignores body contact with an enemy a player shot retires first (shot: %s)',
+  withShot => {
+    game.portal.unlock();
+    game.enemies = [new Enemy({ x: 149, y: 40, speed: 0 })];
+    if (withShot) {
+      game.projectiles = [new Projectile(140, 50, -1)];
+    }
+    game.boss.projectiles = [
+      new BossProjectile(149, 240, 1, 0, game.camera.bounds)
+    ];
+
+    game.update(16);
+
+    expect(game.currentLevel).toBe(withShot ? 1 : 0);
+    expect(game.lives).toBe(withShot ? 3 : 2);
+    expect(game.score).toBe(withShot ? 50 : 0);
+  }
+);
 
 it('does not replay a locked crossing after a later stomp unlocks the portal', () => {
   Object.assign(game.boss, { x: 132, y: 300, health: 1 });

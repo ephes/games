@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Preserve entry into an already-open portal before a later boss fireball hit.
+  Enemies retired by player shots in the same step no longer block that entry,
+  and a rounding-adjacent shot/portal tie still resolves the shot first.
 
 - Keep coin pickups through a damaging boss fireball hit and limit subsequent
   pickups in the step to the respawn overlap.

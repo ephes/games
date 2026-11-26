@@ -405,8 +405,8 @@ Coins, enemy/boss body contacts and already-open portal entry resolve in
 earliest-contact order within a step. Exact ties resolve coins first, then
 body contact, then portal entry. A transition keeps coin awards up to entry.
 An already-open portal also takes precedence over a later boss shot when no
-body contact has priority over entry. A boss shot at the entry time still
-resolves first.
+body contact has priority over entry. A boss shot at the entry time (within a
+rounding tolerance) still resolves first.
 Stomps and respawns replace unused motion with current-pose overlaps, where
 coins and open portals can still trigger. Unlocked portals test the player's
 center along the movement admitted by platform resolution, using the usual
@@ -582,7 +582,7 @@ Conversion throws on invalid data, and `game.loadLDtkLevels(url)` returns `false
 while retaining the previous playable state, including the loaded world.
 
 Lethal enemy, boss or boss-projectile contact ends the update immediately
-when resolved. Coins sweep the
+when resolved (player shots of that step have already resolved). Coins sweep the
 player's pre-step pose to its current pose, awarding each ordinary
 or power-up coin once even without endpoint overlap. Tangent edges do not collect.
 Coin pickups through the first damaging boss shot, including exact ties, are
@@ -594,8 +594,12 @@ poses for both. Invulnerability filters damaging body contacts out of that
 order, so an earlier side contact cannot prevent a later valid enemy or boss
 stomp.
 After bounce/respawn, checks restart at current poses rather than continuing
-the retired sweep. Boss projectile contacts resolve before player projectiles.
-An earlier valid entry into an already-open portal ends the boss shot sweep.
+the retired sweep. Player projectiles resolve first, so an enemy a player shot
+retires in the step no longer counts as a body contact for boss-shot or portal
+arbitration. Boss projectile contacts resolve next, before body contacts.
+An earlier valid entry into an already-open portal ends the boss shot sweep;
+shot and entry times within a rounding tolerance (1e-9 of the step) count as a
+tie, which the shot wins.
 
 ## 🚀 GitHub Pages Deployment
 
