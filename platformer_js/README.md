@@ -584,8 +584,10 @@ while retaining the previous playable state, including the loaded world.
 Lethal enemy, boss or boss-projectile contact ends the update immediately
 when resolved. Coins sweep the
 player's pre-step pose to its current pose, awarding each ordinary
-or power-up coin once even without endpoint overlap. Tangent edges do not collect;
-a boss-shot respawn retires the old pose so the teleport collects nothing in between.
+or power-up coin once even without endpoint overlap. Tangent edges do not collect.
+Coin pickups through the first damaging boss shot, including exact ties, are
+awarded before damage. For the rest of the step, a surviving player can collect
+coins overlapping the respawn point.
 Body contacts choose the earliest relative contact across enemies and boss, with
 the same geometric ties as player shots. The game saves pre-movement target
 poses for both. Invulnerability filters damaging body contacts out of that

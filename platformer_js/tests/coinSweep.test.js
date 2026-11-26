@@ -31,6 +31,33 @@ it.each([false, true])('collects a crossed coin once (powerUp=%s)', powerUp => {
   game.update(16);
   expect(game.score).toBe(10);
 });
+it.each([3, 1])(
+  'keeps coins through a damaging boss shot (%s lives)',
+  lives => {
+    game.lives = lives;
+    game.player.respawnPoint = { x: 600, y: 0 };
+    const early = new Coin(100, 60, true);
+    const tied = new Coin(100, 130);
+    const late = new Coin(100, 180);
+    const spawn = new Coin(600, 0);
+    game.coins = [late, spawn, tied, early];
+    game.boss.projectiles = [
+      new BossProjectile(100, 130, 1, 0, game.camera.bounds)
+    ];
+
+    game.update(16);
+
+    expect(game.lives).toBe(lives - 1);
+    expect(game.gameOver).toBe(lives === 1);
+    expect(game.player.x).toBe(600);
+    expect(early.collected).toBe(true);
+    expect(tied.collected).toBe(true);
+    expect(late.collected).toBe(false);
+    expect(spawn.collected).toBe(lives > 1);
+    expect(game.score).toBe(lives > 1 ? 30 : 20);
+    expect(game.canShoot).toBe(true);
+  }
+);
 it('does not collect coins along a boss-shot respawn teleport', () => {
   Object.assign(game.player, {
     y: 100,

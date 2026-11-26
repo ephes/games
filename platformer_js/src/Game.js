@@ -450,6 +450,9 @@ export class Game {
         portalTime = null;
       }
       projectile.active = false;
+      if (!this.player.isInvulnerable) {
+        this.#collectCoinsThrough(previousPlayer, time);
+      }
       const livesBefore = this.lives;
       this.lives = this.player.takeDamage(this.lives);
       if (this.lives <= 0) {
@@ -617,6 +620,40 @@ export class Game {
     );
   }
 
+  #collectCoinsThrough(previousPlayer, cutoff) {
+    const coins =
+      this.coins === this.indexedCoins
+        ? queryStaticWorld(
+            this.staticWorldIndex,
+            sweptBounds(this.player, previousPlayer),
+            'coins'
+          )
+        : this.coins;
+    const contacts = coins
+      .filter(coin => !coin.collected)
+      .map(coin => ({
+        coin,
+        time: CollisionSystem.sweptContactTime(
+          this.player.getBounds(),
+          coin.getBounds(),
+          previousPlayer ?? this.player,
+          coin
+        )
+      }))
+      .filter(contact => contact.time !== null && contact.time <= cutoff)
+      .sort((a, b) => a.time - b.time);
+    for (const { coin } of contacts) {
+      const result = coin.collect();
+      if (result.collected) {
+        retireStaticCoin(this.staticWorldIndex, coin);
+        this.score += result.points;
+        if (result.powerUp) {
+          this.canShoot = true;
+        }
+      }
+    }
+  }
+
   /**
    * Check all collisions
    * @param {{x: number, y: number}} [previousPlayer] - Player pose at step start
@@ -652,37 +689,7 @@ export class Game {
       );
       const entersPortal = portalTime !== null && portalTime < bodyTime;
       const cutoff = entersPortal ? portalTime : bodyTime;
-      const coins =
-        this.coins === this.indexedCoins
-          ? queryStaticWorld(
-              this.staticWorldIndex,
-              sweptBounds(this.player, previousPlayer),
-              'coins'
-            )
-          : this.coins;
-      const contacts = coins
-        .filter(coin => !coin.collected)
-        .map(coin => ({
-          coin,
-          time: CollisionSystem.sweptContactTime(
-            this.player.getBounds(),
-            coin.getBounds(),
-            previousPlayer ?? this.player,
-            coin
-          )
-        }))
-        .filter(contact => contact.time !== null && contact.time <= cutoff)
-        .sort((a, b) => a.time - b.time);
-      for (const { coin } of contacts) {
-        const result = coin.collect();
-        if (result.collected) {
-          retireStaticCoin(this.staticWorldIndex, coin);
-          this.score += result.points;
-          if (result.powerUp) {
-            this.canShoot = true;
-          }
-        }
-      }
+      this.#collectCoinsThrough(previousPlayer, cutoff);
       if (entersPortal) {
         this.loadNextLevel();
         return;
