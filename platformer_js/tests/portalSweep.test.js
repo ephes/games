@@ -173,6 +173,22 @@ it.each([false, true])(
   }
 );
 
+it('keeps a lethal boss shot that precedes a boss-defeating player shot', () => {
+  game.lives = 1;
+  Object.assign(game.boss, { x: 500, y: 0, health: 1 });
+  game.projectiles = [new Projectile(480, 10, 1)];
+  game.boss.projectiles = [
+    new BossProjectile(149, 40, 1, 0, game.camera.bounds)
+  ];
+
+  game.update(16);
+
+  expect(game.boss.alive).toBe(true);
+  expect(game.gameOver).toBe(true);
+  expect(game.lives).toBe(0);
+  expect(next).not.toHaveBeenCalled();
+});
+
 it('does not replay a locked crossing after a later stomp unlocks the portal', () => {
   Object.assign(game.boss, { x: 132, y: 300, health: 1 });
   Object.assign(game.player, { x: 149, y: 500, velocityY: 500 });

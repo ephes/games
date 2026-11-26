@@ -388,21 +388,30 @@ export class Game {
     );
     this.boss.update(this.platforms, deltaTime, this.player, true);
 
-    // Player shots retire their targets before boss-shot arbitration, so the
-    // portal-versus-body comparison there sees the same targets as
-    // checkCollisions.
-    this.updateProjectiles(deltaTime, previousTargets);
-
     const bossProjectiles = this.boss.getProjectiles();
-    previousPlayer = this.#resolveBossProjectileContacts(
+    const bossShots = this.#resolveBossProjectileContacts(
       bossProjectiles,
       previousPlayer,
       previousTargets,
       portalOpenAtStart
     );
+    let bossShotStep = bossShots.next();
     if (this.gameOver) {
       return;
     }
+
+    // Update projectiles
+    this.updateProjectiles(deltaTime, previousTargets);
+
+    if (!bossShotStep.done) {
+      // A body contact blocked an earlier portal entry; player shots may have
+      // retired its target, so resume boss-shot arbitration now.
+      bossShotStep = bossShots.next();
+      if (this.gameOver) {
+        return;
+      }
+    }
+    previousPlayer = bossShotStep.value;
 
     for (const projectile of bossProjectiles) {
       projectile.cull();
@@ -423,7 +432,12 @@ export class Game {
     }
   }
 
-  #resolveBossProjectileContacts(
+  /**
+   * Resolve boss shot contacts in time order. Yields once, before player shots
+   * resolve, when a body contact precedes an otherwise earlier portal entry;
+   * Game resumes it after player shots and receives the final player pose.
+   */
+  *#resolveBossProjectileContacts(
     projectiles,
     previousPlayer,
     previousTargets,
@@ -438,18 +452,27 @@ export class Game {
     let portalTime = contacts.length
       ? this.#sweptPortalEntryTime(previousPlayer, portalOpenAtStart)
       : null;
+    let deferred = false;
     while (contacts.length) {
       const { projectile, time } = contacts.pop();
       // Separately rounded contact times within CONTACT_TIME_TOLERANCE are a
       // tie, and a tie still resolves the shot first.
       if (portalTime !== null && portalTime < time - CONTACT_TIME_TOLERANCE) {
-        const body = CollisionSystem.checkBodyContacts(
-          this.player,
-          this.enemies,
-          this.boss,
-          previousPlayer,
-          previousTargets
-        );
+        const bodyContact = () =>
+          CollisionSystem.checkBodyContacts(
+            this.player,
+            this.enemies,
+            this.boss,
+            previousPlayer,
+            previousTargets
+          );
+        let body = bodyContact();
+        if (body && !(portalTime < body.time) && !deferred) {
+          // checkCollisions ignores targets retired by this step's player shots.
+          deferred = true;
+          yield;
+          body = bodyContact();
+        }
         if (portalTime < (body?.time ?? Infinity)) {
           // Leave the sweep intact so checkCollisions awards coins through entry.
           break;

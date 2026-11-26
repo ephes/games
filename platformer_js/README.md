@@ -582,7 +582,7 @@ Conversion throws on invalid data, and `game.loadLDtkLevels(url)` returns `false
 while retaining the previous playable state, including the loaded world.
 
 Lethal enemy, boss or boss-projectile contact ends the update immediately
-when resolved (player shots of that step have already resolved). Coins sweep the
+when resolved. Coins sweep the
 player's pre-step pose to its current pose, awarding each ordinary
 or power-up coin once even without endpoint overlap. Tangent edges do not collect.
 Coin pickups through the first damaging boss shot, including exact ties, are
@@ -594,10 +594,10 @@ poses for both. Invulnerability filters damaging body contacts out of that
 order, so an earlier side contact cannot prevent a later valid enemy or boss
 stomp.
 After bounce/respawn, checks restart at current poses rather than continuing
-the retired sweep. Player projectiles resolve first, so an enemy a player shot
-retires in the step no longer counts as a body contact for boss-shot or portal
-arbitration. Boss projectile contacts resolve next, before body contacts.
-An earlier valid entry into an already-open portal ends the boss shot sweep;
+the retired sweep. Boss projectile contacts resolve before player projectiles.
+When a body contact precedes an otherwise earlier portal entry, that boss shot
+waits until player shots resolve, so a target they retire in the step does not
+block entry. An earlier valid entry into an already-open portal ends the boss shot sweep;
 shot and entry times within a rounding tolerance (1e-9 of the step) count as a
 tie, which the shot wins.
 

@@ -89,8 +89,9 @@ existing center threshold only when the portal was unlocked at step start; a
 mid-step unlock (player shot defeating the boss, or stomp) is endpoint-only.
 A boss shot yields to swept portal entry only when entry precedes both the shot
 and any body contact. A shot/portal tie, including times that differ only by
-rounding (1e-9), still resolves the shot first. Player shots resolve before
-boss shots, so enemies they retire never count as earlier body contacts.
+rounding (1e-9), still resolves the shot first. Boss shots resolve before player shots; only
+when a body contact blocks an earlier entry does that decision wait for player
+shots, so targets they retire do not block entry.
 Before damaging the player, a boss shot settles coins through its contact time.
 After a nonfatal shot, the coin sweep reduces to overlap at the respawn point.
 Enemy draw calls use inclusive camera bounds (run and hit sprites fit their

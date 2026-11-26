@@ -290,6 +290,7 @@ describe('Playable level state', () => {
       overlapExit(hazard);
       game.lives = 1;
       const portalCheck = vi.spyOn(CollisionSystem, 'checkPortalEntry');
+      const projectileUpdate = vi.spyOn(game, 'updateProjectiles');
       const collisions = vi.spyOn(game, 'checkCollisions');
       game.update(16);
       expect(game.lives).toBe(0);
@@ -298,7 +299,7 @@ describe('Playable level state', () => {
       expect(game.gameWon).toBe(false);
       expect(portalCheck).not.toHaveBeenCalled();
       if (hazard === 'projectile') {
-        // Player shots resolve before boss shots; body/portal checks never run.
+        expect(projectileUpdate).not.toHaveBeenCalled();
         expect(collisions).not.toHaveBeenCalled();
       }
     }
