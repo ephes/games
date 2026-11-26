@@ -471,6 +471,10 @@ export class Game {
           // checkCollisions ignores targets retired by this step's player shots.
           deferred = true;
           yield;
+          if (!projectile.active) {
+            // A player shot defeated the boss and cleared its shots.
+            break;
+          }
           body = bodyContact();
         }
         if (portalTime < (body?.time ?? Infinity)) {

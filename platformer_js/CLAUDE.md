@@ -91,7 +91,8 @@ A boss shot yields to swept portal entry only when entry precedes both the shot
 and any body contact. A shot/portal tie, including times that differ only by
 rounding (1e-9), still resolves the shot first. Boss shots resolve before player shots; only
 when a body contact blocks an earlier entry does that decision wait for player
-shots, so targets they retire do not block entry.
+shots (modelled as earlier than that contact), so targets they retire do not
+block entry and a boss defeat clears the waiting shot.
 Before damaging the player, a boss shot settles coins through its contact time.
 After a nonfatal shot, the coin sweep reduces to overlap at the respawn point.
 Enemy draw calls use inclusive camera bounds (run and hit sprites fit their

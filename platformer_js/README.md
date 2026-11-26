@@ -597,7 +597,9 @@ After bounce/respawn, checks restart at current poses rather than continuing
 the retired sweep. Boss projectile contacts resolve before player projectiles.
 When a body contact precedes an otherwise earlier portal entry, that boss shot
 waits until player shots resolve, so a target they retire in the step does not
-block entry. An earlier valid entry into an already-open portal ends the boss shot sweep;
+block entry, and a boss defeat by those shots clears the waiting shot. As in
+body-contact resolution, the step's player shots count as earlier than the
+blocking contact and the waiting shot. An earlier valid entry into an already-open portal ends the boss shot sweep;
 shot and entry times within a rounding tolerance (1e-9 of the step) count as a
 tie, which the shot wins.
 

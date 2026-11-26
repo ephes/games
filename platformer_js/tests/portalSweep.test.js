@@ -173,6 +173,28 @@ it.each([false, true])(
   }
 );
 
+it('drops a body-deferred boss shot cleared by a boss-defeating player shot', () => {
+  game.portal.unlock();
+  game.enemies = [new Enemy({ x: 149, y: 40, speed: 0 })];
+  // A stale fireball would settle this coin through its later contact time.
+  const coin = new Coin(149, 180);
+  game.coins = [coin];
+  Object.assign(game.boss, { x: 500, y: 0, health: 1 });
+  game.projectiles = [new Projectile(480, 10, 1)];
+  game.boss.projectiles = [
+    new BossProjectile(149, 240, 1, 0, game.camera.bounds)
+  ];
+
+  game.update(16);
+
+  expect(game.boss.alive).toBe(false);
+  // Boss defeat plus the blocking stomp; the cleared fireball never hits.
+  expect(game.score).toBe(250);
+  expect(game.lives).toBe(3);
+  expect(coin.collected).toBe(false);
+  expect(game.currentLevel).toBe(0);
+});
+
 it('keeps a lethal boss shot that precedes a boss-defeating player shot', () => {
   game.lives = 1;
   Object.assign(game.boss, { x: 500, y: 0, health: 1 });
