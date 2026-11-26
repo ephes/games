@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Stop scoring player-shot hits after confirmed entry into an open portal.
+
 ### Changed
 
 - Scan player shot candidates without sorting per shot, preserving level order

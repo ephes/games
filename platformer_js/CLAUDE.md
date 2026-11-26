@@ -93,6 +93,8 @@ rounding (1e-9), still resolves the shot first. Boss shots resolve before player
 when a body contact blocks an earlier entry does that decision wait for player
 shots (modelled as earlier than that contact), so targets they retire do not
 block entry and a boss defeat clears the waiting shot.
+Confirmed entry along the original sweep caps player-shot contacts at the entry
+time, inclusive. A body-blocked entry keeps the full player-shot sweep for the recheck.
 Before damaging the player, a boss shot settles coins through its contact time.
 After a nonfatal shot, the coin sweep reduces to overlap at the respawn point.
 Enemy draw calls use inclusive camera bounds (run and hit sprites fit their
