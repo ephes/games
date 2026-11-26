@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Stop LDtk transfers before decoding when the deadline elapses or the reader
+  delivers too many consecutive empty chunks.
+
 - Keep boss animation and the game loop running if debug logging throws.
 
 - Limit the boss hit flash to the sprite silhouette, preserving scenery visible

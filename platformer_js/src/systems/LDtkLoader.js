@@ -5,6 +5,7 @@
 export const WORLD_LIMITS = Object.freeze({
   bytes: 16 * 1024 * 1024,
   timeoutMs: 10_000,
+  consecutiveEmptyReads: 64,
   jsonDepth: 64,
   // Sized so 2,000,000 cells and 20,000 LDtk-shaped entities with field
   // instances fit together, with headroom for level, layer and defs metadata.
@@ -189,17 +190,28 @@ export class LDtkLoader {
       }
       const chunks = [];
       let bytes = 0;
+      let emptyReads = 0;
       for (;;) {
         const { done, value } = await withTransferAbort(signal, () =>
           reader.read()
         );
         signal.throwIfAborted();
+        if (performance.now() >= deadline) {
+          throw deadlineError;
+        }
         if (done) {
           if (expectedBytes !== null && bytes !== expectedBytes) {
             throw new Error('LDtk body length does not match Content-Length');
           }
           break;
         }
+        if (value.byteLength === 0) {
+          if (++emptyReads > WORLD_LIMITS.consecutiveEmptyReads) {
+            throw new Error('LDtk empty read budget exceeded');
+          }
+          continue;
+        }
+        emptyReads = 0;
         bytes += value.byteLength;
         if (bytes > WORLD_LIMITS.bytes) {
           throw new Error('LDtk byte budget exceeded');
