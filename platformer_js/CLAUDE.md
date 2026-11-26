@@ -80,7 +80,9 @@ vertical contact time (legacy Y-only snapshots keep fixed X). Body contacts use
 earliest swept contact across enemies/boss with projectile geometry tie rules;
 bounce/respawn retires previous player and target sweeps. Coins use the same
 swept rectangle primitive with the pre-step player pose, skipping collected coins
-and respawn teleport paths. Platform and coin candidates query the level-owned
+and respawn teleport paths. The swept rectangle primitive requires positive overlap
+within the step. A first touch at the endpoint does not count, and immediate entry
+returns time zero. Platform and coin candidates query the level-owned
 static tree in level order; collected coins retire from collision branches.
 Coins, body effects and already-open portal entry resolve by contact time;
 exact ties go coins, then body, then portal, and bounce/respawn replaces unused

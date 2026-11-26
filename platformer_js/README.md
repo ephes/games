@@ -149,9 +149,11 @@ x/y/width/height order; identical trajectories are interchangeable and retain
 storage order. The earliest live contact takes one hit;
 contacts are resolved before off-screen culling. Equal-time contacts use target
 x/y/width/height order, then enemy before boss; identical enemy rectangles keep
-level order. Stationary edge touches and tangential grazing do not hit. Drawing subtracts
-cameraX once without moving world coordinates. Camera tests use translated
-bounds and a recording canvas to check follow/clamp, touching-edge visibility,
+level order. Swept rectangle contacts require positive overlap within the step.
+Stationary edge touches, tangential grazing and a first touch at the endpoint
+do not count. Initial overlap or movement immediately into overlap has contact
+time zero. Drawing subtracts cameraX once without moving world coordinates.
+Camera tests use translated bounds and a recording canvas to check follow/clamp, touching-edge visibility,
 coordinate conversion, transforms and reset, without changing camera policy.
 Game rendering integration tests record boss-shot fallback arcs and sprite frame
 coordinates under the parent camera transform: each path translates world space

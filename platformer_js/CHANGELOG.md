@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Stop scoring player-shot hits after confirmed entry into an open portal.
+- Require overlap during the step for swept rectangle contacts, preventing coin
+  pickups and hits on a first edge touch at the endpoint.
 
 ### Changed
 

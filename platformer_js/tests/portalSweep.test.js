@@ -211,7 +211,7 @@ it('drops a body-deferred boss shot cleared by a boss-defeating player shot', ()
   const coin = new Coin(149, 180);
   game.coins = [coin];
   Object.assign(game.boss, { x: 500, y: 0, health: 1 });
-  game.projectiles = [new Projectile(480, 10, 1)];
+  game.projectiles = [new Projectile(481, 10, 1)];
   game.boss.projectiles = [
     new BossProjectile(149, 240, 1, 0, game.camera.bounds)
   ];
@@ -229,7 +229,7 @@ it('drops a body-deferred boss shot cleared by a boss-defeating player shot', ()
 it('keeps a lethal boss shot that precedes a boss-defeating player shot', () => {
   game.lives = 1;
   Object.assign(game.boss, { x: 500, y: 0, health: 1 });
-  game.projectiles = [new Projectile(480, 10, 1)];
+  game.projectiles = [new Projectile(481, 10, 1)];
   game.boss.projectiles = [
     new BossProjectile(149, 40, 1, 0, game.camera.bounds)
   ];
