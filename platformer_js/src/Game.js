@@ -884,7 +884,9 @@ export class Game {
       this.validateLDtkLevels(ldtkLevels);
 
       if (ldtkLevels.length > 0) {
+        const startsNewRun = this.gameWon;
         const index =
+          !startsNewRun &&
           Number.isInteger(this.currentLevel) &&
           this.currentLevel >= 0 &&
           this.currentLevel < ldtkLevels.length
@@ -897,6 +899,9 @@ export class Game {
         this.levels = ldtkLevels;
         this.totalLevels = ldtkLevels.length;
         this.currentLevel = index;
+        if (startsNewRun) {
+          this.#resetRunProgress();
+        }
         this.restorePlayableLevel();
 
         reportDiagnostic(() =>
@@ -987,12 +992,16 @@ export class Game {
     this.createLevel(this.levels[index]);
     this.currentLevel = index;
     if (startsNewRun) {
-      this.score = 0;
-      this.canShoot = false;
-      this.lastShotTime = -GAME_CONFIG.SHOT_COOLDOWN;
+      this.#resetRunProgress();
     }
     this.restorePlayableLevel();
     return true;
+  }
+
+  #resetRunProgress() {
+    this.score = 0;
+    this.canShoot = false;
+    this.lastShotTime = -GAME_CONFIG.SHOT_COOLDOWN;
   }
 
   /** Publish recovery only after a new level's objects have been constructed. */
