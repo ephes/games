@@ -2,6 +2,8 @@
  * @module systems/SpriteLoader
  */
 
+import { BOSS_FIREBALL_SHEET } from '../utils/constants.js';
+
 function spriteAbortError() {
   return new DOMException('Sprite load aborted', 'AbortError');
 }
@@ -119,7 +121,7 @@ export class SpriteLoader {
   /**
    * Load all game sprites
    * @param {Object} [options] - Optional signal and per-image timeoutMs (default 10000)
-   * @returns {Promise<void>} Resolves when this batch publishes. Rejects on load failure, cancellation or supersession.
+   * @returns {Promise<void>} Resolves when this batch publishes. Rejects on load failure, undersized sheets, cancellation or supersession.
    */
   async loadAll({ signal, timeoutMs = 10_000 } = {}) {
     if (signal?.aborted) {
@@ -180,6 +182,23 @@ export class SpriteLoader {
         throw new DOMException('Sprite batch superseded', 'AbortError');
       }
       controller.signal.throwIfAborted();
+      const animations = this.getAnimationConfig();
+      for (const [name, img] of staged) {
+        const [kind, state] = name.split('.');
+        const sheet =
+          name === 'boss.fireball' ? BOSS_FIREBALL_SHEET : animations[kind];
+        if (!sheet) {
+          continue;
+        }
+        const frames = sheet.animations?.[state].frames ?? sheet.frames;
+        const width = sheet.frameWidth * frames;
+        const height = sheet.frameHeight;
+        if (!(img.naturalWidth >= width && img.naturalHeight >= height)) {
+          throw new Error(
+            `Sprite sheet too small: ${name} needs at least ${width}×${height}`
+          );
+        }
+      }
       for (const [name, img] of staged) {
         this.sprites.set(name, img);
       }

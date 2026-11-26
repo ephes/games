@@ -93,6 +93,11 @@ SpriteLoader batches can be retried after failure. Only the newest complete batc
 publishes its images together. `loaded` starts false and becomes true with the
 first successful publication. It stays true while a replacement is pending and
 if that replacement fails, is cancelled or is superseded.
+Before publication, `loadAll()` checks the intrinsic dimensions of player,
+enemy, boss and boss fireball sheets. Each sheet must cover a full horizontal
+row of its configured frames, including the last frame. Wider or taller sheets
+are accepted. An undersized sheet rejects the batch and retains the previous
+complete set.
 `loadAll()` resolves only after its own batch publishes. Cancellation or
 supersession before publication rejects with an `AbortError`, even if every
 image has finished loading. Game initialization then fails before creating a
@@ -474,6 +479,12 @@ and the world entity budget below together, with LDtk-shaped entity records
 pass checks decoded key identities per object before conversion or
 publication. Wire refusal keeps the current playable world. Legal Unicode and
 names repeated in separate objects remain supported. The loader uses raw LDtk records, including modern `intGridCsv`.
+
+Direct `loadWorld(url)` also converts every level within the load deadline to
+check geometry and the cumulative platform budget. It resolves with the raw
+world after publication. Any conversion failure or expired deadline rejects the
+load and retains the previous world. Game stages the raw candidate with
+`loadWorld(url, { publish: false })` and converts it during import.
 
 `ldtkLoader.getLevel(index)` accepts a published world with `levels` directly
 or under `data`. It returns `null` when no world is loaded or the index is

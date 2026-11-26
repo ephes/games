@@ -131,8 +131,9 @@ export class LDtkLoader {
 
   /**
    * Load a candidate world. Only the latest requested load may publish it.
-   * Cancellation and supersession reject pending loads. Convert a successful
-   * candidate with getAllLevels(world), including when publish is false.
+   * Cancellation and supersession reject pending loads. A direct load admits
+   * every level through conversion before publishing the raw world. With
+   * publish false, callers convert the staged world with getAllLevels(world).
    * @param {string} url - URL to LDtk file
    * @param {Object} options - Publication options
    * @param {boolean} options.publish - Publish if latest (default true)
@@ -227,15 +228,18 @@ export class LDtkLoader {
         buffer.set(chunk, offset);
         offset += chunk.byteLength;
       }
-      const data = parseWorldJSON(
+      const world = parseWorldJSON(
         new TextDecoder('utf-8', { fatal: true }).decode(buffer)
       );
-      this.preflightWorld(data);
+      if (publish) {
+        this.getAllLevels({ data: world });
+      } else {
+        this.preflightWorld(world);
+      }
       signal.throwIfAborted();
       if (performance.now() >= deadline) {
         throw deadlineError;
       }
-      const world = data;
       if (publish && generation === this.loadGeneration) {
         this.world = world;
       }
@@ -722,7 +726,7 @@ export class LDtkLoader {
       return [];
     }
 
-    const data = world.data ?? world;
+    const data = Array.isArray(world.levels) ? world : (world.data ?? world);
     this.preflightWorld(data);
     const levels = [];
     let platforms = 0;
@@ -744,7 +748,7 @@ export class LDtkLoader {
    * @throws {Error} If conversion of the selected level fails
    */
   getLevel(index) {
-    const levels = (this.world?.data ?? this.world)?.levels;
+    const levels = this.world?.levels ?? this.world?.data?.levels;
     if (
       !levels ||
       !Number.isInteger(index) ||
