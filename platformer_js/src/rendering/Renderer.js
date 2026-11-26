@@ -6,6 +6,8 @@
  * Main rendering system
  */
 export class Renderer {
+  #bossHitContext;
+
   /**
    * Create renderer
    * @param {HTMLCanvasElement} canvas - Canvas element
@@ -130,6 +132,40 @@ export class Renderer {
   }
 
   /**
+   * Tint one frame at source resolution so only the sprite's alpha masks it.
+   */
+  #composeBossHitFrame(sprite, sx, frameWidth, frameHeight, boss) {
+    if (!this.#bossHitContext) {
+      const frame = document.createElement('canvas');
+      frame.width = frameWidth;
+      frame.height = frameHeight;
+      this.#bossHitContext = frame.getContext('2d');
+    }
+
+    const ctx = this.#bossHitContext;
+    ctx.clearRect(0, 0, frameWidth, frameHeight);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(
+      sprite,
+      sx,
+      0,
+      frameWidth,
+      frameHeight,
+      0,
+      0,
+      frameWidth,
+      frameHeight
+    );
+
+    const flashPhase = (boss.simulationTime - boss.hitTimer) / boss.hitDuration;
+    const flashIntensity = Math.max(0, 1 - flashPhase) * 0.6;
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = `rgba(255, 100, 100, ${flashIntensity})`;
+    ctx.fillRect(0, 0, frameWidth, frameHeight);
+    return ctx.canvas;
+  }
+
+  /**
    * Draw boss sprite with health bar
    * @param {Object} boss - Boss object
    * @param {number} cameraX - Camera X offset
@@ -139,66 +175,43 @@ export class Renderer {
       return;
     }
 
-    const sprite = this.sprites.getSprite('boss');
+    let sprite = this.sprites.getSprite('boss');
     if (!sprite) {
       return;
     }
 
-    const config = this.animationConfigs.boss;
-    const sx = boss.frameX * config.frameWidth;
-    const sy = 0; // Single row sprite sheet
+    const { frameWidth, frameHeight } = this.animationConfigs.boss;
+    let sx = boss.frameX * frameWidth;
+    if (boss.isHit) {
+      sprite = this.#composeBossHitFrame(
+        sprite,
+        sx,
+        frameWidth,
+        frameHeight,
+        boss
+      );
+      sx = 0;
+    }
 
     this.ctx.save();
     try {
-      // Enable image smoothing for better animation
+      // Scale the original or tinted frame with the same smoothing and transform.
       this.ctx.imageSmoothingEnabled = true;
       this.ctx.imageSmoothingQuality = 'high';
-
-      // Draw the boss sprite first
       if (boss.direction === -1) {
         this.ctx.scale(-1, 1);
-        this.ctx.drawImage(
-          sprite,
-          sx,
-          sy,
-          config.frameWidth,
-          config.frameHeight,
-          -(boss.x + boss.width),
-          boss.y,
-          boss.width,
-          boss.height
-        );
-      } else {
-        this.ctx.drawImage(
-          sprite,
-          sx,
-          sy,
-          config.frameWidth,
-          config.frameHeight,
-          boss.x,
-          boss.y,
-          boss.width,
-          boss.height
-        );
       }
-
-      // Apply hit effect overlay after drawing the sprite
-      if (boss.isHit) {
-        // Create a more stable flash effect with slower pulsing
-        const timeSinceHit = boss.simulationTime - boss.hitTimer;
-        const flashPhase = timeSinceHit / boss.hitDuration;
-        const flashIntensity = Math.max(0, 1 - flashPhase) * 0.6; // Fade out over hit duration
-
-        this.ctx.globalCompositeOperation = 'source-atop';
-        this.ctx.fillStyle = `rgba(255, 100, 100, ${flashIntensity})`;
-        this.ctx.fillRect(
-          boss.direction === -1 ? -(boss.x + boss.width) : boss.x,
-          boss.y,
-          boss.width,
-          boss.height
-        );
-        this.ctx.globalCompositeOperation = 'source-over';
-      }
+      this.ctx.drawImage(
+        sprite,
+        sx,
+        0,
+        frameWidth,
+        frameHeight,
+        boss.direction === -1 ? -(boss.x + boss.width) : boss.x,
+        boss.y,
+        boss.width,
+        boss.height
+      );
     } finally {
       this.ctx.restore();
     }
