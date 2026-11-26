@@ -580,6 +580,7 @@ export class Game {
    * @param {number} deltaTime - Time since last update
    * @param {Map} [previousTargets] - Target positions before this step
    * @param {number} [cutoff] - Latest contact fraction to resolve, inclusive
+   *   within CONTACT_TIME_TOLERANCE
    */
   updateProjectiles(deltaTime, previousTargets, cutoff = Infinity) {
     if (this.projectiles.length === 0) {
@@ -643,7 +644,8 @@ export class Game {
     while (pending.length) {
       const step = pending.shift();
       const { hit, projectile } = step;
-      if (hit.time > cutoff) {
+      // A shot within CONTACT_TIME_TOLERANCE of the cutoff is a tie and scores.
+      if (hit.time > cutoff + CONTACT_TIME_TOLERANCE) {
         break;
       }
       if (!hit.target.alive) {

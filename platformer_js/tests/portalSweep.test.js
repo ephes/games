@@ -4,6 +4,7 @@ import { Coin } from '../src/objects/Coin.js';
 import { Enemy } from '../src/entities/Enemy.js';
 import { BossProjectile } from '../src/entities/BossProjectile.js';
 import { Projectile } from '../src/entities/Projectile.js';
+import { CollisionSystem } from '../src/systems/CollisionSystem.js';
 
 let game, next;
 beforeEach(() => {
@@ -26,6 +27,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   game.dispose();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -176,6 +178,44 @@ it.each([
 
     expect(game.currentLevel).toBe(1);
     expect(game.lives).toBe(3);
+    expect(game.score).toBe(score);
+    expect(enemy.alive).toBe(score === 0);
+  }
+);
+
+it.each([
+  { offset: 5e-10, score: 50 },
+  { offset: 1e-6, score: 0 }
+])(
+  'treats a rounding-adjacent player shot at portal entry as a tie ($offset)',
+  ({ offset, score }) => {
+    game.portal.unlock();
+    const enemy = new Enemy({ x: 100, y: 40, speed: 0 });
+    game.enemies = [enemy];
+    const shot = new Projectile(80, 50, 1);
+    shot.speed = 100;
+    game.projectiles = [shot];
+    let portalTime = null;
+    const portalEntryTime =
+      CollisionSystem.portalEntryTime.bind(CollisionSystem);
+    vi.spyOn(CollisionSystem, 'portalEntryTime').mockImplementation(
+      (...args) => (portalTime = portalEntryTime(...args))
+    );
+    const checkProjectileCollisions =
+      CollisionSystem.checkProjectileCollisions.bind(CollisionSystem);
+    vi.spyOn(CollisionSystem, 'checkProjectileCollisions').mockImplementation(
+      (...args) => {
+        const hit = checkProjectileCollisions(...args);
+        return hit && portalTime !== null
+          ? { ...hit, time: portalTime + offset }
+          : hit;
+      }
+    );
+
+    game.update(16);
+
+    expect(portalTime).not.toBeNull();
+    expect(game.currentLevel).toBe(1);
     expect(game.score).toBe(score);
     expect(enemy.alive).toBe(score === 0);
   }

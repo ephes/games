@@ -407,7 +407,8 @@ Coins, enemy/boss body contacts and already-open portal entry resolve in
 earliest-contact order within a step. Exact ties resolve coins first, then
 body contact, then portal entry. A transition keeps coin awards up to entry.
 When entry on the original sweep precedes any body contact and survives boss-shot
-arbitration, only player-shot hits through the entry time score. If a body contact
+arbitration, only player-shot hits through the entry time score (a hit
+within the same rounding tolerance as boss shots counts as a tie and scores). If a body contact
 blocks entry, player shots still resolve across the step before rechecking entry.
 An already-open portal also takes precedence over a later boss shot when no
 body contact has priority over entry. A boss shot at the entry time (within a
